@@ -10,7 +10,10 @@ import lombok.Setter;
 @Getter
 @NoArgsConstructor
 @AllArgsConstructor
-@Table(name = "quiz_choice")
+@Table(name = "quiz_choice",
+    uniqueConstraints = @UniqueConstraint(name = "uk_choice_question_order", columnNames = {"quiz_question_id", "sort_order"}),
+    indexes = { @Index(name = "idx_choice_question_answer", columnList = "quiz_question_id, is_answer")}
+)
 public class QuizChoice {
 
     @Id
@@ -29,6 +32,10 @@ public class QuizChoice {
     @Setter
     @Column(name = "is_answer", nullable = false)
     private boolean isAnswer;
+
+    @Setter
+    @Column(name = "sort_order", nullable = false)
+    private int sortOrder;
 
     @Setter
     @Column(columnDefinition = "TEXT")

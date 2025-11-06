@@ -31,8 +31,8 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
 
         // 1) 세트의 CHOICE 문항(정렬 보장)
         List<QuizQuestion> questions =
-                quizQuestionRepository.findByQuizSetIdAndQuestionTypeOrderByOrderIndexAscIdAsc(
-                        setId, QuestionType.CHOICE
+                quizQuestionRepository.findByQuizSetIdAndQuestionTypeInOrderByOrderIndexAscIdAsc(
+                        setId, List.of(QuestionType.CHOICE, QuestionType.OX)
                 );
         if (questions.isEmpty()) return List.of();
 
@@ -53,18 +53,14 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
                     .map(c -> Optional.ofNullable(c.getChoiceText()).orElse(""))
                     .toList();
 
-            int correctIdx0;
-            Integer ans1 = q.getAnswerIndex(); // 1-based 가정
-            if (ans1 != null && ans1 >= 1 && ans1 <= choiceTexts.size()) {
-                correctIdx0 = ans1 - 1;
-            } else {
-                // 안전장치: answer=true 첫 번째를 정답으로
-                int idx = 0;
-                for (int i = 0; i < cs.size(); i++) {
-                    if (Boolean.TRUE.equals(cs.get(i).isAnswer())) { idx = i; break; }
+            int correctIdx0 = 0;
+            for (int i = 0; i < cs.size(); i++) {
+                if (Boolean.TRUE.equals(cs.get(i).isAnswer())) {
+                    correctIdx0 = i;
+                    break;
                 }
-                correctIdx0 = Math.min(Math.max(0, idx), Math.max(0, choiceTexts.size() - 1));
             }
+            correctIdx0 = Math.min(Math.max(0, correctIdx0), Math.max(0, choiceTexts.size() - 1));
 
             String explanation = null;
             if (correctIdx0 >= 0 && correctIdx0 < cs.size()) {

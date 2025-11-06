@@ -17,7 +17,7 @@ public class CreateQuizQuestionRequestForm {
     private final Integer questionAnswer;
 
     public CreateQuizQuestionRequest toCreateQuizQuestionRequest(Long termId) {
-        return new CreateQuizQuestionRequest(termId, categoryId, questionType, questionText, questionAnswer);
+        return new CreateQuizQuestionRequest(termId, categoryId, questionType, questionText, questionAnswer, null);
     }
 
 }

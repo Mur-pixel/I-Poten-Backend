@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz.service.request;
 
+import com.cygnus.ipoten.quiz.entity.QuizSet;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;
 import com.cygnus.ipoten.term.entity.Category;
@@ -16,9 +17,13 @@ public class CreateQuizQuestionRequest {
     private final QuestionType questionType;
     private final String questionText;
     private final Integer questionAnswer;
+    private final String answerText;
 
     public QuizQuestion toQuizQuestion(Term term, Category category) {
-        return new QuizQuestion(term, category, questionType, questionText, questionAnswer);
+        QuizQuestion q = new QuizQuestion(term, category, questionType, questionText, (QuizSet) null);
+        if (questionType == QuestionType.INITIALS && answerText != null && !answerText.isBlank()) {
+            q.setAnswerText(answerText);
+        }
+        return q;
     }
-
 }

@@ -393,7 +393,7 @@ public class QuizController {
 
     // 자신이 푼 답안을 제출하여 점수 확인하기
     @PostMapping("/me/quiz/sessions/{sessionId}/submit")
-    public ResponseEntity<SubmitQuizSessionResponseForm> submitQuizSession(
+    public ResponseEntity<?> submitQuizSession(
             @PathVariable Long sessionId,
             @Valid @RequestBody SubmitQuizSessionRequestForm requestForm,
             @CookieValue(name = "userToken", required = false) String userToken
@@ -410,8 +410,12 @@ public class QuizController {
             log.warn("세션 접근 거부", e);
             return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
         } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn("세션 제출 유효성 오류", e);
-            return ResponseEntity.badRequest().build();
+            String message = String.valueOf(e.getMessage());
+            if (message.contains("이미 제출된 세션")) {
+                var summary = userQuizSessionQueryService.getSummary(sessionId, accountId);
+                return ResponseEntity.ok(summary);
+            }
+            throw e;
         } catch (Exception e) {
             log.error("세션 제출 실패", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();

@@ -13,6 +13,7 @@ import lombok.Setter;
 @NoArgsConstructor
 @Table(
         name = "quiz_question",
+        uniqueConstraints=@UniqueConstraint(name="uk_question_set_order", columnNames={"quiz_set_id","order_index"}),
         indexes = {
                 @Index(name = "idx_quiz_question_set_order", columnList = "quiz_set_id, order_index"),
                 @Index(name = "idx_quiz_question_category", columnList = "category_id"),
@@ -50,11 +51,6 @@ public class QuizQuestion {
     @Column(name = "question_text", nullable = false, length = 1000)
     private String questionText;
 
-    /** 보기형 정답(CHOICE/OX) */
-    @Setter
-    @Column(name = "answer_index")
-    private Integer answerIndex;
-
     /** 텍스트 정답(초성/주관식/정규식 등) */
     @Setter
     @Column(name="answer_text", length=255)
@@ -76,21 +72,9 @@ public class QuizQuestion {
             Category category,
             QuestionType questionType,
             String questionText,
-            Integer answerIndex
-    ) {
-        this(term, category, questionType, questionText, answerIndex, null, null, null);
-    }
-
-    /** CHOICE/OX 전용 (세트 지정) */
-    public QuizQuestion(
-            Term term,
-            Category category,
-            QuestionType questionType,
-            String questionText,
-            Integer answerIndex,
             QuizSet quizSet
     ) {
-        this(term, category, questionType, questionText, answerIndex, null, quizSet, null);
+        this(term, category, questionType, questionText, null, quizSet, null);
     }
 
     /** 공용(내부) */
@@ -99,7 +83,6 @@ public class QuizQuestion {
             Category category,
             QuestionType questionType,
             String questionText,
-            Integer answerIndex,
             String answerText,
             QuizSet quizSet,
             Integer orderIndex
@@ -108,7 +91,6 @@ public class QuizQuestion {
         this.category = category;
         this.questionType = questionType;
         this.questionText = questionText;
-        this.answerIndex = answerIndex;
         this.answerText = answerText;
         this.quizSet = quizSet;
         this.orderIndex = orderIndex;
@@ -124,7 +106,7 @@ public class QuizQuestion {
             QuizSet quizSet,
             Integer orderIndex
     ) {
-        return new QuizQuestion(term, category, questionType, questionText, null, answerText, quizSet, orderIndex);
+        return new QuizQuestion(term, category, questionType, questionText, answerText, quizSet, orderIndex);
     }
 
     public void setQuizSet(QuizSet quizSet) {

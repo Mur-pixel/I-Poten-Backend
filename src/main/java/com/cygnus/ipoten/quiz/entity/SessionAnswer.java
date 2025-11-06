@@ -52,7 +52,7 @@ public class SessionAnswer {
     private QuizQuestion quizQuestion;  // 문제 ID
 
     @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_choice_id", nullable = false)
+    @JoinColumn(name = "quiz_choice_id")
     private QuizChoice quizChoice;  // 선택한 보기 ID
 
     @Column(name = "submitted_at", nullable = false)
@@ -60,6 +60,9 @@ public class SessionAnswer {
 
     @Column(name = "is_correct", nullable = false)
     private boolean isCorrect;  // 정답 여부
+
+    @Column(name = "submitted_text", length = 255)
+    private String submittedText; // INITIALS/주관식 제출값
 
     public SessionAnswer(UserQuizSession userQuizSession, QuizQuestion quizQuestion, QuizChoice quizChoice, LocalDateTime submittedAt, boolean isCorrect) {
         this.userQuizSession = userQuizSession;

@@ -324,11 +324,14 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
         session.submit(correctCount, elapsedMs);
         userQuizSessionRepository.save(session);
 
-        // 퀴즈 완료 시 갱신
-        trustScoreService.calculateTrustScore(accountId);
-
         // 6) 오답노트 저장(중복 방지)
         saveWrongNotes(toSave, accountId);
+
+        try {
+            trustScoreService.calculateTrustScore(accountId);
+        } catch (Exception e) {
+            log.error("TrustScore 계산 실패 - 제출은 성공으로 처리 (accountId={}): {}", accountId, e.getMessage(), e);
+        }
 
         return new SubmitQuizSessionResponseForm(
                 session.getId(),

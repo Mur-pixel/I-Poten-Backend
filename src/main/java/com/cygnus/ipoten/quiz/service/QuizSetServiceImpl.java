@@ -123,7 +123,6 @@ public class QuizSetServiceImpl implements QuizSetService {
                 q = new QuizQuestion(
                         term, category, qType,
                         makeQuestionText(term, qType),
-                        null,
                         quizSet
                 );
                 q.setOrderIndex(++order);
@@ -245,7 +244,7 @@ public class QuizSetServiceImpl implements QuizSetService {
                 switch (reqType2) {
                     case CHOICE   -> questionType = QuestionType.CHOICE;
                     case OX       -> questionType = QuestionType.OX;
-                    case INITIALS -> questionType = gateInitialsByKorean(term, QuestionType.INITIALS); // ✅ 게이트
+                    case INITIALS -> questionType = gateInitialsByKorean(term, QuestionType.INITIALS);
                     case MIX      -> questionType = mixByTerm(term);
                     default       -> questionType = mixByTerm(term);
                 }
@@ -256,14 +255,13 @@ public class QuizSetServiceImpl implements QuizSetService {
                 q = QuizQuestion.textAnswer(
                         term, null, QuestionType.INITIALS,
                         makeQuestionText(term, questionType),
-                        toKoreanInitials(koreanHead(term.getTitle())), // ✅ 일관
+                        toKoreanInitials(koreanHead(term.getTitle())),
                         set, ++order
                 );
             } else {
                 q = new QuizQuestion(
                         term, null, questionType,
-                        makeQuestionText(term, questionType),
-                        null, set
+                        makeQuestionText(term, questionType), set
                 );
                 q.setOrderIndex(++order);
             }
@@ -530,9 +528,10 @@ public class QuizSetServiceImpl implements QuizSetService {
                 String brief = oneLine(safeText(term.getDescription()), 140);
                 if (brief.isBlank()) brief = "~.";
                 QuizChoice o = new QuizChoice(q, "O", true,  brief);
+                o.setSortOrder(1);
                 QuizChoice x = new QuizChoice(q, "X", false, brief);
+                x.setSortOrder(2);
                 quizChoiceRepository.saveAll(List.of(o, x));
-                q.setAnswerIndex(1);
                 continue;
             }
 
@@ -608,13 +607,10 @@ public class QuizSetServiceImpl implements QuizSetService {
 
             // 4) 섞기 + 저장 + 정답 위치 기록
             Collections.shuffle(toSave, new Random(q.getId()));
-            quizChoiceRepository.saveAll(toSave);
-
-            int idx = 1;
             for (int i = 0; i < toSave.size(); i++) {
-                if (toSave.get(i).isAnswer()) { idx = i + 1; break; }
+                toSave.get(i).setSortOrder(i + 1);
             }
-            q.setAnswerIndex(idx);
+            quizChoiceRepository.saveAll(toSave);
         }
          em.flush();
     }

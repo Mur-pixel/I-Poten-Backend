@@ -200,7 +200,6 @@ public class QuizTsvImportRunner implements CommandLineRunner {
                 category,
                 type,
                 nvl(row.getQuestionText(), "(빈 문제)"),
-                null,   // answerIndex
                 set
         );
 
@@ -219,9 +218,6 @@ public class QuizTsvImportRunner implements CommandLineRunner {
                         new QuizChoice(q, "O", answerIdx == 1, nvl(row.getExplanation(), "")),
                         new QuizChoice(q, "X", answerIdx == 2, nvl(row.getExplanation(), ""))
                 ));
-
-                q.setAnswerIndex(answerIdx); // ← 여기서 q는 detached일 수 있음
-                quizQuestionRepository.save(q); // ← 한번 더 저장!
             }
             case CHOICE -> {
                 List<String> opts = new ArrayList<>();
@@ -252,14 +248,12 @@ public class QuizTsvImportRunner implements CommandLineRunner {
                             new QuizChoice(q, opts.get(i), isAns, isAns ? nvl(row.getExplanation(), "") : null)
                     );
                 }
-                q.setAnswerIndex(ai);
-                quizQuestionRepository.save(q); // ← 다시 저장
             }
             case INITIALS -> {
                 String at = safe(row.getAnswerText());
                 if (at.isBlank()) throw new IllegalArgumentException("INITIALS는 answer_text(초성)가 필요합니다.");
                 q.setAnswerText(at);
-                quizQuestionRepository.save(q); // ← 다시 저장
+                quizQuestionRepository.save(q);
             }
         }
     }
