@@ -321,10 +321,13 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
         double accuracy = (sumTotal > 0) ? (sumCorrect * 100.0 / sumTotal) : 0.0;
         double retryRate = (submitted > 0) ? (retry * 100.0 / submitted) : 0.0;
 
+        double accuracyRounded = Math.round(accuracy * 10.0) / 10.0;
+        double retryRounded = Math.round(retry * 10.0) / 10.0;
+
         var summary = TimelineResponseForm.Summary.builder()
                 .totalSets(submitted)
-                .accuracy(Math.round(accuracy))
-                .retryRate(Math.round(retryRate))
+                .accuracy(Math.round(accuracyRounded))
+                .retryRate(Math.round(retryRounded))
                 .build();
 
         var recentRaw = timelineRepository.findRecentRaw(accountId, 10);
