@@ -14,7 +14,6 @@ public class CreateQuizQuestionResponseForm {
     private final Long questionId;
     private final QuestionType questionType;
     private final String questionText;
-    private final Integer answerIndex; // OX/CHOICE
     private final String answerText;   // INITIALS/주관식
 
     public static CreateQuizQuestionResponseForm from(CreateQuizQuestionResponse response) {
@@ -23,7 +22,6 @@ public class CreateQuizQuestionResponseForm {
                 response.getQuestionId(),
                 response.getQuestionType(),
                 response.getQuestionText(),
-                response.getAnswerIndex(),
                 response.getAnswerText()
         );
     }

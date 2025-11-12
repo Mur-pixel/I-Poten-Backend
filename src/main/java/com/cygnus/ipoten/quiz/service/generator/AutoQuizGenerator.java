@@ -2,6 +2,7 @@ package com.cygnus.ipoten.quiz.service.generator;
 
 import com.cygnus.ipoten.quiz.entity.QuizChoice;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz.entity.QuizSet;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
 import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
@@ -90,12 +91,10 @@ public class AutoQuizGenerator {
                         new QuizChoice(q, "X", false, "오답 해설")
                 );
                 quizChoiceRepository.saveAll(choices);
-                q.setAnswerIndex(1); // O 인덱스 고정(팀 규칙 유지)
                 continue;
             }
 
             if (q.getQuestionType() == QuestionType.INITIALS) {
-                q.setAnswerIndex(null);
                 if (q.getAnswerText() == null || q.getAnswerText().isBlank()) {
                     String core = koreanCore(q.getTerm().getTitle());
                     q.setAnswerText(toChoseong(core));
@@ -129,7 +128,6 @@ public class AutoQuizGenerator {
                 quizChoiceRepository.save(new QuizChoice(
                         q, options.get(i), isAns, isAns ? "정답 해설" : "오답 해설"));
             }
-            q.setAnswerIndex(answerIdx);
         }
     }
 
@@ -151,12 +149,10 @@ public class AutoQuizGenerator {
                         new QuizChoice(q, "X", false, "오답 해설")
                 );
                 quizChoiceRepository.saveAll(choices);
-                q.setAnswerIndex(1);
                 continue;
             }
 
             if (q.getQuestionType() == QuestionType.INITIALS) {
-                q.setAnswerIndex(null);
                 if (q.getAnswerText() == null || q.getAnswerText().isBlank()) {
                     q.setAnswerText(toChoseong(q.getTerm().getTitle()));
                 }
@@ -209,7 +205,6 @@ public class AutoQuizGenerator {
                 quizChoiceRepository.save(new QuizChoice(
                         q, options.get(i), isAns, isAns ? "정답 해설" : "오답 해설"));
             }
-            q.setAnswerIndex(answerIdx);
         }
     }
 
@@ -217,13 +212,13 @@ public class AutoQuizGenerator {
     private QuizQuestion mkChoice(Term t, DifficultyProperties.Profile p, Random rng) {
         String stem = normalize(t.getDescription());
         stem = maybeNegateOrReplace(stem, p, rng);
-        return new QuizQuestion(t, t.getCategory(), QuestionType.CHOICE, stem, /*answerIdx*/ 1);
+        return new QuizQuestion(t, t.getCategory(), QuestionType.CHOICE, stem, (QuizSet) null);
     }
 
     private QuizQuestion mkOX(Term t, DifficultyProperties.Profile p, Random rng) {
         String base = "다음 설명은 '" + t.getTitle() + "'에 대한 올바른 설명이다.";
         base = maybeNegateOrReplace(base, p, rng);
-        return new QuizQuestion(t, t.getCategory(), QuestionType.OX, base, /*answerIdx*/ 1);
+        return new QuizQuestion(t, t.getCategory(), QuestionType.OX, base, (QuizSet) null);
     }
 
     private QuizQuestion mkInitials(Term t, DifficultyProperties.Profile p) {
@@ -236,7 +231,7 @@ public class AutoQuizGenerator {
 
         String stem = "초성 힌트: " + hint + "\n설명: " + brief;
 
-        QuizQuestion q = new QuizQuestion(t, t.getCategory(), QuestionType.INITIALS, stem, null);
+        QuizQuestion q = new QuizQuestion(t, t.getCategory(), QuestionType.INITIALS, stem, (QuizSet) null);
         q.setAnswerText(hint); // 정답은 초성 문자열 자체
         return q;
     }

@@ -16,9 +16,6 @@ public class CreateQuizQuestionResponse {
     private final QuestionType questionType;
     private final String questionText;
 
-    // 선택형(OX/CHOICE)
-    private final Integer answerIndex;
-
     // 텍스트형(INITIALS/주관식 등)
     private final String answerText;
 
@@ -29,7 +26,6 @@ public class CreateQuizQuestionResponse {
                 q.getId(),
                 q.getQuestionType(),
                 q.getQuestionText(),
-                q.getAnswerIndex(),   // OX/CHOICE면 값, INITIALS면 null
                 q.getAnswerText()     // INITIALS/주관식이면 값, OX/CHOICE면 null
         );
     }
