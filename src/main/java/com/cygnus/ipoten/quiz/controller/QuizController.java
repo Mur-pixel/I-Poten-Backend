@@ -551,6 +551,25 @@ public class QuizController {
         }
     }
 
+    @GetMapping("/me/quiz/timeline")
+    public ResponseEntity<?> getMyTimeline(
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "type", required = false, defaultValue = "ALL") String type,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        QuizPartType part = ("ALL".equalsIgnoreCase(type) || type == null || type.isBlank())
+                ? null
+                : QuizPartType.valueOf(type.toUpperCase());
+        var result = userQuizSessionQueryService.getTimeline(accountId, q, part, page, size);
+        return ResponseEntity.ok(result);
+    }
+
     /** 정책: 소유권 위반/존재하지 않음은 404로 숨김 */
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<Void> handleSecurityException(SecurityException ex) {

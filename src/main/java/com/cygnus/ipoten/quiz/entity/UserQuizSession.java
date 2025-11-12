@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -78,10 +77,10 @@ public class UserQuizSession {
     private Integer total; // 총 문항 수
 
     @Column(name = "started_at", nullable = false)
-    private LocalDateTime startedAt;
+    private Instant startedAt;
 
     @Column(name = "submitted_at")
-    private LocalDateTime submittedAt;
+    private Instant submittedAt;
 
     @Column(name = "elapsed_ms")
     private Long elapsedMs; // 제출까지 걸린 시간(ms), null 허용
@@ -98,7 +97,7 @@ public class UserQuizSession {
 
     public void submit(int finalScore) {
         this.sessionStatus = SessionStatus.SUBMITTED;
-        this.submittedAt = LocalDateTime.now();
+        this.submittedAt = Instant.now();
         this.score = finalScore;
     }
 
@@ -119,7 +118,7 @@ public class UserQuizSession {
         this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = questionsSnapshotJson;
         this.lastActivityAt = Instant.now();
@@ -134,7 +133,7 @@ public class UserQuizSession {
         this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = questionsSnapshotJson;
         this.seedMode = seedMode;
@@ -150,7 +149,7 @@ public class UserQuizSession {
         this.sessionMode = mode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = snapshotJson;
         this.lastActivityAt = Instant.now();

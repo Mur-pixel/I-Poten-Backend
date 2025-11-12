@@ -6,7 +6,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -34,8 +34,8 @@ public class SessionListResponseForm {
         private Integer total;              // 총 문항 수
         private Integer correct;            // 맞은 개수(제출 전이면 null)
         private Long elapsedMs;             // 소요시간(제출 전이면 null)
-        private LocalDateTime startedAt;    // 퀴즈 시작 시간
-        private LocalDateTime submittedAt;  // 퀴즈 제출 시간
+        private Instant startedAt;          // 퀴즈 시작 시간
+        private Instant submittedAt;        // 퀴즈 제출 시간
         private Double score;               // 점수
         private Integer scorePercent;       // (correct/total)*100
         private String title;               // 퀴즈 세트 타이틀이 있는 경우
