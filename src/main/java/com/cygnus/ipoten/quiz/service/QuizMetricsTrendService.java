@@ -11,4 +11,5 @@ public interface QuizMetricsTrendService {
     Map<LocalDate, Double> querySets(Long aid, Instant from, Instant to);
     Map<LocalDate, Double> queryRetryRate(Long aid, Instant from, Instant to);
     Map<LocalDate, Double> queryAccuracy(Long aid, Instant from, Instant to);
+    long getTotalSets(Long accountId);
 }

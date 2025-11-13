@@ -106,6 +106,11 @@ public class QuizMetricsTrendServiceImpl implements QuizMetricsTrendService {
         return map;
     }
 
+    @Override
+    public long getTotalSets(Long accountId) {
+        return quizMetricsTrendRepository.countSubmittedSets(accountId);
+    }
+
     private static int parseDays(String span, int def) {
         if (span == null || span.isBlank()) return def;
         String s = span.trim().toLowerCase(Locale.ROOT);

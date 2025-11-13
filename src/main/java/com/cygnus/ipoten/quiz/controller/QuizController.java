@@ -571,6 +571,7 @@ public class QuizController {
         return ResponseEntity.ok(result);
     }
 
+    // 사용자의 학습 성과 변화 추이 확인
     @GetMapping("/me/quiz/metrics")
     public ResponseEntity<QuizTrendResponseForm> getTrend(
             @RequestParam String metric,
@@ -582,6 +583,19 @@ public class QuizController {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
         return ResponseEntity.ok(quizMetricsTrendService.getTrend(accountId, metric, span));
+    }
+
+    // 사용자가 완료한 퀴즈 세트의 총 개수를 조회
+    @GetMapping("/me/quiz/metrics/total-sets")
+    public ResponseEntity<TotalSetsResponseForm> getTotalSets(
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        long total = quizMetricsTrendService.getTotalSets(accountId);
+        return ResponseEntity.ok(new TotalSetsResponseForm(total));
     }
 
     /** 정책: 소유권 위반/존재하지 않음은 404로 숨김 */
