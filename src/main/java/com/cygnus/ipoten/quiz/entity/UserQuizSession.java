@@ -32,7 +32,8 @@ import java.util.List;
     name = "user_quiz_session",
     indexes = {
             @Index(name = "idx_uqs_user_set", columnList = "account_id, quiz_set_id, started_at"),
-            @Index(name = "idx_uqs_started", columnList = "started_at")
+            @Index(name = "idx_uqs_started", columnList = "started_at"),
+            @Index(name = "idx_uqs_user_status_started", columnList = "account_id, session_status, started_at")
     }
 )
 public class UserQuizSession {
@@ -92,6 +93,9 @@ public class UserQuizSession {
     @Column(name ="seed_value")
     private Long seed; // 최종 해석된 시드 값
 
+    @Version
+    private Long version;
+
     // 마지막 활동 시각(조회/답안 저장/제출 시 갱신)
     private Instant lastActivityAt;
 
@@ -102,11 +106,19 @@ public class UserQuizSession {
     }
 
     public void submit(int finalScore, Long elapsedMs) {
-        submit(finalScore);
+        if (this.sessionStatus == SessionStatus.SUBMITTED || this.sessionStatus == SessionStatus.EXPIRED) {
+            throw new IllegalStateException("이미 제출되었거나 만료된 세션입니다. id=" + id);
+        }
+        this.sessionStatus = SessionStatus.SUBMITTED;
+        this.submittedAt = Instant.now();
+        this.score = finalScore;
         this.elapsedMs = elapsedMs;
     }
 
     public void expire() {
+        if (this.sessionStatus == SessionStatus.SUBMITTED || this.sessionStatus == SessionStatus.EXPIRED) {
+            throw new IllegalStateException("이미 제출되었거나 만료된 세션입니다. id=" + id);
+        }
         this.sessionStatus = SessionStatus.EXPIRED;
     }
 

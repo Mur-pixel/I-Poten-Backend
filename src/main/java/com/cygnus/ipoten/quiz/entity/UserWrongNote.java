@@ -7,6 +7,7 @@ import lombok.Builder;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
 import java.time.LocalDateTime;
 
 @Entity
@@ -35,7 +36,7 @@ public class UserWrongNote {
     @JoinColumn(name = "quiz_choice_id", nullable = false)
     private QuizChoice quizChoice; // 사용자가 선택한 오답 보기와 해설
 
-    private LocalDateTime submittedAt; // 오답 저장 시각
+    private Instant submittedAt; // 오답 저장 시각
     private String explanation; // 해설
 
     public static UserWrongNote create(Account account,
@@ -46,7 +47,7 @@ public class UserWrongNote {
         n.account = account;
         n.quizQuestion = question;
         n.quizChoice = choice;
-        n.submittedAt = LocalDateTime.now();
+        n.submittedAt = Instant.now();
         n.explanation = explanation;
         return n;
     }
@@ -54,10 +55,10 @@ public class UserWrongNote {
     public void update(QuizChoice choice, String explanation) {
         this.quizChoice = choice;
         this.explanation = explanation;
-        this.submittedAt = LocalDateTime.now();
+        this.submittedAt = Instant.now();
     }
 
     public void setQuizChoice(QuizChoice c){ this.quizChoice = c; }
     public void setExplanation(String e){ this.explanation = e; }
-    public void setSubmittedAt(LocalDateTime t){ this.submittedAt = t; }
+    public void setSubmittedAt(Instant t){ this.submittedAt = t; }
 }

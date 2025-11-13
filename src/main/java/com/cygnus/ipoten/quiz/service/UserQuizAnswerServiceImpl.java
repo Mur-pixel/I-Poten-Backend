@@ -18,10 +18,7 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.time.Duration;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.time.ZoneId;
+import java.time.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
@@ -279,7 +276,7 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
 
         // 4) 채점 + SessionAnswer 생성
         int correctCount = 0;
-        LocalDateTime now = LocalDateTime.now();
+        Instant now = Instant.now();
         List<SessionAnswer> toSave = new ArrayList<>();
         List<SubmitQuizSessionResponseForm.Item> details = new ArrayList<>();
 

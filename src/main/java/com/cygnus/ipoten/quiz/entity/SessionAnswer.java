@@ -1,9 +1,9 @@
 package com.cygnus.ipoten.quiz.entity;
 
 import jakarta.persistence.*;
-import lombok.AllArgsConstructor;
-import lombok.Getter;
-import lombok.NoArgsConstructor;
+import lombok.*;
+
+import java.time.Instant;
 import java.time.LocalDateTime;
 /**
  * SessionAnswer
@@ -30,12 +30,12 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 @Table(
     name = "session_answer",
-    uniqueConstraints = @UniqueConstraint(
-        name = "uk_session_question",
-        columnNames = {"session_id", "quiz_question_id"}),
+    uniqueConstraints = @UniqueConstraint(name = "uk_session_question", columnNames = {"session_id", "quiz_question_id"}),
     indexes = {
-        @Index(name = "idx_sa_session", columnList = "session_id"),
-        @Index(name = "idx_sa_question", columnList = "quiz_question_id")
+            @Index(name = "idx_sa_session", columnList = "session_id"),
+            @Index(name = "idx_sa_question", columnList = "quiz_question_id"),
+            @Index(name = "idx_sa_session_correct", columnList = "session_id, is_correct"),
+            @Index(name = "idx_sa_submitted_at", columnList = "submitted_at")
     }
 )
 public class SessionAnswer {
@@ -43,6 +43,7 @@ public class SessionAnswer {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;    // 응답 ID
 
+    @Setter(AccessLevel.PACKAGE)
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "session_id", nullable = false)
     private UserQuizSession userQuizSession;    // 소속 세션
@@ -56,7 +57,7 @@ public class SessionAnswer {
     private QuizChoice quizChoice;  // 선택한 보기 ID
 
     @Column(name = "submitted_at", nullable = false)
-    private LocalDateTime submittedAt;  // 응답 시각
+    private Instant submittedAt;  // 응답 시각
 
     @Column(name = "is_correct", nullable = false)
     private boolean isCorrect;  // 정답 여부
@@ -64,7 +65,7 @@ public class SessionAnswer {
     @Column(name = "submitted_text", length = 255)
     private String submittedText; // INITIALS/주관식 제출값
 
-    public SessionAnswer(UserQuizSession userQuizSession, QuizQuestion quizQuestion, QuizChoice quizChoice, LocalDateTime submittedAt, boolean isCorrect) {
+    public SessionAnswer(UserQuizSession userQuizSession, QuizQuestion quizQuestion, QuizChoice quizChoice, Instant submittedAt, boolean isCorrect) {
         this.userQuizSession = userQuizSession;
         this.quizQuestion = quizQuestion;
         this.quizChoice = quizChoice;

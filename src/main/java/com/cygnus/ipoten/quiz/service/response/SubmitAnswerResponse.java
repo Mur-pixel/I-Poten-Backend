@@ -4,7 +4,7 @@ import com.cygnus.ipoten.quiz.entity.SessionAnswer;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
-import java.time.LocalDateTime;
+import java.time.Instant;
 
 @Getter
 @RequiredArgsConstructor
@@ -13,7 +13,7 @@ public class SubmitAnswerResponse {
     private final Long selectedChoiceId;
     private final Long userAnswerId;
     private final boolean isCorrect;
-    private final LocalDateTime submittedAt;
+    private final Instant submittedAt;
 
     public static SubmitAnswerResponse from(SessionAnswer answer) {
         return new SubmitAnswerResponse(

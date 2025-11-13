@@ -280,16 +280,18 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
         var pageRes = timelineRepository.findTimelinePage(accountId, nullIfBlank(q), part, pr);
         var sessions = pageRes.getContent();
 
-        var ids = sessions.stream().map(UserQuizSession::getId).toList();
+        List<Long> ids = sessions.stream().map(UserQuizSession::getId).toList();
 
         Map<Long, Integer> correctBySession = new HashMap<>();
-        for (Object[] row : timelineRepository.countCorrectBySessionIds(ids)) {
-            correctBySession.put((Long) row[0], ((Number) row[1]).intValue());
-        }
-
         Map<Long, Integer> answersBySession = new HashMap<>();
-        for (Object[] row : timelineRepository.countAnswersBySessionIds(ids)) {
-            answersBySession.put((Long) row[0], ((Number) row[1]).intValue());
+
+        if (!ids.isEmpty()) {
+            for (Object[] row : timelineRepository.countCorrectBySessionIds(ids)) {
+                correctBySession.put((Long) row[0], ((Number) row[1]).intValue());
+            }
+            for (Object[] row : timelineRepository.countAnswersBySessionIds(ids)) {
+                answersBySession.put((Long) row[0], ((Number) row[1]).intValue());
+            }
         }
 
         var items = sessions.stream().map(s -> {
@@ -298,9 +300,7 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
                     .orElse(answersBySession.getOrDefault(s.getId(), 0));
             int correct = correctBySession.getOrDefault(s.getId(), 0);
 
-            Instant when = (s.getSubmittedAt() != null)
-                    ? s.getSubmittedAt()
-                    : (s.getStartedAt() == null ? null : s.getStartedAt().atZone(KST).toInstant());
+            Instant when = (s.getSubmittedAt() != null) ? s.getSubmittedAt() : s.getStartedAt();
 
             return TimelineResponseForm.Item.builder()
                     .id(s.getId())
@@ -321,13 +321,13 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
         double accuracy = (sumTotal > 0) ? (sumCorrect * 100.0 / sumTotal) : 0.0;
         double retryRate = (submitted > 0) ? (retry * 100.0 / submitted) : 0.0;
 
-        double accuracyRounded = Math.round(accuracy * 10.0) / 10.0;
-        double retryRounded = Math.round(retry * 10.0) / 10.0;
+        int accuracyRounded = (int) Math.round(accuracy);
+        int retryRounded    = (int) Math.round(retryRate);
 
         var summary = TimelineResponseForm.Summary.builder()
                 .totalSets(submitted)
-                .accuracy(Math.round(accuracyRounded))
-                .retryRate(Math.round(retryRounded))
+                .accuracy(accuracyRounded)
+                .retryRate(retryRounded)
                 .build();
 
         var recentRaw = timelineRepository.findRecentRaw(accountId, 10);
