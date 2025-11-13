@@ -76,7 +76,8 @@ public class UserQuizSessionTimelineRepositoryImpl implements UserQuizSessionTim
     public long countSubmittedRetry(Long accountId) {
         String jpql = "SELECT COUNT(s) FROM UserQuizSession s " +
                 "WHERE s.account.id = :aid AND s.sessionStatus = :st " +
-                "AND (s.parent IS NOT NULL OR s.source = 'RETRY_WRONG')";
+                "AND (s.parentSession IS NOT NULL " +
+                "     OR s.sessionMode = com.cygnus.ipoten.quiz.entity.enums.SessionMode.WRONG_ONLY)";
         return em.createQuery(jpql, Long.class)
                 .setParameter("aid", accountId)
                 .setParameter("st", SessionStatus.SUBMITTED)
@@ -98,7 +99,7 @@ public class UserQuizSessionTimelineRepositoryImpl implements UserQuizSessionTim
 
     @Override
     public long sumCorrectAnswersOfSubmitted(Long accountId) {
-        String jpql = "SELECT COALESCE(SUM(CASE WHEN a.correct = TRUE THEN 1 ELSE 0 END), 0) " +
+        String jpql = "SELECT COALESCE(SUM(CASE WHEN a.isCorrect = TRUE THEN 1 ELSE 0 END), 0) " +
                 "FROM SessionAnswer a " +
                 "WHERE a.userQuizSession.account.id = :aid " +
                 "AND a.userQuizSession.sessionStatus = :st";
@@ -129,7 +130,7 @@ public class UserQuizSessionTimelineRepositoryImpl implements UserQuizSessionTim
     public List<Object[]> countCorrectBySessionIds(Collection<Long> sessionIds) {
         if (sessionIds == null || sessionIds.isEmpty()) return List.of();
         String jpql = "SELECT a.userQuizSession.id, " +
-                "SUM(CASE WHEN a.correct = TRUE THEN 1 ELSE 0 END) " +
+                "SUM(CASE WHEN a.isCorrect = TRUE THEN 1 ELSE 0 END) " +
                 "FROM SessionAnswer a " +
                 "WHERE a.userQuizSession.id IN :ids " +
                 "GROUP BY a.userQuizSession.id";
