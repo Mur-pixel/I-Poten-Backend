@@ -13,7 +13,6 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
-import java.time.LocalDateTime;
 import java.util.List;
 
 /**
@@ -33,7 +32,8 @@ import java.util.List;
     name = "user_quiz_session",
     indexes = {
             @Index(name = "idx_uqs_user_set", columnList = "account_id, quiz_set_id, started_at"),
-            @Index(name = "idx_uqs_started", columnList = "started_at")
+            @Index(name = "idx_uqs_started", columnList = "started_at"),
+            @Index(name = "idx_uqs_user_status_started", columnList = "account_id, session_status, started_at")
     }
 )
 public class UserQuizSession {
@@ -78,10 +78,10 @@ public class UserQuizSession {
     private Integer total; // 총 문항 수
 
     @Column(name = "started_at", nullable = false)
-    private LocalDateTime startedAt;
+    private Instant startedAt;
 
     @Column(name = "submitted_at")
-    private LocalDateTime submittedAt;
+    private Instant submittedAt;
 
     @Column(name = "elapsed_ms")
     private Long elapsedMs; // 제출까지 걸린 시간(ms), null 허용
@@ -93,21 +93,32 @@ public class UserQuizSession {
     @Column(name ="seed_value")
     private Long seed; // 최종 해석된 시드 값
 
+    @Version
+    private Long version;
+
     // 마지막 활동 시각(조회/답안 저장/제출 시 갱신)
     private Instant lastActivityAt;
 
     public void submit(int finalScore) {
         this.sessionStatus = SessionStatus.SUBMITTED;
-        this.submittedAt = LocalDateTime.now();
+        this.submittedAt = Instant.now();
         this.score = finalScore;
     }
 
     public void submit(int finalScore, Long elapsedMs) {
-        submit(finalScore);
+        if (this.sessionStatus == SessionStatus.SUBMITTED || this.sessionStatus == SessionStatus.EXPIRED) {
+            throw new IllegalStateException("이미 제출되었거나 만료된 세션입니다. id=" + id);
+        }
+        this.sessionStatus = SessionStatus.SUBMITTED;
+        this.submittedAt = Instant.now();
+        this.score = finalScore;
         this.elapsedMs = elapsedMs;
     }
 
     public void expire() {
+        if (this.sessionStatus == SessionStatus.SUBMITTED || this.sessionStatus == SessionStatus.EXPIRED) {
+            throw new IllegalStateException("이미 제출되었거나 만료된 세션입니다. id=" + id);
+        }
         this.sessionStatus = SessionStatus.EXPIRED;
     }
 
@@ -119,7 +130,7 @@ public class UserQuizSession {
         this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = questionsSnapshotJson;
         this.lastActivityAt = Instant.now();
@@ -134,7 +145,7 @@ public class UserQuizSession {
         this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = questionsSnapshotJson;
         this.seedMode = seedMode;
@@ -150,7 +161,7 @@ public class UserQuizSession {
         this.sessionMode = mode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
-        this.startedAt = LocalDateTime.now();
+        this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = snapshotJson;
         this.lastActivityAt = Instant.now();

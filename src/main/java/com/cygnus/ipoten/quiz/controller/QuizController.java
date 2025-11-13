@@ -49,6 +49,7 @@ public class QuizController {
     private final UserQuizSessionRepository userQuizSessionRepository;
     private final ObjectMapper objectMapper;
     private final QuizSetRepository quizSetRepository;
+    private final QuizMetricsTrendService quizMetricsTrendService;
 
     /** 공통: 쿠키/헤더에서 토큰 추출 후 Redis에서 accountId 조회(없으면 null) */
     // -> 정책 변경: 쿠키 전용으로 단순화
@@ -549,6 +550,52 @@ public class QuizController {
             }
             default -> throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "unsupported part");
         }
+    }
+
+    @GetMapping("/me/quiz/timeline")
+    public ResponseEntity<?> getMyTimeline(
+            @RequestParam(name = "q", required = false) String q,
+            @RequestParam(name = "type", required = false, defaultValue = "ALL") String type,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        QuizPartType part = ("ALL".equalsIgnoreCase(type) || type == null || type.isBlank())
+                ? null
+                : QuizPartType.valueOf(type.toUpperCase());
+        var result = userQuizSessionQueryService.getTimeline(accountId, q, part, page, size);
+        return ResponseEntity.ok(result);
+    }
+
+    // 사용자의 학습 성과 변화 추이 확인
+    @GetMapping("/me/quiz/metrics")
+    public ResponseEntity<QuizTrendResponseForm> getTrend(
+            @RequestParam String metric,
+            @RequestParam(defaultValue = "30d") String span,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        return ResponseEntity.ok(quizMetricsTrendService.getTrend(accountId, metric, span));
+    }
+
+    // 사용자가 완료한 퀴즈 세트의 총 개수를 조회
+    @GetMapping("/me/quiz/metrics/total-sets")
+    public ResponseEntity<TotalSetsResponseForm> getTotalSets(
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        long total = quizMetricsTrendService.getTotalSets(accountId);
+        return ResponseEntity.ok(new TotalSetsResponseForm(total));
     }
 
     /** 정책: 소유권 위반/존재하지 않음은 404로 숨김 */

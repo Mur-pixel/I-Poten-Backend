@@ -1,18 +1,13 @@
 package com.cygnus.ipoten.quiz.service;
 
-import com.cygnus.ipoten.quiz.controller.response_form.SessionItemsPageResponseForm;
-import com.cygnus.ipoten.quiz.controller.response_form.SessionListResponseForm;
-import com.cygnus.ipoten.quiz.controller.response_form.SessionReviewResponseForm;
-import com.cygnus.ipoten.quiz.controller.response_form.SessionSummaryResponseForm;
+import com.cygnus.ipoten.quiz.controller.response_form.*;
 import com.cygnus.ipoten.quiz.entity.QuizChoice;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.SessionAnswer;
 import com.cygnus.ipoten.quiz.entity.UserQuizSession;
+import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
 import com.cygnus.ipoten.quiz.entity.enums.SessionStatus;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
-import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
-import com.cygnus.ipoten.quiz.repository.SessionAnswerRepository;
-import com.cygnus.ipoten.quiz.repository.UserQuizSessionRepository;
+import com.cygnus.ipoten.quiz.repository.*;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
@@ -21,6 +16,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -33,8 +30,11 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizChoiceRepository quizChoiceRepository;
     private final SessionAnswerRepository sessionAnswerRepository;
+    private final UserQuizSessionTimelineRepository timelineRepository;
 
     private static final Duration EXPIRE_AFTER = Duration.ofMinutes(60);
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter D = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(KST);
 
     /** 상태/권한/만료 전환 포함 단건 요약 */
     @Override
@@ -271,6 +271,104 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
                 .correct(correctCnt)
                 .items(items)
                 .build();
+    }
+
+    @Override
+    public TimelineResponseForm getTimeline(Long accountId, String q, QuizPartType part, int page, int size) {
+
+        var pr = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(50, size)));
+        var pageRes = timelineRepository.findTimelinePage(accountId, nullIfBlank(q), part, pr);
+        var sessions = pageRes.getContent();
+
+        List<Long> ids = sessions.stream().map(UserQuizSession::getId).toList();
+
+        Map<Long, Integer> correctBySession = new HashMap<>();
+        Map<Long, Integer> answersBySession = new HashMap<>();
+
+        if (!ids.isEmpty()) {
+            for (Object[] row : timelineRepository.countCorrectBySessionIds(ids)) {
+                correctBySession.put((Long) row[0], ((Number) row[1]).intValue());
+            }
+            for (Object[] row : timelineRepository.countAnswersBySessionIds(ids)) {
+                answersBySession.put((Long) row[0], ((Number) row[1]).intValue());
+            }
+        }
+
+        var items = sessions.stream().map(s -> {
+            var qs = s.getQuizSet();
+            int total = Optional.ofNullable(s.getTotal())
+                    .orElse(answersBySession.getOrDefault(s.getId(), 0));
+            int correct = correctBySession.getOrDefault(s.getId(), 0);
+
+            Instant when = (s.getSubmittedAt() != null) ? s.getSubmittedAt() : s.getStartedAt();
+
+            return TimelineResponseForm.Item.builder()
+                    .id(s.getId())
+                    .title(qs != null ? qs.getTitle() : "제목없음")
+                    .partType(qs != null && qs.getPartType() != null ? qs.getPartType().name() : "CHOICE")
+                    .date(when)
+                    .correct(correct)
+                    .total(total)
+                    .category(qs != null && qs.getCategory() != null ? qs.getCategory().getName() : null)
+                    .build();
+        }).toList();
+
+        long submitted = timelineRepository.countSubmitted(accountId);
+        long retry = timelineRepository.countSubmittedRetry(accountId);
+        long sumTotal = timelineRepository.sumTotalQuestionsOfSubmitted(accountId);
+        long sumCorrect = timelineRepository.sumCorrectAnswersOfSubmitted(accountId);
+
+        double accuracy = (sumTotal > 0) ? (sumCorrect * 100.0 / sumTotal) : 0.0;
+        double retryRate = (submitted > 0) ? (retry * 100.0 / submitted) : 0.0;
+
+        int accuracyRounded = (int) Math.round(accuracy);
+        int retryRounded    = (int) Math.round(retryRate);
+
+        var summary = TimelineResponseForm.Summary.builder()
+                .totalSets(submitted)
+                .accuracy(accuracyRounded)
+                .retryRate(retryRounded)
+                .build();
+
+        var recentRaw = timelineRepository.findRecentRaw(accountId, 10);
+        var recent = recentRaw.stream()
+                .map(r -> {
+                    String whenStr;
+                    Object ts = r[1];
+                    if (ts instanceof java.time.Instant i) {
+                        whenStr = D.format(i);
+                    } else if (ts instanceof java.time.LocalDateTime ldt) {
+                        whenStr = D.format(ldt.atZone(KST).toInstant());
+                    } else if (ts instanceof java.time.ZonedDateTime zdt) {
+                        whenStr = D.format(zdt.toInstant());
+                    } else {
+                        whenStr = String.valueOf(ts);
+                    }
+                    return TimelineResponseForm.Recent.builder()
+                            .label(String.valueOf(r[0]))
+                            .when(whenStr)
+                            .build();
+                })
+                .toList();
+
+        return TimelineResponseForm.builder()
+                .summary(summary)
+                .items(items)
+                .recent(recent)
+                .total(pageRes.getTotalElements())
+                .build();
+    }
+
+    private String nullIfBlank(String s) {
+        return (s == null || s.isBlank()) ? null : s;
+    }
+
+    private Instant toInstant(Object ts) {
+        if (ts == null) return null;
+        if (ts instanceof Instant i) return i;
+        if (ts instanceof java.time.LocalDateTime ldt) return ldt.atZone(KST).toInstant();
+        if (ts instanceof java.time.ZonedDateTime zdt) return zdt.toInstant();
+        return null;
     }
 
     /** 마지막 활동 60분 초과 시 EXPIRE 전환(상태 계산 및 필요 시 DB 전환) */
