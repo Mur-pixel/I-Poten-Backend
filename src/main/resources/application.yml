@@ -46,6 +46,7 @@ naver:
   login-url: ${NAVER_LOGIN_URL}
   client-id: ${NAVER_CLIENT_ID}
   redirect-uri: ${NAVER_REDIRECT_URI}
+  client-secret: ${NAVER_CLIENT_SECRET}
   token-request-uri: ${NAVER_TOKEN_REQUEST_URI}
   user-info-request-uri: ${NAVER_USER_INFO_REQUEST_URI}
 
