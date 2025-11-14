@@ -42,6 +42,14 @@ github:
   token-request-uri: ${GITHUB_TOKEN_REQUEST_URL}
   user-info-request-uri: ${GITHUB_USER_INFO_REQUEST_URL}
 
+naver:
+  login-url: ${NAVER_LOGIN_URL}
+  client-id: ${NAVER_CLIENT_ID}
+  redirect-uri: ${NAVER_REDIRECT_URI}
+  client-secret: ${NAVER_CLIENT_SECRET}
+  token-request-uri: ${NAVER_TOKEN_REQUEST_URI}
+  user-info-request-uri: ${NAVER_USER_INFO_REQUEST_URI}
+
 
 meta:
   login-url: ${META_LOGIN_URL}
@@ -49,6 +57,8 @@ meta:
   redirect-uri: ${META_REDIRECT_URI}
   token-request-uri: ${META_TOKEN_REQUEST_URI}
   user-info-request-uri: ${META_USER_INFO_REQUEST_URI}
+
+
 
 cors:
   allow:
