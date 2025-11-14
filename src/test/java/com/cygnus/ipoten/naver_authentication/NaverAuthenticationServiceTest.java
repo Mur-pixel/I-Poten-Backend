@@ -18,6 +18,7 @@ import org.mockito.Mock;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.web.client.RestTemplate;
 
+import java.util.Map;
 import java.util.Optional;
 import java.util.UUID;
 
@@ -82,5 +83,34 @@ public class NaverAuthenticationServiceTest {
 
     }
 
-    
+    @Test
+    @DisplayName("네이버_소셜_로그인_진행_성공")
+    void 네이버_소셜_로그인_진행_시_신규_유저_임시_토큰_발행_성공(){
+
+        // given
+        Map<String, Object> testUserInfo = Map.of(
+                "email", "testEmail",
+                "nickName", "testNickname"
+        );
+        String testEamil = "testEamil";
+        String temporaryCode = "testCode";
+        String testAccessToken = "testAccessToken";
+        String testTemporaryToken = "testTemporaryToken";
+
+        given(accountProfileService.loadProfileByEmailAndLoginType(testEamil, LoginType.META)).willReturn(Optional.empty());
+        given(authenticationService.createTemporaryUserTokenWithAccessToken(testAccessToken)).willReturn(testTemporaryToken);
+        given(naverAuthenticationService.getAccessToken(temporaryCode)).willReturn(testTemporaryToken);
+        given(naverAuthenticationService.getUserInfo(testAccessToken)).willReturn(testUserInfo);
+
+        // when
+        NaverLoginResponse naverLoginResponse = naverAuthenticationService.handleLogin(temporaryCode);
+
+
+        // then
+        Assertions.assertEquals(naverLoginResponse.getIsNewUser(), true);
+        Assertions.assertEquals(naverLoginResponse.getUserToken(), testTemporaryToken);
+
+
+
+    }
 }
