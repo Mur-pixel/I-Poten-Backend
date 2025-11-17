@@ -50,6 +50,14 @@ naver:
   token-request-uri: ${NAVER_TOKEN_REQUEST_URI}
   user-info-request-uri: ${NAVER_USER_INFO_REQUEST_URI}
 
+google:
+  login-url: ${GOOGLE_LOGIN_URL}
+  client-id: ${GOOGLE_CLIENT_ID}
+  redirect-uri: ${GOOGLE_REDIRECT_URI}
+  client-secret: ${GOOGLE_CLIENT_SECRET}
+  token-request-uri: ${GOOGLE_TOKEN_REQUEST_URI}
+  user-info-request-uri: ${GOOGLE_USER_INFO_REQUEST_URI}
+
 
 meta:
   login-url: ${META_LOGIN_URL}
