@@ -2,6 +2,8 @@ package com.cygnus.ipoten.exception;
 
 import com.cygnus.ipoten.account.exception.NotLoggedInException;
 import com.cygnus.ipoten.account.exception.UserNotFoundException;
+import com.cygnus.ipoten.google_authentication.exception.GoogleAccessTokenException;
+import com.cygnus.ipoten.google_authentication.exception.GoogleGetUserInfoException;
 import com.cygnus.ipoten.term.exception.TermNotFoundException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -37,5 +39,15 @@ public class GlobalExceptionHandler {
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<String> handleUserNotFoundException(UserNotFoundException e) {
         return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND); // 404 Not Found
+    }
+
+    @ExceptionHandler(GoogleAccessTokenException.class)
+    public ResponseEntity<String> handleGoogleAccessTokenException(GoogleAccessTokenException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
+    }
+
+    @ExceptionHandler(GoogleGetUserInfoException.class)
+    public ResponseEntity<String> handleGoogleGetUserInfoException(GoogleGetUserInfoException ex) {
+        return new ResponseEntity<>(ex.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 }
