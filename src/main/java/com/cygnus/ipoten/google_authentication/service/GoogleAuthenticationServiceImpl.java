@@ -79,13 +79,12 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
 
         boolean isNewUser = accountProfile.isEmpty();
 
-        if(isNewUser) {
-            String temporaryUserTokenWithAccessToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
-            return GoogleLoginResponse.of(isNewUser,temporaryUserTokenWithAccessToken,name,email,origin);
+        String token =
+                isNewUser
+                ? authenticationService.createTemporaryUserTokenWithAccessToken(accessToken)
+                : authenticationService.createUserTokenWithAccessToken(accountProfile.get().getAccount().getId(), accessToken);
 
-        }
-
-        return null;
+        return GoogleLoginResponse.of(isNewUser, token, name, email, origin);
 
     }
 
