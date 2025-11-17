@@ -20,7 +20,7 @@ public class AccountController {
     private final AccountService accountService;
 
 
-    //네이버 약관 동의 후 회원 가입
+    //네이버, 구글 통합 약관 동의 후 회원 가입
     @PostMapping("/signup")
     public ResponseEntity<RegisterResponse> signup(
             @RequestHeader("Authentication") String temporaryUserToken,
