@@ -38,7 +38,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
     public GoogleAuthenticationServiceImpl(
             @Value("${google.client-id}") String clientId,
             @Value("${google.client-secret}") String clientSecret,
-            @Value("${google.rediret-uri}") String redirectUri,
+            @Value(" ${google.redirect-uri}") String redirectUri,
             @Value("${google.token-request-uri}") String tokenRequestUri,
             RestTemplate restTemplate,
             AuthenticationService authenticationService,
@@ -60,12 +60,20 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
 
     @Override
     public String Link() {
-        return String.format("https://accounts.google.com/o/oauth2/v2/auth?"
+        String scope = "https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/userinfo.profile";
+
+        return String.format(
+                "https://accounts.google.com/o/oauth2/v2/auth?"
                         + "client_id=%s"
                         + "&redirect_uri=%s"
-                        + "&response_type=code",
-                clientId, redirectUri);
+                        + "&response_type=code"
+                        + "&scope=%s"
+                        + "&access_type=offline"
+                        + "&prompt=consent",
+                clientId, redirectUri, scope
+        );
     }
+
 
     @Override
     public GoogleLoginResponse handleLogin(String code) {
