@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.term.batch;
+package com.cygnus.ipoten.batch.term;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

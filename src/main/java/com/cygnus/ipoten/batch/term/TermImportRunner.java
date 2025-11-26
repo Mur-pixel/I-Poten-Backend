@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.term.batch;
+package com.cygnus.ipoten.batch.term;
 
 import com.cygnus.ipoten.term.service.TermService;
 import com.cygnus.ipoten.term.service.request.CreateTermRequest;

@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.quiz.batch;
+package com.cygnus.ipoten.batch.quiz;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

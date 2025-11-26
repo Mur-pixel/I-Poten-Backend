@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.quiz.batch;
+package com.cygnus.ipoten.batch.quiz;
 
 import com.cygnus.ipoten.quiz.entity.QuizChoice;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;

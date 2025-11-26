@@ -1,9 +1,9 @@
-package com.cygnus.ipoten.quiz.batch;
+package com.cygnus.ipoten.batch.quiz;
 
 import com.cygnus.ipoten.quiz.entity.QuizPublication;
 import com.cygnus.ipoten.quiz.entity.QuizSet;
 import com.cygnus.ipoten.quiz.entity.enums.JobRole;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.repository.QuizPublicationRepository;
 import com.cygnus.ipoten.quiz.repository.QuizSetRepository;
 import lombok.RequiredArgsConstructor;
@@ -62,7 +62,7 @@ public class QuizPublicationTsvImportRunner implements CommandLineRunner {
 
                 try {
                     LocalDate date = LocalDate.parse(get(c, col, "scheduled_date"));
-                    QuizPartType part = QuizPartType.valueOf(get(c, col, "part_type").trim().toUpperCase());
+                    QuizSetType part = QuizSetType.valueOf(get(c, col, "part_type").trim().toUpperCase());
                     String roleRaw = get(c, col, "job_role_key");
                     JobRole role = (roleRaw == null || roleRaw.isBlank()) ? JobRole.GENERAL : JobRole.from(roleRaw);
 
