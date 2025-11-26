@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz.entity;
 
 import com.cygnus.ipoten.quiz.entity.enums.JobRole;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
@@ -26,7 +26,7 @@ public class QuizPublication {
 
     @Enumerated(EnumType.STRING)
     @Column(name="part_type", nullable=false, length=32)
-    private QuizPartType partType;
+    private QuizSetType partType;
 
     @Enumerated(EnumType.STRING)
     @Column(name="job_role", nullable=false, length=32)
@@ -42,7 +42,7 @@ public class QuizPublication {
     @CreationTimestamp
     private LocalDateTime createdAt;
 
-    public QuizPublication(LocalDate d, QuizPartType p, JobRole r, QuizSet set) {
+    public QuizPublication(LocalDate d, QuizSetType p, JobRole r, QuizSet set) {
         this.scheduledDate = d; this.partType = p; this.jobRole = r; this.quizSet = set;
     }
 }

@@ -5,7 +5,7 @@ import com.cygnus.ipoten.quiz.entity.QuizChoice;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.SessionAnswer;
 import com.cygnus.ipoten.quiz.entity.UserQuizSession;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.entity.enums.SessionStatus;
 import com.cygnus.ipoten.quiz.repository.*;
 import lombok.RequiredArgsConstructor;
@@ -274,7 +274,7 @@ public class UserQuizSessionQueryServiceImpl implements UserQuizSessionQueryServ
     }
 
     @Override
-    public TimelineResponseForm getTimeline(Long accountId, String q, QuizPartType part, int page, int size) {
+    public TimelineResponseForm getTimeline(Long accountId, String q, QuizSetType part, int page, int size) {
 
         var pr = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(50, size)));
         var pageRes = timelineRepository.findTimelinePage(accountId, nullIfBlank(q), part, pr);

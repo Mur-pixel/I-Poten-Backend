@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz.repository;
 
 import com.cygnus.ipoten.quiz.entity.UserQuizSession;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 
@@ -9,7 +9,7 @@ import java.util.Collection;
 import java.util.List;
 
 public interface UserQuizSessionTimelineRepositoryCustom {
-    Page<UserQuizSession> findTimelinePage(Long accountId, String q, QuizPartType part, Pageable pageable);
+    Page<UserQuizSession> findTimelinePage(Long accountId, String q, QuizSetType part, Pageable pageable);
     long countSubmitted(Long accountId);
     long countSubmittedRetry(Long accountId);
     long sumTotalQuestionsOfSubmitted(Long accountId);

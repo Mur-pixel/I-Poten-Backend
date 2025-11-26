@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz.repository;
 
 import com.cygnus.ipoten.quiz.entity.UserQuizSession;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.entity.enums.SessionStatus;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.TypedQuery;
@@ -22,7 +22,7 @@ public class UserQuizSessionTimelineRepositoryImpl implements UserQuizSessionTim
     private final EntityManager em;
 
     @Override
-    public Page<UserQuizSession> findTimelinePage(Long accountId, String q, QuizPartType part, Pageable pageable) {
+    public Page<UserQuizSession> findTimelinePage(Long accountId, String q, QuizSetType part, Pageable pageable) {
         String base =
                 " FROM UserQuizSession s " +
                         " JOIN s.quizSet qs " +

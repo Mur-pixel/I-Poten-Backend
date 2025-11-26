@@ -4,7 +4,7 @@ import com.cygnus.ipoten.quiz.entity.QuizChoice;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.QuizSet;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
 import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
@@ -78,17 +78,17 @@ public class QuizSetServiceImpl implements QuizSetService {
         }
 
         // 3) 세트 생성/저장
-        QuizPartType setPart;
+        QuizSetType setPart;
         var reqTypeCat = request.getQuestionType();
         if (reqTypeCat == null) {
-            setPart = QuizPartType.CHOICE;
+            setPart = QuizSetType.CHOICE;
         } else {
             switch (reqTypeCat) {
-                case INITIALS -> setPart = QuizPartType.INITIALS;
-                case OX       -> setPart = QuizPartType.OX;
-                case CHOICE   -> setPart = QuizPartType.CHOICE;
-                case MIX      -> setPart = QuizPartType.CHOICE;
-                default       -> setPart = QuizPartType.CHOICE;
+                case INITIALS -> setPart = QuizSetType.INITIALS;
+                case OX       -> setPart = QuizSetType.OX;
+                case CHOICE   -> setPart = QuizSetType.CHOICE;
+                case MIX      -> setPart = QuizSetType.CHOICE;
+                default       -> setPart = QuizSetType.CHOICE;
             }
         }
         QuizSet quizSet = new QuizSet(title, category, request.isRandom());
@@ -193,17 +193,17 @@ public class QuizSetServiceImpl implements QuizSetService {
         }
 
         // 4) 세트 저장
-        QuizPartType setPart;
+        QuizSetType setPart;
         var reqTypeFold = request.getQuestionType();
         if (reqTypeFold == null) {
-            setPart = QuizPartType.CHOICE;
+            setPart = QuizSetType.CHOICE;
         } else {
             switch (reqTypeFold) {
-                case INITIALS -> setPart = QuizPartType.INITIALS;
-                case OX       -> setPart = QuizPartType.OX;
-                case CHOICE   -> setPart = QuizPartType.CHOICE;
-                case MIX      -> setPart = QuizPartType.CHOICE;
-                default       -> setPart = QuizPartType.CHOICE;
+                case INITIALS -> setPart = QuizSetType.INITIALS;
+                case OX       -> setPart = QuizSetType.OX;
+                case CHOICE   -> setPart = QuizSetType.CHOICE;
+                case MIX      -> setPart = QuizSetType.CHOICE;
+                default       -> setPart = QuizSetType.CHOICE;
             }
         }
         QuizSet set = new QuizSet(title, null, request.isRandom());

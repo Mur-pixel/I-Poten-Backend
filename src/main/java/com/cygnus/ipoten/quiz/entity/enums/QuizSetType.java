@@ -1,9 +1,9 @@
 package com.cygnus.ipoten.quiz.entity.enums;
 
-public enum QuizPartType {
+public enum QuizSetType {
     CHOICE, OX, INITIALS, MIX;
 
-    public static QuizPartType fromParam(String raw){
+    public static QuizSetType fromParam(String raw){
         if (raw == null || raw.isBlank()) return CHOICE;
         String s = raw.trim().toUpperCase(java.util.Locale.ROOT);
 
@@ -14,7 +14,7 @@ public enum QuizPartType {
         s = switch (s) {
             case "TRUE_FALSE", "TRUEFALSE", "TF", "T/F" -> "OX";
             case "INITIAL" -> "INITIALS";
-            case "MIXED", "ALL", "COMBINED" -> "MIX";  // ★ 혼합형 동의어 대응(선택)
+            case "MIXED", "ALL", "COMBINED" -> "MIX";
             default -> s;
         };
 
@@ -22,7 +22,7 @@ public enum QuizPartType {
             case "CHOICE" -> CHOICE;
             case "OX" -> OX;
             case "INITIALS" -> INITIALS;
-            case "MIX" -> MIX; // ★ 추가
+            case "MIX" -> MIX;
             default -> throw new IllegalArgumentException("Unknown part: " + raw);
         };
     }

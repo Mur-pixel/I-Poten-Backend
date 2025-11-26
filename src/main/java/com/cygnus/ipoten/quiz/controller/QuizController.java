@@ -5,7 +5,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.cygnus.ipoten.quiz.controller.request_form.*;
 import com.cygnus.ipoten.quiz.controller.response_form.*;
 import com.cygnus.ipoten.quiz.entity.QuizChoice;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
 import com.cygnus.ipoten.quiz.repository.QuizSetRepository;
 import com.cygnus.ipoten.quiz.repository.UserQuizSessionRepository;
@@ -336,7 +336,7 @@ public class QuizController {
                             ? java.time.LocalDate.now(zone)
                             : java.time.LocalDate.parse(requestForm.getDate());
 
-                    var p = com.cygnus.ipoten.quiz.entity.enums.QuizPartType.fromParam(requestForm.getType());
+                    var p = QuizSetType.fromParam(requestForm.getType());
                     var r = com.cygnus.ipoten.quiz.entity.enums.JobRole.from(
                             java.util.Optional.ofNullable(requestForm.getRole()).orElse("GENERAL")
                     );
@@ -517,7 +517,7 @@ public class QuizController {
     @GetMapping("/quiz/sets/{setId}/questions")
     public ResponseEntity<?> getQuestionsBySet(
             @PathVariable Long setId,
-            @RequestParam(name = "part", required = false) QuizPartType part
+            @RequestParam(name = "part", required = false) QuizSetType part
     ) {
         // 세트의 실제 타입
         var actual = quizSetQueryService.findPartTypeBySetId(setId).orElse(null);
@@ -564,9 +564,9 @@ public class QuizController {
         if (accountId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        QuizPartType part = ("ALL".equalsIgnoreCase(type) || type == null || type.isBlank())
+        QuizSetType part = ("ALL".equalsIgnoreCase(type) || type == null || type.isBlank())
                 ? null
-                : QuizPartType.valueOf(type.toUpperCase());
+                : QuizSetType.valueOf(type.toUpperCase());
         var result = userQuizSessionQueryService.getTimeline(accountId, q, part, page, size);
         return ResponseEntity.ok(result);
     }
@@ -663,7 +663,7 @@ public class QuizController {
 
         if (session.getSeedMode() != SeedMode.DAILY)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "DAILY only");
-        if (session.getQuizSet() == null || session.getQuizSet().getPartType() != QuizPartType.INITIALS)
+        if (session.getQuizSet() == null || session.getQuizSet().getPartType() != QuizSetType.INITIALS)
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "INITIALS only");
 
         // 1) 세션 스냅샷(id 리스트) 뽑기

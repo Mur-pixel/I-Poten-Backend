@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz.service;
 
 import com.cygnus.ipoten.quiz.entity.enums.JobRole;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.repository.QuizPublicationRepository;
 import com.cygnus.ipoten.quiz.service.response.BuiltQuizSetResponse;
 import com.cygnus.ipoten.quiz.service.response.InitialsQuestionRead;
@@ -24,7 +24,7 @@ public class DailyQuizServiceImpl implements DailyQuizService {
     private final EntityManager em;
 
     @Transactional(readOnly = true)
-    public BuiltQuizSetResponse resolve(LocalDate date, QuizPartType part, JobRole role) {
+    public BuiltQuizSetResponse resolve(LocalDate date, QuizSetType part, JobRole role) {
 
         List<JobRole> roles = (role == JobRole.GENERAL)
                 ? List.of(JobRole.GENERAL)

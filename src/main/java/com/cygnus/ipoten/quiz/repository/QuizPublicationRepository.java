@@ -2,7 +2,7 @@ package com.cygnus.ipoten.quiz.repository;
 
 import com.cygnus.ipoten.quiz.entity.QuizPublication;
 import com.cygnus.ipoten.quiz.entity.enums.JobRole;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -13,7 +13,7 @@ import java.util.Optional;
 
 public interface QuizPublicationRepository extends JpaRepository<QuizPublication, Long> {
     Optional<QuizPublication> findFirstByScheduledDateAndPartTypeAndJobRoleAndActiveIsTrue(
-            LocalDate date, QuizPartType part, JobRole role);
+            LocalDate date, QuizSetType part, JobRole role);
 
     // 날짜 = 오늘, part 일치, role ∈ {요청 role, GENERAL}, 또는 role IS NULL
     @Query("""
@@ -26,7 +26,7 @@ public interface QuizPublicationRepository extends JpaRepository<QuizPublication
     """)
     Optional<QuizPublication> findExact(
             @Param("date") LocalDate date,
-            @Param("part") QuizPartType part,
+            @Param("part") QuizSetType part,
             @Param("roles") Collection<JobRole> roles
     );
 
@@ -41,7 +41,7 @@ public interface QuizPublicationRepository extends JpaRepository<QuizPublication
     """)
     Optional<QuizPublication> findLatestOnOrBefore(
             @Param("date") LocalDate date,
-            @Param("part") QuizPartType part,
+            @Param("part") QuizSetType part,
             @Param("roles") Collection<JobRole> roles
     );
 }

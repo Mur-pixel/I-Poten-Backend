@@ -155,7 +155,7 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
         List<QuizQuestion> questions = quizQuestionRepository.findAllById(wrongQuestionId);
 
         // 2-2) 부모 세트의 partType을 우선 사용, 없으면 질문 타입으로 유추(단일=그 타입, 혼합=MIX)
-        QuizPartType resolvedPartType = resolvePartTypeFromParentOrQuestions(
+        QuizSetType resolvedPartType = resolvePartTypeFromParentOrQuestions(
                 parent,
                 questions
         );
@@ -438,7 +438,7 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
     }
 
     /** 부모 세트의 partType을 우선 사용, 없으면 질문 타입 기반으로 유추 */
-    private QuizPartType resolvePartTypeFromParentOrQuestions(UserQuizSession parent, List<QuizQuestion> questions) {
+    private QuizSetType resolvePartTypeFromParentOrQuestions(UserQuizSession parent, List<QuizQuestion> questions) {
         QuizSet parentSet = parent.getQuizSet();
         if (parentSet != null && parentSet.getPartType() != null) {
             return parentSet.getPartType();
@@ -448,7 +448,7 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
                 .map(QuizQuestion::getQuestionType)
                 .collect(Collectors.toSet());
 
-        if (types.isEmpty()) return QuizPartType.MIX; // 가드
+        if (types.isEmpty()) return QuizSetType.MIX; // 가드
 
         if (types.size() == 1) {
             // 단일 타입이면 그 타입으로 매핑
@@ -456,20 +456,20 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
             return mapToPartType(only);
         }
         // 혼합
-        return QuizPartType.MIX;
+        return QuizSetType.MIX;
     }
 
     /** QuestionType -> QuizPartType 매핑 (상수명이 같다면 valueOf로 충분) */
-    private QuizPartType mapToPartType(QuestionType qt) {
+    private QuizSetType mapToPartType(QuestionType qt) {
         // 상수명이 동일한 경우 (예: CHOICE, OX, INITIALS 등) 아래 한 줄이면 충분
         try {
-            return QuizPartType.valueOf(qt.name());
+            return QuizSetType.valueOf(qt.name());
         } catch (IllegalArgumentException e) {
             // 혹시 상수명이 다르면 스위치로 보정
             switch (qt) {
                 // case MULTI: return QuizPartType.CHOICE;
                 // case TRUE_FALSE: return QuizPartType.OX;
-                default: return QuizPartType.MIX;
+                default: return QuizSetType.MIX;
             }
         }
     }

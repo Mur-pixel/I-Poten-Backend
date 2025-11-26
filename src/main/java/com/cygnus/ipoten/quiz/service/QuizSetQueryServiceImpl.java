@@ -3,7 +3,7 @@ package com.cygnus.ipoten.quiz.service;
 import com.cygnus.ipoten.quiz.entity.QuizChoice;
 import com.cygnus.ipoten.quiz.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz.repository.QuizSetRepository;
@@ -84,10 +84,10 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
     }
 
     @Override
-    public Optional<QuizPartType> findPartTypeBySetId(Long setId) {
-        List<QuizPartType> r = em.createQuery(
+    public Optional<QuizSetType> findPartTypeBySetId(Long setId) {
+        List<QuizSetType> r = em.createQuery(
                 "select qs.partType from QuizSet qs where qs.id = :id",
-                QuizPartType.class
+                QuizSetType.class
         ).setParameter("id", setId).getResultList();
         return r.stream().findFirst();
     }

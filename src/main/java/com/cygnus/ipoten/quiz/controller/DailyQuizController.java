@@ -2,7 +2,7 @@ package com.cygnus.ipoten.quiz.controller;
 
 import com.cygnus.ipoten.quiz.controller.response_form.CreateQuizSessionResponseForm;
 import com.cygnus.ipoten.quiz.entity.enums.JobRole;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.service.DailyQuizService;
 import com.cygnus.ipoten.quiz.service.UserQuizAnswerService;
 import com.cygnus.ipoten.quiz.service.response.StartUserQuizSessionResponse;
@@ -40,7 +40,7 @@ public class DailyQuizController {
                 ? java.time.LocalDate.now(zone)
                 : java.time.LocalDate.parse(date);
 
-        var p = QuizPartType.fromParam(part);
+        var p = QuizSetType.fromParam(part);
         var r = JobRole.from(role);
 
         try {
@@ -86,7 +86,7 @@ public class DailyQuizController {
         var d = (date == null || date.isBlank())
                 ? java.time.LocalDate.now(zone)
                 : java.time.LocalDate.parse(date);
-        var p = QuizPartType.fromParam(part);
+        var p = QuizSetType.fromParam(part);
         var r = JobRole.from(role);
 
         try {

@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.quiz.entity;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.term.entity.Category;
 import jakarta.persistence.*;
 import lombok.*;
@@ -37,11 +37,11 @@ public class QuizSet {
 
     @Enumerated(EnumType.STRING)
     @Column(name = "part_type", length = 20, nullable = false)
-    private QuizPartType partType;
+    private QuizSetType partType;
 
-    public QuizPartType getPartType() { return partType; }
+    public QuizSetType getPartType() { return partType; }
 
-    public void setPartType(QuizPartType partType) { this.partType = partType; }
+    public void setPartType(QuizSetType partType) { this.partType = partType; }
 
     public QuizSet(String title, boolean isRandom) {
         this.title = title;
