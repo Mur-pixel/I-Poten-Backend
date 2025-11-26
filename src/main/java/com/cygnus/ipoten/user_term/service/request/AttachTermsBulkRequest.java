@@ -1,7 +1,10 @@
 package com.cygnus.ipoten.user_term.service.request;
 
+import lombok.Builder;
+
 import java.util.List;
 
+@Builder
 public record AttachTermsBulkRequest(
         Long accountId,
         Long folderId,
@@ -23,5 +26,15 @@ public record AttachTermsBulkRequest(
                 return SKIP;
             }
         }
+    }
+
+    /** 편의용 팩토리: dedupeMode는 기본 SKIP */
+    public static AttachTermsBulkRequest of(Long accountId, Long folderId, List<Long> termIds) {
+        return AttachTermsBulkRequest.builder()
+                .accountId(accountId)
+                .folderId(folderId)
+                .termIds(termIds)
+                .dedupeMode(DedupeMode.SKIP)
+                .build();
     }
 }

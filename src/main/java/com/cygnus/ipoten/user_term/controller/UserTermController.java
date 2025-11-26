@@ -41,6 +41,7 @@ public class UserTermController {
     private final UserWordbookFolderQueryService userWordbookFolderQueryService;
     private final UserTermEraseService eraseService;
     private final UserWordbookTermMapper userWordbookTermMapper;
+    private final JobGroupWordbookService jobGroupWordbookService;
 
     /** 공통: 쿠키에서 토큰 추출 후 Redis에서 accountId 조회(없으면 null) — 쿠키 전용 */
     private Long resolveAccountId(String userToken) {
@@ -489,6 +490,21 @@ public class UserTermController {
         }
         long count = userWordbookFolderQueryService.countTermsInFolderOrThrow(accountId, folderId);
         return Map.of("folderId",  folderId, "count", count);
+    }
+
+    // 직무별 추천 단어를 내 단어장에 저장하기
+    @PostMapping("/me/folders/{folderId}/terms:bulk-by-job")
+    public ResponseEntity<AttachTermsBulkResponseForm> attachJobGroupToFolder(
+            @CookieValue(name = "userToken", required = false) String userToken,
+            @PathVariable Long folderId,
+            @RequestBody @Valid AttachJobGroupRequestForm requestForm
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+        var response = jobGroupWordbookService.attachJobGroupToFolder(accountId, folderId, requestForm.getJobKey());
+        return ResponseEntity.status(HttpStatus.CREATED).body(AttachTermsBulkResponseForm.from(response));
     }
 
     /**
