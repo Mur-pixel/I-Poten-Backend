@@ -10,4 +10,8 @@ public class AttachJobGroupRequestForm {
 
     @NotBlank
     private String jobKey;
+
+    public String getJobKey() {
+        return jobKey;
+    }
 }
