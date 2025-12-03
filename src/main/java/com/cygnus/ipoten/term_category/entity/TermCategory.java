@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.term.entity;
+package com.cygnus.ipoten.term_category.entity;
 
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -11,13 +11,13 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 @AllArgsConstructor
 @Table(
-        name = "category",
+        name = "term_category",
         uniqueConstraints = @UniqueConstraint(
                 name = "uk_category_name_depth",
                 columnNames = {"name", "depth"}
         )
 )
-public class Category {
+public class TermCategory {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -40,10 +40,10 @@ public class Category {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_id")
-    private Category parent;    // 상위 카테고리(nullable)
+    private TermCategory parent;    // 상위 카테고리(nullable)
 
     @Builder
-    private Category(String type, String groupName, String name, Integer depth, Integer sortOrder, Category parent) {
+    private TermCategory(String type, String groupName, String name, Integer depth, Integer sortOrder, TermCategory parent) {
         this.type = type;
         this.groupName = groupName;
         this.name = name;

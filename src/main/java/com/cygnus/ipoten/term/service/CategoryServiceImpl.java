@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.term.service;
 
-import com.cygnus.ipoten.term.entity.Category;
-import com.cygnus.ipoten.term.repository.CategoryRepository;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -14,22 +14,22 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CategoryServiceImpl implements CategoryService {
 
-    private final CategoryRepository categoryRepository;
+    private final TermCategoryRepository termCategoryRepository;
 
     @Override
-    public List<Category> findCategories(Integer depth, Long parentId) {
+    public List<TermCategory> findCategories(Integer depth, Long parentId) {
 
         if (depth == null || parentId == null) {
             // 기본값: 최상위 카테고리
-            return categoryRepository.findByDepthOrderBySortOrder(0);
+            return termCategoryRepository.findByDepthOrderBySortOrder(0);
         }
 
         if (depth != null && parentId == null) {
-            return categoryRepository.findByDepthOrderBySortOrder(depth);
+            return termCategoryRepository.findByDepthOrderBySortOrder(depth);
         }
 
         if (depth != null && parentId != null) {
-            return categoryRepository.findByDepthAndParentIdOrderBySortOrder(depth, parentId);
+            return termCategoryRepository.findByDepthAndParentIdOrderBySortOrder(depth, parentId);
         }
 
         // 잘못된 요청 : 빈 배열 반환
@@ -40,7 +40,7 @@ public class CategoryServiceImpl implements CategoryService {
     public List<Long> resolveSearchTargetIds(Long selectedCategoryId) {
         if (selectedCategoryId == null) return List.of();
 
-        Category sel = categoryRepository.findById(selectedCategoryId)
+        TermCategory sel = termCategoryRepository.findById(selectedCategoryId)
                 .orElse(null);
         if (sel == null) return List.of();
 
@@ -54,9 +54,9 @@ public class CategoryServiceImpl implements CategoryService {
 
         // 중분류(직무/기타) → 하위 소분류 모두
         if (sel.getDepth() == 1) {
-            List<Category> children = categoryRepository.findAllByParent_Id(sel.getId());
+            List<TermCategory> children = termCategoryRepository.findAllByParent_Id(sel.getId());
             List<Long> out = new ArrayList<>();
-            for (Category c : children) {
+            for (TermCategory c : children) {
                 if (c.getDepth() == 2) out.add(c.getId());
             }
             return out;
@@ -64,13 +64,13 @@ public class CategoryServiceImpl implements CategoryService {
 
         // 대분류(0) → (중분류들) → (소분류들) 전체 수집
         if (sel.getDepth() == 0) {
-            List<Category> mids = categoryRepository.findAllByParent_Id(sel.getId());
+            List<TermCategory> mids = termCategoryRepository.findAllByParent_Id(sel.getId());
             if (mids.isEmpty()) return List.of();
-            List<Long> midIds = mids.stream().map(Category::getId).toList();
-            List<Category> leaves = categoryRepository.findAllByParent_IdIn(midIds);
+            List<Long> midIds = mids.stream().map(TermCategory::getId).toList();
+            List<TermCategory> leaves = termCategoryRepository.findAllByParent_IdIn(midIds);
             return leaves.stream()
                     .filter(c -> c.getDepth() == 2)
-                    .map(Category::getId)
+                    .map(TermCategory::getId)
                     .toList();
         }
 

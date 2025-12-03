@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.term.entity;
 
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.AllArgsConstructor;
@@ -34,7 +35,7 @@ public class JobRecommendedTerm {
     /** 이 추천 용어가 속한 카테고리 */
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "category_id", nullable = false)
-    private Category category;
+    private TermCategory termCategory;
 
     /** 직무 내에서의 노출 순서 (1~100) */
     @Column(name = "rank_no", nullable = false)

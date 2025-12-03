@@ -28,10 +28,20 @@ import org.springframework.web.bind.annotation.*;
 
 import java.util.*;
 
+import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.media.ArraySchema;
+import io.swagger.v3.oas.annotations.media.Content;
+import io.swagger.v3.oas.annotations.media.Schema;
+import io.swagger.v3.oas.annotations.responses.ApiResponse;
+import io.swagger.v3.oas.annotations.responses.ApiResponses;
+import io.swagger.v3.oas.annotations.tags.Tag;
+
 @Slf4j
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api/terms")
+@Tag(name = "Term", description = "용어(IT 개념) CRUD 및 검색 API")
 public class TermController {
 
     private final TermService termService;
@@ -49,9 +59,23 @@ public class TermController {
     }
 
     // 용어 등록 (제목, 설명, 태그, 카테고리)
+    @Operation(
+            summary = "용어 등록",
+            description = "제목, 설명, 태그, 카테고리 정보를 입력하여 새로운 IT 용어를 등록합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "201",
+                    description = "용어 생성 성공",
+                    content = @Content(schema = @Schema(implementation = CreateTermResponseForm.class))
+            ),
+            @ApiResponse(responseCode = "401", description = "인증 실패 (userToken 없음 또는 만료)"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @PostMapping
     public ResponseEntity<CreateTermResponseForm> createTerm(
             @Valid @RequestBody CreateTermRequestForm createTermRequestForm,
+            @Parameter(description = "로그인 후 발급되는 사용자 토큰 (쿠키)", required = false)
             @CookieValue(name = "userToken", required = false) String userToken) {
 
         log.debug("용어 생성 요청 - 제목: {}, 카테고리 ID: {}", createTermRequestForm.getTitle(), createTermRequestForm.getCategoryId());
@@ -74,10 +98,25 @@ public class TermController {
     }
 
     // PUT /api/terms/{termId} — 용어 정보 수정
+    @Operation(
+            summary = "용어 수정",
+            description = "기존에 등록된 용어의 제목, 설명, 태그, 카테고리 정보를 수정합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "용어 수정 성공",
+                    content = @Content(schema = @Schema(implementation = UpdateTermResponseForm.class))
+            ),
+            @ApiResponse(responseCode = "401", description = "인증 실패 (userToken 없음 또는 만료)"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @PutMapping("/{termId}")
     public ResponseEntity<UpdateTermResponseForm> updateTerm(
+            @Parameter(description = "수정할 용어 ID", example = "1")
             @PathVariable Long termId,
             @Valid @RequestBody UpdateTermRequestForm updateTermRequestForm,
+            @Parameter(description = "로그인 후 발급되는 사용자 토큰 (쿠키)", required = false)
             @CookieValue(name = "userToken", required = false) String userToken) {
 
         log.debug("용어 수정 요청 - 용어 ID: {}, 제목: {}", termId, updateTermRequestForm.getTitle());
@@ -99,9 +138,20 @@ public class TermController {
     }
 
     // DELETE /api/terms/{termId} — 용어 삭제
+    @Operation(
+            summary = "용어 삭제",
+            description = "특정 용어를 삭제합니다. 관련 퀴즈/단어장 등 영향도는 별도 정책에 따릅니다."
+    )
+    @ApiResponses({
+            @ApiResponse(responseCode = "204", description = "용어 삭제 성공 (본문 없음)"),
+            @ApiResponse(responseCode = "401", description = "인증 실패 (userToken 없음 또는 만료)"),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @DeleteMapping("/{termId}")
     public ResponseEntity<Void> deleteTerm(
+            @Parameter(description = "삭제할 용어 ID", example = "1")
             @PathVariable Long termId,
+            @Parameter(description = "로그인 후 발급되는 사용자 토큰 (쿠키)", required = false)
             @CookieValue(name = "userToken", required = false) String userToken) {
 
         log.debug("용어 삭제 요청 - 용어 ID: {}", termId);
@@ -123,8 +173,21 @@ public class TermController {
     }
 
     // 모든 용어를 페이지 단위로 확인하기
+    @Operation(
+            summary = "용어 목록 조회",
+            description = "페이지/크기 기준으로 전체 용어 목록을 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "목록 조회 성공",
+                    content = @Content(schema = @Schema(implementation = ListTermResponseForm.class))
+            ),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @GetMapping
-    public ResponseEntity<ListTermResponseForm> termList(@Valid @ModelAttribute ListTermRequestForm requestForm) {
+    public ResponseEntity<ListTermResponseForm> termList(
+            @Valid @ModelAttribute ListTermRequestForm requestForm) {
         log.debug("용어 목록 조회 요청 - 페이지: {}, 크기: {}", requestForm.getPage(), requestForm.getPerPage());
         try {
             ListTermRequest request = requestForm.toListTermRequest();
@@ -138,8 +201,21 @@ public class TermController {
     }
 
     // '가장 일치하는 제목' 기준 검색
+    @Operation(
+            summary = "용어 검색",
+            description = "검색어(q)를 기준으로 가장 일치하는 제목/설명을 가진 용어를 검색합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "검색 성공",
+                    content = @Content(schema = @Schema(implementation = SearchTermResponseForm.class))
+            ),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @GetMapping("/search")
-    public ResponseEntity<SearchTermResponseForm> search(@Valid @ModelAttribute SearchRequestForm requestForm) {
+    public ResponseEntity<SearchTermResponseForm> search(
+            @Valid @ModelAttribute SearchRequestForm requestForm) {
         log.debug("용어 검색 요청 - 페이지: {}, 크기: {}", requestForm.getPage(), requestForm.getSize());
         try {
             var response = searchService.search(requestForm.toRequest());
@@ -152,8 +228,22 @@ public class TermController {
     }
 
     // 단건 태그 조회
+    @Operation(
+            summary = "단일 용어 태그 조회",
+            description = "특정 용어 ID에 연결된 태그 목록을 조회합니다. 정규화 테이블 → 폴백 파싱 순으로 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "태그 조회 성공",
+                    content = @Content(array = @ArraySchema(schema = @Schema(implementation = String.class)))
+            ),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @GetMapping("/{termId}/tags")
-    public ResponseEntity<List<String>> tags(@PathVariable Long termId) {
+    public ResponseEntity<List<String>> tags(
+            @Parameter(description = "태그를 조회할 용어 ID", example = "1")
+            @PathVariable Long termId) {
         log.debug("용어 태그 조회 요청 - 용어 ID: {}", termId);
         try {
             // 1) 정규화 테이블 조인
@@ -177,8 +267,30 @@ public class TermController {
     }
 
     // 배치 태그 조회: /api/terms/tags?ids=1&ids=2...
+    @Operation(
+            summary = "여러 용어 태그 배치 조회",
+            description = "`ids` 쿼리 파라미터로 전달된 여러 용어 ID에 대해 태그 목록을 한 번에 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "배치 태그 조회 성공",
+                    content = @Content(
+                            schema = @Schema(
+                                    description = "termId → 태그 목록 매핑",
+                                    implementation = Map.class
+                            )
+                    )
+            ),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @GetMapping("/tags")
-    public ResponseEntity<Map<Long, List<String>>> tagsByIds(@RequestParam("ids") List<Long> ids) {
+    public ResponseEntity<Map<Long, List<String>>> tagsByIds(
+            @Parameter(
+                    description = "태그를 조회할 용어 ID 목록. 예: ids=1&ids=2&ids=3",
+                    required = true
+            )
+            @RequestParam("ids") List<Long> ids) {
         log.info("배치 태그 조회 요청 - 총 {}개 ID", ids.size());
         try {
             // 1) 정규화 테이블에서 최대한 수집
@@ -217,10 +329,25 @@ public class TermController {
     }
 
     // 연관 키워드(해시태그) 클릭 시 같은 태그의 용어만 조회
+    @Operation(
+            summary = "태그 기준 용어 검색",
+            description = "특정 태그를 기준으로 해당 태그가 포함된 용어 목록을 페이지 단위로 조회합니다."
+    )
+    @ApiResponses({
+            @ApiResponse(
+                    responseCode = "200",
+                    description = "태그 검색 성공",
+                    content = @Content(schema = @Schema(implementation = ListTermResponseForm.class))
+            ),
+            @ApiResponse(responseCode = "500", description = "서버 내부 오류")
+    })
     @GetMapping("/search/by-tag")
     public ResponseEntity<ListTermResponseForm> searchByTag(
+            @Parameter(description = "검색할 태그 문자열", example = "#Java")
             @RequestParam String tag,
+            @Parameter(description = "페이지 번호(1부터 시작)", example = "1")
             @RequestParam(defaultValue = "1") int page,
+            @Parameter(description = "페이지당 조회할 개수", example = "10")
             @RequestParam(defaultValue = "10") int size) {
 
         log.debug("태그별 용어 검색 요청 - 태그: {}, 페이지: {}, 크기: {}", tag, page, size);

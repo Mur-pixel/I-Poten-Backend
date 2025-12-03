@@ -1,10 +1,10 @@
 package com.cygnus.ipoten.term.service;
 
-import com.cygnus.ipoten.term.entity.Category;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Tag;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term.entity.TermTag;
-import com.cygnus.ipoten.term.repository.CategoryRepository;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.cygnus.ipoten.term.repository.TagRepository;
 import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.term.repository.TermTagRepository;
@@ -31,7 +31,7 @@ import java.util.List;
 public class TermServiceImpl implements TermService {
 
     private final TermRepository termRepository;
-    private final CategoryRepository categoryRepository;
+    private final TermCategoryRepository termCategoryRepository;
     private final TagRepository tagRepository;
     private final TermTagRepository termTagRepository;
 
@@ -41,17 +41,17 @@ public class TermServiceImpl implements TermService {
 
         // 카테고리 조회
         // 처음 테스트를 수행하는 경우 DB에 categoryId가 등록되어 있지 않아 Null 값 발생 → DataInitializer.java 에서 임시 데이터 넣을 수 있도록 해둠
-        Category category = categoryRepository.findById(createTermRequest.getCategoryId())
+        TermCategory termCategory = termCategoryRepository.findById(createTermRequest.getCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 카테고리입니다."));
 
-        if (!category.getType().equals("언어 중심") && category.getDepth() != 2) {
+        if (!termCategory.getType().equals("언어 중심") && termCategory.getDepth() != 2) {
             throw new IllegalArgumentException("용어 등록은 소분류(또는 언어 중심 중분류)에서만 가능합니다.");
         }
 
         // 중복 확인
-        if (termRepository.existsByCategoryIdAndTitle(category.getId(), createTermRequest.getTitle())) {
-            log.warn("Duplicate term skipped: categoryId={}, title={}", category.getId(), createTermRequest.getTitle());
-            Term existing = termRepository.findByCategoryIdAndTitle(category.getId(), createTermRequest.getTitle())
+        if (termRepository.existsByTermCategory_IdAndTitle(termCategory.getId(), createTermRequest.getTitle())) {
+            log.warn("Duplicate term skipped: categoryId={}, title={}", termCategory.getId(), createTermRequest.getTitle());
+            Term existing = termRepository.findByTermCategoryIdAndTitle(termCategory.getId(), createTermRequest.getTitle())
                     .orElseThrow();
 
             List<String> existingTags = termTagRepository.findAllByTerm(existing).stream()
@@ -59,11 +59,11 @@ public class TermServiceImpl implements TermService {
                     .toList();
 
             // 중복일 때는 duplicate() 사용
-            return CreateTermResponse.duplicate(existing, existingTags, category);
+            return CreateTermResponse.duplicate(existing, existingTags, termCategory);
         }
 
         // Term 생성 및 저장
-        Term term = createTermRequest.toTerm(category);
+        Term term = createTermRequest.toTerm(termCategory);
         Term savedTerm = termRepository.save(term);
 
         // 중복 제거 및 정렬
@@ -80,16 +80,16 @@ public class TermServiceImpl implements TermService {
             return tag.getName();
         }).toList();
 
-        return CreateTermResponse.from(savedTerm, savedTagNames, category);
+        return CreateTermResponse.from(savedTerm, savedTagNames, termCategory);
     }
 
     @Override
     @Transactional
     public UpdateTermResponse updateTerm(UpdateTermRequest updateTermRequest) {
-        Category category = categoryRepository.findById(updateTermRequest.getCategoryId())
+        TermCategory termCategory = termCategoryRepository.findById(updateTermRequest.getCategoryId())
                 .orElseThrow(() -> new IllegalArgumentException("존재하지 않는 카테고리입니다."));
 
-        if (category.getDepth() != 2) {
+        if (termCategory.getDepth() != 2) {
             throw new IllegalArgumentException("용어 수정 시 소분류만 선택할 수 있습니다.");
         }
 
@@ -98,7 +98,7 @@ public class TermServiceImpl implements TermService {
 
         existingTerm.setTitle(updateTermRequest.getTitle());
         existingTerm.setDescription(updateTermRequest.getDescription());
-        existingTerm.setCategory(category);
+        existingTerm.setTermCategory(termCategory);
         Term updatedTerm = termRepository.save(existingTerm);
 
         // 태그 갱신
@@ -118,7 +118,7 @@ public class TermServiceImpl implements TermService {
             return tag.getName();
         }).toList();
 
-        return UpdateTermResponse.from(updatedTerm, updatedTagNames, category);
+        return UpdateTermResponse.from(updatedTerm, updatedTagNames, termCategory);
     }
 
     @Override

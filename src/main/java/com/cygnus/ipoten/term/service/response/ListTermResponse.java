@@ -30,7 +30,7 @@ public class ListTermResponse {
                     termMap.put("id", term.getId());
                     termMap.put("title", term.getTitle());
                     termMap.put("description", term.getDescription());
-                    termMap.put("category", term.getCategory() != null ? term.getCategory().getName() : null);
+                    termMap.put("category", term.getTermCategory() != null ? term.getTermCategory().getName() : null);
 
                     // 태그 포함
                     termMap.put("tags", tagsByTermId.getOrDefault(term.getId(), List.of()));
