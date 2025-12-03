@@ -1,11 +1,10 @@
 package com.cygnus.ipoten.quiz.service.generator;
 
-import com.cygnus.ipoten.quiz.entity.QuizChoice;
-import com.cygnus.ipoten.quiz.entity.QuizQuestion;
-import com.cygnus.ipoten.quiz.entity.QuizSet;
+import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz.service.util.OptionQualityChecker;
 import com.cygnus.ipoten.quiz.service.util.SeedUtil;
 import com.cygnus.ipoten.term.entity.Term;
@@ -87,18 +86,14 @@ public class AutoQuizGenerator {
 
             if (q.getQuestionType() == QuestionType.OX) {
                 var choices = List.of(
-                        new QuizChoice(q, "O", true,  "정답 해설"),
-                        new QuizChoice(q, "X", false, "오답 해설")
+                        QuizChoice.create(q, "O", true),
+                        QuizChoice.create(q, "X", false)
                 );
                 quizChoiceRepository.saveAll(choices);
                 continue;
             }
 
             if (q.getQuestionType() == QuestionType.INITIALS) {
-                if (q.getAnswerText() == null || q.getAnswerText().isBlank()) {
-                    String core = koreanCore(q.getTerm().getTitle());
-                    q.setAnswerText(toChoseong(core));
-                }
                 continue;
             }
 
@@ -124,9 +119,9 @@ public class AutoQuizGenerator {
             int answerIdx = -1;
             for (int i = 0; i < options.size(); i++) {
                 boolean isAns = options.get(i).equals(correct);
-                if (isAns) answerIdx = i + 1;
-                quizChoiceRepository.save(new QuizChoice(
-                        q, options.get(i), isAns, isAns ? "정답 해설" : "오답 해설"));
+                quizChoiceRepository.save(
+                        QuizChoice.create(q, options.get(i), isAns)
+                );
             }
         }
     }
@@ -145,17 +140,14 @@ public class AutoQuizGenerator {
 
             if (q.getQuestionType() == QuestionType.OX) {
                 var choices = List.of(
-                        new QuizChoice(q, "O", true,  "정답 해설"),
-                        new QuizChoice(q, "X", false, "오답 해설")
+                        QuizChoice.create(q, "O", true),
+                        QuizChoice.create(q, "X", false)
                 );
                 quizChoiceRepository.saveAll(choices);
                 continue;
             }
 
             if (q.getQuestionType() == QuestionType.INITIALS) {
-                if (q.getAnswerText() == null || q.getAnswerText().isBlank()) {
-                    q.setAnswerText(toChoseong(q.getTerm().getTitle()));
-                }
                 continue;
             }
 
@@ -201,9 +193,9 @@ public class AutoQuizGenerator {
             int answerIdx = -1;
             for (int i = 0; i < options.size(); i++) {
                 boolean isAns = options.get(i).equals(correct);
-                if (isAns) answerIdx = i + 1;
-                quizChoiceRepository.save(new QuizChoice(
-                        q, options.get(i), isAns, isAns ? "정답 해설" : "오답 해설"));
+                quizChoiceRepository.save(
+                        QuizChoice.create(q, options.get(i), isAns)
+                );
             }
         }
     }
@@ -212,18 +204,31 @@ public class AutoQuizGenerator {
     private QuizQuestion mkChoice(Term t, DifficultyProperties.Profile p, Random rng) {
         String stem = normalize(t.getDescription());
         stem = maybeNegateOrReplace(stem, p, rng);
-        return new QuizQuestion(t, t.getCategory(), QuestionType.CHOICE, stem, (QuizSet) null);
+        return new QuizQuestion(
+                t,
+                t.getTermCategory(),
+                QuestionType.CHOICE,
+                stem,
+                null
+        );
     }
+
 
     private QuizQuestion mkOX(Term t, DifficultyProperties.Profile p, Random rng) {
         String base = "다음 설명은 '" + t.getTitle() + "'에 대한 올바른 설명이다.";
         base = maybeNegateOrReplace(base, p, rng);
-        return new QuizQuestion(t, t.getCategory(), QuestionType.OX, base, (QuizSet) null);
+        return new QuizQuestion(
+                t,
+                t.getTermCategory(),
+                QuestionType.OX,
+                base,
+                null
+        );
     }
 
     private QuizQuestion mkInitials(Term t, DifficultyProperties.Profile p) {
         String core = koreanCore(t.getTitle());
-        if (core.isEmpty()) return null; // 안전장치
+        if (core.isEmpty()) return null;
 
         String hint  = toChoseong(core);
         String brief = oneLine(t.getDescription(), 140);
@@ -231,9 +236,13 @@ public class AutoQuizGenerator {
 
         String stem = "초성 힌트: " + hint + "\n설명: " + brief;
 
-        QuizQuestion q = new QuizQuestion(t, t.getCategory(), QuestionType.INITIALS, stem, (QuizSet) null);
-        q.setAnswerText(hint); // 정답은 초성 문자열 자체
-        return q;
+        return new QuizQuestion(
+                t,
+                t.getTermCategory(),
+                QuestionType.INITIALS,
+                stem,
+                null
+        );
     }
 
     // --- 시드/셔플 유틸 ---

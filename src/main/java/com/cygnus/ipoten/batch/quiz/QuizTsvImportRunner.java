@@ -1,15 +1,17 @@
 package com.cygnus.ipoten.batch.quiz;
 
-import com.cygnus.ipoten.quiz.entity.QuizChoice;
-import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.QuizSet;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
-import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.entity.QuizTextAnswer;
+import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz.repository.QuizSetRepository;
-import com.cygnus.ipoten.term.entity.Category;
+import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
-import com.cygnus.ipoten.term.repository.CategoryRepository;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.cygnus.ipoten.term.repository.TermRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -31,8 +33,9 @@ public class QuizTsvImportRunner implements CommandLineRunner {
     private final QuizSetRepository quizSetRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizChoiceRepository quizChoiceRepository;
-    private final CategoryRepository categoryRepository;
-    private final TermRepository termRepository; // 없으면 주석처리하고 term 기능 빼도 됩니다.
+    private final TermCategoryRepository termCategoryRepository;
+    private final TermRepository termRepository;
+    private final QuizTextAnswerRepository quizTextAnswerRepository;
 
     @Override
     @Transactional
@@ -79,12 +82,12 @@ public class QuizTsvImportRunner implements CommandLineRunner {
 
                     // 세트 확보/캐시
                     QuizSet set = setCache.computeIfAbsent(keyForSet(row), k -> {
-                        QuizSet qs = new QuizSet(
-                                nvl(row.getSetTitle(), "퀴즈 세트"),
-                                resolveCategory(row.getCategoryId()),
-                                Boolean.TRUE.equals(row.getSetRandom())
-                        );
-                        return quizSetRepository.save(qs);
+                        String title = nvl(row.getSetTitle(), "퀴즈 세트");
+
+                        return quizSetRepository.findFirstByTitle(title)
+                                .orElseThrow(() -> new IllegalArgumentException(
+                                        "[QUIZ-IMPORT] quiz_set not found for title=" + title
+                                ));
                     });
 
                     // 질문 생성
@@ -174,13 +177,12 @@ public class QuizTsvImportRunner implements CommandLineRunner {
     private String nvl(String s, String def) { return (s == null || s.isBlank()) ? def : s; }
 
     private String keyForSet(QuizImportRow r) {
-        // 제목 + 카테고리 + 랜덤여부 조합으로 캐시 키
-        return nvl(r.getSetTitle(), "") + "|" + nvl(String.valueOf(r.getCategoryId()), "") + "|" + String.valueOf(Boolean.TRUE.equals(r.getSetRandom()));
+        return nvl(r.getSetTitle(), "");
     }
 
-    private Category resolveCategory(Long categoryId) {
+    private TermCategory resolveCategory(Long categoryId) {
         if (categoryId == null) return null;
-        return categoryRepository.findById(categoryId).orElse(null);
+        return termCategoryRepository.findById(categoryId).orElse(null);
     }
 
     private Term resolveTerm(Long termId) {
@@ -192,48 +194,63 @@ public class QuizTsvImportRunner implements CommandLineRunner {
     protected void createOneQuestion(QuizSet set, QuizImportRow row) {
         QuestionType type = QuestionType.from(row.getQuestionType());
         Term term = resolveTerm(row.getTermId());
-        Category category = resolveCategory(row.getCategoryId());
+        TermCategory termCategory = resolveCategory(row.getCategoryId());
 
-        // 공통: Question 생성 (answerIndex/answerText는 타입별로 세팅)
+        String questionText = nvl(row.getQuestionText(), "(빈 문제)");
+        String explanation = safe(row.getExplanation());
+
+        // 1) 공통: 문제 엔티티 생성 / 저장
         QuizQuestion q = new QuizQuestion(
                 term,
-                category,
+                termCategory,
                 type,
-                nvl(row.getQuestionText(), "(빈 문제)"),
-                set
+                questionText,
+                set,
+                explanation
         );
-
-        if (row.getOrderIndex() != null) q.setOrderIndex(row.getOrderIndex());
-        q.setRandom(Boolean.TRUE.equals(row.getSetRandom()));
         quizQuestionRepository.save(q); // PK 확보
 
+        // 2) 타입별 정답/보기 구성
         switch (type) {
             case OX -> {
                 String ax = safe(row.getAnswerText());
                 Integer ai = row.getAnswerIndex();
-                int answerIdx = (ai != null) ? ai
-                        : ("O".equalsIgnoreCase(ax) ? 1 : "X".equalsIgnoreCase(ax) ? 2 : 1);
+
+                // 인덱스 우선, 없으면 answer_text(O/X)로 보정
+                int answerIdx = (ai != null)
+                        ? ai
+                        : ("O".equalsIgnoreCase(ax) ? 1 :
+                        "X".equalsIgnoreCase(ax) ? 2 : 1);
 
                 quizChoiceRepository.saveAll(List.of(
-                        new QuizChoice(q, "O", answerIdx == 1, nvl(row.getExplanation(), "")),
-                        new QuizChoice(q, "X", answerIdx == 2, nvl(row.getExplanation(), ""))
+                        new QuizChoice(q, "O", answerIdx == 1),
+                        new QuizChoice(q, "X", answerIdx == 2)
                 ));
             }
             case CHOICE -> {
+                // 보기를 TSV에서 수집
                 List<String> opts = new ArrayList<>();
-                for (String s : new String[]{ row.getChoice1(), row.getChoice2(), row.getChoice3(), row.getChoice4() }) {
+                for (String s : new String[]{
+                        row.getChoice1(), row.getChoice2(), row.getChoice3(), row.getChoice4()
+                }) {
                     s = safe(s);
                     if (!s.isBlank()) opts.add(s);
                 }
-                if (opts.size() < 2) throw new IllegalArgumentException("CHOICE는 최소 2개 보기가 필요합니다.");
+                if (opts.size() < 2) {
+                    throw new IllegalArgumentException("CHOICE는 최소 2개 보기가 필요합니다.");
+                }
 
                 Integer ai = row.getAnswerIndex();
                 if (ai == null || ai < 1 || ai > opts.size()) {
+                    // 정답 인덱스가 없으면 answer_text 내용으로 찾아보기
                     String at = safe(row.getAnswerText());
                     if (!at.isBlank()) {
                         int found = -1;
                         for (int i = 0; i < opts.size(); i++) {
-                            if (opts.get(i).trim().equalsIgnoreCase(at)) { found = i + 1; break; }
+                            if (opts.get(i).trim().equalsIgnoreCase(at)) {
+                                found = i + 1;
+                                break;
+                            }
                         }
                         if (found > 0) ai = found;
                     }
@@ -245,15 +262,18 @@ public class QuizTsvImportRunner implements CommandLineRunner {
                 for (int i = 0; i < opts.size(); i++) {
                     boolean isAns = (i + 1) == ai;
                     quizChoiceRepository.save(
-                            new QuizChoice(q, opts.get(i), isAns, isAns ? nvl(row.getExplanation(), "") : null)
+                            new QuizChoice(q, opts.get(i), isAns)
                     );
                 }
             }
             case INITIALS -> {
                 String at = safe(row.getAnswerText());
-                if (at.isBlank()) throw new IllegalArgumentException("INITIALS는 answer_text(초성)가 필요합니다.");
-                q.setAnswerText(at);
-                quizQuestionRepository.save(q);
+                if (at.isBlank()) {
+                    throw new IllegalArgumentException("INITIALS는 answer_text(텍스트 정답)가 필요합니다.");
+                }
+                // 텍스트 정답은 분리된 엔티티에 저장
+                QuizTextAnswer textAnswer = QuizTextAnswer.create(q, at);
+                quizTextAnswerRepository.save(textAnswer);
             }
         }
     }

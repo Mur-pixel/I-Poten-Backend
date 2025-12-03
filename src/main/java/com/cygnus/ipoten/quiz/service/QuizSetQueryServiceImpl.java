@@ -1,13 +1,13 @@
 package com.cygnus.ipoten.quiz.service;
 
-import com.cygnus.ipoten.quiz.entity.QuizChoice;
-import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
-import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz.repository.QuizSetRepository;
-import com.cygnus.ipoten.quiz.service.response.ChoiceQuestionRead;
+import com.cygnus.ipoten.quiz_question.service.response.ChoiceQuestionRead;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -31,7 +31,7 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
 
         // 1) 세트의 CHOICE 문항(정렬 보장)
         List<QuizQuestion> questions =
-                quizQuestionRepository.findByQuizSetIdAndQuestionTypeInOrderByOrderIndexAscIdAsc(
+                quizQuestionRepository.findByQuizSetIdAndQuestionTypeInOrderByIdAsc(
                         setId, List.of(QuestionType.CHOICE, QuestionType.OX)
                 );
         if (questions.isEmpty()) return List.of();
@@ -62,10 +62,7 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
             }
             correctIdx0 = Math.min(Math.max(0, correctIdx0), Math.max(0, choiceTexts.size() - 1));
 
-            String explanation = null;
-            if (correctIdx0 >= 0 && correctIdx0 < cs.size()) {
-                explanation = cs.get(correctIdx0).getExplanation();
-            }
+            String explanation = Optional.ofNullable(q.getExplanation()).orElse(null);
 
             out.add(new ChoiceQuestionRead(
                     q.getId(),
@@ -94,7 +91,7 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
 
     @Override
     public List<QuizQuestion> findInitialsQuestionsBySetId(Long setId) {
-        return quizQuestionRepository.findByQuizSet_IdOrderByOrderIndexAscIdAsc(setId);
+        return quizQuestionRepository.findByQuizSet_IdOrderByIdAsc(setId);
     }
 
 }

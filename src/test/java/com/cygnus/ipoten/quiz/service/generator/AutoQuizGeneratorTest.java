@@ -1,9 +1,9 @@
 package com.cygnus.ipoten.quiz.service.generator;
 
-import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.term.entity.Term;
 import org.junit.jupiter.api.Test;
 import org.mockito.Mockito;

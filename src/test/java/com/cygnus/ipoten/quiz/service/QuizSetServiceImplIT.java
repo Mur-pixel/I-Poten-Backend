@@ -4,11 +4,11 @@ import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.repository.AccountRepository;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
-import com.cygnus.ipoten.quiz.service.request.CreateQuizSessionRequest;
-import com.cygnus.ipoten.term.entity.Category;
+import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
+import com.cygnus.ipoten.quiz_session.service.request.CreateQuizSessionRequest;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
-import com.cygnus.ipoten.term.repository.CategoryRepository;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.user_term.entity.UserWordbookFolder;
 import com.cygnus.ipoten.user_term.entity.UserWordbookTerm;
@@ -33,7 +33,8 @@ class QuizSetServiceImplIT {
     @Autowired AccountRepository accountRepository;
     @Autowired TermRepository termRepository;
     @Autowired UserWordbookTermRepository userWordbookTermRepository;
-    @Autowired CategoryRepository categoryRepository;
+    @Autowired
+    TermCategoryRepository termCategoryRepository;
     @Autowired UserWordbookFolderRepository userWordbookFolderRepository;
     @Autowired QuizQuestionRepository quizQuestionRepository;
 
@@ -67,7 +68,7 @@ class QuizSetServiceImplIT {
                 .orElseThrow(() -> new IllegalStateException("테스트용 계정이 필요합니다(시드 확인)."));
 
         // 2) 카테고리 ((name, depth) 유니크라 name에 nanoTime 섞음)
-        Category cat = Category.builder()
+        TermCategory cat = TermCategory.builder()
                 .type("GENERAL")
                 .groupName("DEFAULT_GROUP")
                 .name("TEST-" + System.nanoTime())
@@ -75,7 +76,7 @@ class QuizSetServiceImplIT {
                 .sortOrder(0)
                 .parent(null)
                 .build();
-        cat = categoryRepository.save(cat);
+        cat = termCategoryRepository.save(cat);
 
         // 3) 폴더 (필드명이 프로젝트별로 다를 수 있어 후보군으로 세팅)
         UserWordbookFolder folder = new UserWordbookFolder();
@@ -90,7 +91,7 @@ class QuizSetServiceImplIT {
             Term t = new Term();
             t.setTitle("용어" + i);
             t.setDescription("용어" + i + " 설명");
-            t.setCategory(cat);
+            t.setTermCategory(cat);
             termRepository.save(t);
 
             userWordbookTermRepository.save(new UserWordbookTerm(acc, folder, t));

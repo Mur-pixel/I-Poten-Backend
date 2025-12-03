@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz.controller.request_form;
 
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz.service.request.CreateQuizChoiceRequest;
+import com.cygnus.ipoten.quiz_question.service.request.CreateQuizChoiceRequest;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -27,8 +27,7 @@ public class CreateQuizChoiceRequestForm {
                 .map(choice -> new CreateQuizChoiceRequest(
                         quizQuestionId,
                         choice.getChoiceText(),
-                        choice.isAnswer(),
-                        choice.getExplanation()
+                        choice.isAnswer()
                 )).toList();
     }
 

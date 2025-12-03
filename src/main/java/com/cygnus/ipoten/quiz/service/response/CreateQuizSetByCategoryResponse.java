@@ -1,6 +1,5 @@
 package com.cygnus.ipoten.quiz.service.response;
 
-import com.fasterxml.jackson.annotation.JsonProperty;
 import com.cygnus.ipoten.quiz.entity.QuizSet;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
@@ -14,9 +13,6 @@ public class CreateQuizSetByCategoryResponse {
     private final Long quizSetId;
     private final String title;
 
-    @JsonProperty("isRandom")
-    private final boolean isRandom;
-
     private final List<Long> questionIds;
     private final int totalQuestions;
 
@@ -28,7 +24,6 @@ public class CreateQuizSetByCategoryResponse {
                 message,
                 quizSet.getId(),
                 quizSet.getTitle(),
-                quizSet.isRandom(),
                 ids,
                 ids.size()
         );

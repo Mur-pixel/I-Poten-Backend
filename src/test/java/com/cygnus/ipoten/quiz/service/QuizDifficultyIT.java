@@ -4,13 +4,14 @@ import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.repository.AccountRepository;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz.service.generator.AutoQuizGenerator;
 import com.cygnus.ipoten.quiz.service.generator.DifficultyProperties;
-import com.cygnus.ipoten.quiz.service.request.CreateQuizSessionRequest;
-import com.cygnus.ipoten.term.entity.Category;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_session.service.request.CreateQuizSessionRequest;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
-import com.cygnus.ipoten.term.repository.CategoryRepository;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.user_term.entity.UserWordbookFolder;
 import com.cygnus.ipoten.user_term.entity.UserWordbookTerm;
@@ -40,7 +41,8 @@ class QuizDifficultyIT {
     @Autowired AccountRepository accountRepository;
     @Autowired TermRepository termRepository;
     @Autowired UserWordbookTermRepository userWordbookTermRepository;
-    @Autowired CategoryRepository categoryRepository;
+    @Autowired
+    TermCategoryRepository termCategoryRepository;
     @Autowired UserWordbookFolderRepository userWordbookFolderRepository;
     @Autowired DifficultyProperties difficultyProperties;
 
@@ -52,7 +54,7 @@ class QuizDifficultyIT {
                 .orElseThrow(() -> new IllegalStateException("시드 계정 필요"));
 
         // 카테고리
-        Category cat = Category.builder()
+        TermCategory cat = TermCategory.builder()
                 .type("GENERAL")
                 .groupName("DEFAULT_GROUP")
                 .name("DIFF-" + System.nanoTime())
@@ -60,7 +62,7 @@ class QuizDifficultyIT {
                 .sortOrder(0)
                 .parent(null)
                 .build();
-        cat = categoryRepository.save(cat);
+        cat = termCategoryRepository.save(cat);
 
         // 폴더
         UserWordbookFolder folder = new UserWordbookFolder();
@@ -81,7 +83,7 @@ class QuizDifficultyIT {
             Term t = new Term();
             t.setTitle("용어" + i);
             t.setDescription("용어" + i + " 설명");
-            t.setCategory(cat);
+            t.setTermCategory(cat);
             termRepository.save(t);
             userWordbookTermRepository.save(new UserWordbookTerm(acc, folder, t, i));
         }
@@ -223,7 +225,7 @@ class QuizDifficultyIT {
     }
 
     // 퀴즈 문제의 용어 제목 목록 추출 (순서 비교용)
-    private java.util.List<String> keys(java.util.List<com.cygnus.ipoten.quiz.entity.QuizQuestion> qs) {
+    private java.util.List<String> keys(java.util.List<QuizQuestion> qs) {
         return qs.stream().map(q -> q.getTerm().getTitle()).toList();
     }
 }

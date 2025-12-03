@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.userDashboard.service;
 
-import com.cygnus.ipoten.quiz.repository.UserQuizSessionRepository;
+import com.cygnus.ipoten.quiz_session.repository.QuizSessionRepository;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -13,7 +13,7 @@ import java.time.ZoneId;
 @RequiredArgsConstructor
 public class QuizSummaryServiceImpl implements QuizSummaryService {
 
-    private final UserQuizSessionRepository userQuizSessionRepository;
+    private final QuizSessionRepository quizSessionRepository;
 
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
@@ -21,7 +21,7 @@ public class QuizSummaryServiceImpl implements QuizSummaryService {
     @Override
     @Transactional(readOnly = true)
     public long getTotalCount(Long accountId) {
-        return userQuizSessionRepository.countByAccountId(accountId);
+        return quizSessionRepository.countByAccountId(accountId);
     }
 
     /** 이번 달 문제풀이 횟수 */
@@ -33,6 +33,6 @@ public class QuizSummaryServiceImpl implements QuizSummaryService {
         LocalDateTime start = yearMonth.atDay(1).atStartOfDay(KST).toLocalDateTime();
         LocalDateTime end = yearMonth.atEndOfMonth().atTime(23, 59, 59).atZone(KST).toLocalDateTime();
 
-        return userQuizSessionRepository.countMonthlyByAccountId(accountId, start, end);
+        return quizSessionRepository.countMonthlyByAccountId(accountId, start, end);
     }
 }
