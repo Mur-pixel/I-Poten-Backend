@@ -30,7 +30,7 @@ public class AccountProfileController {
         return ResponseEntity.ok(response);
     }
 
-    @GetMapping
+    @GetMapping("/nickname")
     public ResponseEntity<NicknameResponse>  getNickname(
             @CookieValue(name = "userToken", required = false) String userToken) {
         Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
