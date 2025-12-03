@@ -12,7 +12,6 @@ import com.cygnus.ipoten.quiz.repository.*;
 import com.cygnus.ipoten.quiz.service.response.StartUserQuizSessionResponse;
 import com.cygnus.ipoten.quiz.service.util.AnswerIndexPlanner;
 import com.cygnus.ipoten.quiz.service.util.SeedUtil;
-import com.cygnus.ipoten.userTrustscore.service.TrustScoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -36,7 +35,6 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
     private final UserWrongNoteRepository userWrongNoteRepository;
     private final ObjectMapper objectMapper = new ObjectMapper();
     private final SessionAnswerRepository sessionAnswerRepository;
-    private final TrustScoreService trustScoreService;
 
     // 정답 위치 분배 시드 계산용
     private final SeedUtil seedUtil = new SeedUtil();
@@ -324,11 +322,7 @@ public class UserQuizAnswerServiceImpl implements UserQuizAnswerService {
         // 6) 오답노트 저장(중복 방지)
         saveWrongNotes(toSave, accountId);
 
-        try {
-            trustScoreService.calculateTrustScore(accountId);
-        } catch (Exception e) {
-            log.error("TrustScore 계산 실패 - 제출은 성공으로 처리 (accountId={}): {}", accountId, e.getMessage(), e);
-        }
+
 
         return new SubmitQuizSessionResponseForm(
                 session.getId(),

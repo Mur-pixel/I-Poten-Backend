@@ -7,7 +7,6 @@ import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import com.cygnus.ipoten.infrastructure.external.email.EmailService;
-import com.cygnus.ipoten.profileAppearance.Service.ProfileAppearanceService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
@@ -21,7 +20,6 @@ public class SignupServiceImpl implements SignupService {
     private final AccountService accountService;
     private final AccountProfileService accountProfileService;
     private final RedisCacheService redisCacheService;
-    private final ProfileAppearanceService profileAppearanceService;
     private final AuthenticationService authenticationService;
     private final EmailService emailService;
 
