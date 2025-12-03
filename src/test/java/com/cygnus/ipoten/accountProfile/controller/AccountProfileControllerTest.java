@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.accountProfile.controller;
 
+import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
@@ -53,6 +54,29 @@ public class AccountProfileControllerTest {
 
     }
 
+
+    @Test
+    @DisplayName("사용자의_이메일을_가져옵니다")
+    void 사용자의_이메일을_가져옵니다() {
+
+        // given
+        String testToken = "testToken";
+        Long testAccountId = 1L;
+        String testUserEmail = "testUserEmail";
+        EmailResponse emailResponse = new EmailResponse(testUserEmail);
+
+        given(redisCacheService.getValueByKey(testToken, Long.class)).willReturn(testAccountId);
+        given(accountProfileService.getEmailByAccountId(testAccountId)).willReturn(Optional.of(emailResponse));
+
+        // when
+        ResponseEntity<EmailResponse> email = accountProfileController.getEmail(testToken);
+
+        // then
+        Assertions.assertNotNull(email.getBody());
+        Assertions.assertEquals(testUserEmail, email.getBody().getEmail());
+
+
+    }
 
 
 

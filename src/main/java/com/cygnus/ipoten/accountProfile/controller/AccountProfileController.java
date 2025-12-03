@@ -1,6 +1,7 @@
 package com.cygnus.ipoten.accountProfile.controller;
 
 import com.cygnus.ipoten.accountProfile.controller.request.NicknameRequest;
+import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.UpdateNicknameResponse;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
@@ -39,6 +40,17 @@ public class AccountProfileController {
                 .orElseThrow(() -> new IllegalArgumentException("회원의 닉네임을 찾을 수 없습니다"));
 
         return ResponseEntity.ok(nicknameResponse);
+    }
+
+    @GetMapping("/email")
+    public ResponseEntity<EmailResponse>  getEmail(
+            @CookieValue(name = "userToken", required = false) String userToken) {
+        Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
+
+        EmailResponse emailResponse = accountProfileService.getEmailByAccountId(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("회원의 닉네임을 찾을 수 없습니다"));
+
+        return ResponseEntity.ok(emailResponse);
     }
 
 

@@ -2,6 +2,7 @@ package com.cygnus.ipoten.accountProfile.service;
 
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.entity.LoginType;
+import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.UpdateNicknameResponse;
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.controller.request.RegisterAccountProfileRequest;
@@ -117,4 +118,14 @@ public class AccountProfileServiceImp implements AccountProfileService {
 
         return Optional.of(new NicknameResponse(accountProfile.getNickname()));
     }
+
+    @Override
+    public Optional<EmailResponse> getEmailByAccountId(Long accountId) {
+
+        AccountProfile accountProfile = accountProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("이메일을 찾는중 회원을 찾을 수 없습니다"));
+
+        return Optional.of(new EmailResponse(accountProfile.getEmail()));
+    }
+
 }
