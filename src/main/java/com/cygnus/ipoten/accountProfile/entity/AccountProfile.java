@@ -32,6 +32,8 @@ public class AccountProfile {
         this.email = email;
     }
 
+
+
     // 닉네임 변경 전용 메소드
     public void setNickname(String nickname) {
         this.nickname = nickname;
