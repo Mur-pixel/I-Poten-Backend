@@ -10,10 +10,10 @@ import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.cygnus.ipoten.term.repository.TermRepository;
-import com.cygnus.ipoten.user_term.entity.UserWordbookFolder;
-import com.cygnus.ipoten.user_term.entity.UserWordbookTerm;
-import com.cygnus.ipoten.user_term.repository.UserWordbookFolderRepository;
-import com.cygnus.ipoten.user_term.repository.UserWordbookTermRepository;
+import com.cygnus.ipoten.wordbook.entity.WordbookFolder;
+import com.cygnus.ipoten.wordbook.entity.WordbookTerm;
+import com.cygnus.ipoten.wordbook.repository.WordbookFolderRepository;
+import com.cygnus.ipoten.wordbook.repository.WordbookTermRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -32,10 +32,12 @@ class QuizSetServiceImplIT {
     @Autowired QuizSetService quizSetService;
     @Autowired AccountRepository accountRepository;
     @Autowired TermRepository termRepository;
-    @Autowired UserWordbookTermRepository userWordbookTermRepository;
+    @Autowired
+    WordbookTermRepository wordbookTermRepository;
     @Autowired
     TermCategoryRepository termCategoryRepository;
-    @Autowired UserWordbookFolderRepository userWordbookFolderRepository;
+    @Autowired
+    WordbookFolderRepository wordbookFolderRepository;
     @Autowired QuizQuestionRepository quizQuestionRepository;
 
     /**
@@ -79,12 +81,12 @@ class QuizSetServiceImplIT {
         cat = termCategoryRepository.save(cat);
 
         // 3) 폴더 (필드명이 프로젝트별로 다를 수 있어 후보군으로 세팅)
-        UserWordbookFolder folder = new UserWordbookFolder();
+        WordbookFolder folder = new WordbookFolder();
         // account-like 필드
         safeSetOneOf(folder, acc, "account", "owner", "user", "member");
         // name-like 필드
         safeSetOneOf(folder, "기본 폴더", "name", "title", "folderName", "label");
-        folder = userWordbookFolderRepository.save(folder);
+        folder = wordbookFolderRepository.save(folder);
 
         // 4) 용어 + 즐겨찾기
         for (int i = 1; i <= 15; i++) {
@@ -94,7 +96,7 @@ class QuizSetServiceImplIT {
             t.setTermCategory(cat);
             termRepository.save(t);
 
-            userWordbookTermRepository.save(new UserWordbookTerm(acc, folder, t));
+            wordbookTermRepository.save(new WordbookTerm(acc, folder, t));
         }
 
         var req = CreateQuizSessionRequest.builder()

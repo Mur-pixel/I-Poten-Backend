@@ -10,10 +10,10 @@ import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.cygnus.ipoten.term.repository.TermRepository;
-import com.cygnus.ipoten.user_term.entity.UserWordbookFolder;
-import com.cygnus.ipoten.user_term.entity.UserWordbookTerm;
-import com.cygnus.ipoten.user_term.repository.UserWordbookFolderRepository;
-import com.cygnus.ipoten.user_term.repository.UserWordbookTermRepository;
+import com.cygnus.ipoten.wordbook.entity.WordbookFolder;
+import com.cygnus.ipoten.wordbook.entity.WordbookTerm;
+import com.cygnus.ipoten.wordbook.repository.WordbookFolderRepository;
+import com.cygnus.ipoten.wordbook.repository.WordbookTermRepository;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -30,8 +30,10 @@ class QuizServiceValidationIT {
     @Autowired AccountRepository accountRepository;
     @Autowired
     TermCategoryRepository termCategoryRepository;
-    @Autowired UserWordbookFolderRepository userWordbookFolderRepository;
-    @Autowired UserWordbookTermRepository userWordbookTermRepository;
+    @Autowired
+    WordbookFolderRepository wordbookFolderRepository;
+    @Autowired
+    WordbookTermRepository wordbookTermRepository;
     @Autowired TermRepository termRepository;
 
     // 테스트용 임의 계정 ID 조회
@@ -131,7 +133,7 @@ class QuizServiceValidationIT {
         cat = termCategoryRepository.save(cat);
 
         // 폴더 생성 (필드 접근자가 없으면 리플렉션)
-        UserWordbookFolder folder = new UserWordbookFolder();
+        WordbookFolder folder = new WordbookFolder();
         try {
             var fAcc = folder.getClass().getDeclaredField("account");
             fAcc.setAccessible(true);
@@ -142,7 +144,7 @@ class QuizServiceValidationIT {
         } catch (Exception e) {
             throw new RuntimeException(e);
         }
-        folder = userWordbookFolderRepository.save(folder);
+        folder = wordbookFolderRepository.save(folder);
 
         // 용어 + 즐겨찾기
         Term term = new Term();
@@ -151,6 +153,6 @@ class QuizServiceValidationIT {
         term.setTermCategory(cat);
         term = termRepository.save(term);
 
-        userWordbookTermRepository.save(new UserWordbookTerm(acc, folder, term));
+        wordbookTermRepository.save(new WordbookTerm(acc, folder, term));
     }
 }

@@ -23,8 +23,8 @@ import com.cygnus.ipoten.quiz.service.response.CreateQuizSetByCategoryResponse;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
-import com.cygnus.ipoten.user_term.repository.UserWordbookTermRepository;
-import com.cygnus.ipoten.user_term.service.UserWordbookFolderQueryService;
+import com.cygnus.ipoten.wordbook.repository.WordbookTermRepository;
+import com.cygnus.ipoten.wordbook.service.WordbookFolderQueryService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -47,10 +47,10 @@ public class QuizSetServiceImpl implements QuizSetService {
     private final QuizSetRepository quizSetRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final AutoQuizGenerator autoQuizGenerator;
-    private final UserWordbookFolderQueryService userWordbookFolderQueryService;
+    private final WordbookFolderQueryService wordbookFolderQueryService;
     private final SessionAnswerRepository sessionAnswerRepository;
     private final QuizChoiceRepository quizChoiceRepository;
-    private final UserWordbookTermRepository userWordbookTermRepository;
+    private final WordbookTermRepository wordbookTermRepository;
     private final QuizRepository quizRepository;
 
     /** 선택 주입: 있으면 사용(최근 옵션 텍스트 재사용 회피 등), 없으면 SessionAnswerRepository로 폴백 */
@@ -168,7 +168,7 @@ public class QuizSetServiceImpl implements QuizSetService {
         }
 
         // 1) 폴더 소유권 확인
-        boolean owned = userWordbookFolderQueryService.existsByIdAndAccountId(
+        boolean owned = wordbookFolderQueryService.existsByIdAndAccountId(
                 request.getFolderId(), request.getAccountId()
         );
         if (!owned) {
@@ -177,7 +177,7 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 2) 폴더 용어 조회
         List<Long> candidateTermIds =
-                userWordbookTermRepository.findDistinctTermIdsByFolderAndAccountOrderByTermIdAsc(
+                wordbookTermRepository.findDistinctTermIdsByFolderAndAccountOrderByTermIdAsc(
                         request.getFolderId(), request.getAccountId());
 
         if (candidateTermIds.isEmpty()) {
@@ -317,7 +317,7 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 1) 소유권 검증
         if (folderId != null) {
-            boolean owned = userWordbookFolderQueryService.existsByIdAndAccountId(folderId, accountId);
+            boolean owned = wordbookFolderQueryService.existsByIdAndAccountId(folderId, accountId);
             if (!owned) {
                 throw new SecurityException("폴더가 없거나 권한이 없습니다.");
             }
@@ -325,8 +325,8 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 2) 용어 조회
         List<Term> terms = (folderId == null)
-                ? userWordbookTermRepository.findTermsByAccount(accountId)
-                : userWordbookTermRepository.findTermsByAccountAndFolderStrict(accountId, folderId);
+                ? wordbookTermRepository.findTermsByAccount(accountId)
+                : wordbookTermRepository.findTermsByAccountAndFolderStrict(accountId, folderId);
 
         if (terms.isEmpty()) {
             throw new IllegalArgumentException("즐겨찾기 용어가 없습니다.");
