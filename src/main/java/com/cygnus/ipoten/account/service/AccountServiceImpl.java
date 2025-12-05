@@ -10,8 +10,11 @@ import com.cygnus.ipoten.account.service.register_request.RegisterAccountRequest
 import com.cygnus.ipoten.accountProfile.repository.AccountProfileRepository;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.profileAppearance.Service.ProfileAppearanceService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
-
+import com.cygnus.ipoten.userLevel.service.UserLevelService;
+import com.cygnus.ipoten.userTitle.service.UserTitleService;
+import com.cygnus.ipoten.userTrustscore.service.TrustScoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -29,10 +32,13 @@ public class AccountServiceImpl implements AccountService {
     private final AccountRoleTypeRepository accountRoleTypeRepository;
     private final RedisCacheService redisCacheService;
     private final AuthenticationService authenticationService;
+    private final ProfileAppearanceService profileAppearanceService;
     private final AccountProfileRepository accountProfileRepository;
 
     private final AccountProfileService accountProfileService;
-
+    private final TrustScoreService trustScoreService;
+    private final UserLevelService userLevelService;
+    private final UserTitleService userTitleService;
 
 
     @Override
@@ -51,7 +57,10 @@ public class AccountServiceImpl implements AccountService {
         Account account = accountRepository.save(new Account(accountRoleType, accountLoginType));
         Long accountId = account.getId();
 
-
+        // 2️⃣ 연관 데이터 초기화
+        profileAppearanceService.create(accountId);   // 프로필 외형 row 생성
+        trustScoreService.initTrustScore(accountId);  // 신뢰점수 0 생성
+        userTitleService.initTitle(accountId);        // 기본 칭호 “초심자” 생성 및 장착
 
         // 3️⃣ 결과 반환
         return Optional.of(account);
@@ -86,6 +95,7 @@ public class AccountServiceImpl implements AccountService {
 
         authenticationService.deleteToken(userToken);
 
+        profileAppearanceService.delete(accountId);
 
         // 계정을 찾고 삭제
         Account account = accountRepository.findById(accountId)

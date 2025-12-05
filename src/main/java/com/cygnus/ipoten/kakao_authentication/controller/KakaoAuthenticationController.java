@@ -4,7 +4,8 @@ import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import com.cygnus.ipoten.kakao_authentication.service.KakaoAuthenticationService;
 import com.cygnus.ipoten.kakao_authentication.service.mobile_response.KakaoLoginMobileResponse;
 import com.cygnus.ipoten.kakao_authentication.service.response.KakaoLoginResponse;
-
+import com.cygnus.ipoten.userAttendance.service.AttendanceService;
+import com.cygnus.ipoten.userTrustscore.service.TrustScoreService;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,7 +21,8 @@ public class KakaoAuthenticationController {
 
     private final KakaoAuthenticationService kakaoAuthenticationService;
     private final AuthenticationService authenticationService;
-
+    private final AttendanceService attendanceService;
+    private final TrustScoreService trustScoreService;
 
     @GetMapping("/kakao/link")
     public String kakaoOauthLink() {
@@ -44,7 +46,12 @@ public class KakaoAuthenticationController {
                 );        // CSRF 방어
                 response.addHeader("Set-Cookie", cookieHeader);
                 Long accountId = authenticationService.getAccountIdByUserToken(kakaoLoginResponse.getUserToken());
-
+                boolean created = attendanceService.markLogin(accountId);
+                if (created) {
+                    // 출석이 새로 찍힌 경우에만 신뢰점수 갱신
+                    trustScoreService.calculateTrustScore(accountId);
+                    log.info("✅ 출석 및 신뢰점수 갱신 완료 for accountId={}", accountId);
+                }
 
 
             }

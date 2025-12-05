@@ -29,6 +29,7 @@ import com.cygnus.ipoten.interview_score.entity.InterviewScore;
 import com.cygnus.ipoten.interview_score.service.InterviewScoreService;
 import com.cygnus.ipoten.interviewee_profile.entity.IntervieweeProfile;
 import com.cygnus.ipoten.interviewee_profile.service.IntervieweeProfileService;
+import com.cygnus.ipoten.userTrustscore.service.TrustScoreService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -56,6 +57,7 @@ public class InterviewServiceImpl implements InterviewService {
     private final InterviewResultService interviewResultService;
     private final InterviewResultDetailService interviewResultDetailService;
     private final InterviewScoreService interviewScoreService;
+    private final TrustScoreService trustScoreService;
 
     @Value("${current_server.end_interview_url}")
     private String callbackUrl;
@@ -169,7 +171,8 @@ public class InterviewServiceImpl implements InterviewService {
             interview.setFinished(true);
             interviewRepository.save(interview);
 
-
+            // 인터뷰 종료 시 갱신
+            trustScoreService.calculateTrustScore(interview.getAccount().getId());
 
             InterviewEndRequest endInterviewRequestEndInterviewRequest = createEndInterviewRequestEndInterviewRequest(interviewEndRequestForm, userToken);
 
