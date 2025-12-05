@@ -2,6 +2,9 @@ package com.cygnus.ipoten.accountProfile.service;
 
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.entity.LoginType;
+import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
+import com.cygnus.ipoten.accountProfile.controller.response.ProfileResponse;
+import com.cygnus.ipoten.accountProfile.controller.response.UpdateNicknameResponse;
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.controller.request.RegisterAccountProfileRequest;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
@@ -63,7 +66,7 @@ public class AccountProfileServiceImp implements AccountProfileService {
     }
 
     @Override
-    public Optional<NicknameResponse> updateNickname(Long accountId, String newNickname){
+    public Optional<UpdateNicknameResponse> updateNickname(Long accountId, String newNickname){
         if(newNickname == null || newNickname.trim().isEmpty()) {
             throw new IllegalArgumentException("닉네임은 비워둘 수 없습니다.");
         }
@@ -100,11 +103,40 @@ public class AccountProfileServiceImp implements AccountProfileService {
         ap.setNickname(trimmed);
         accountProfileRepository.save(ap);
 
-        return Optional.of(new NicknameResponse(trimmed));
+        return Optional.of(new UpdateNicknameResponse(trimmed));
     }
 
     @Override
     public Optional<AccountProfile> findByAccountId(Long accountId) {
         return accountProfileRepository.findByAccountId(accountId);
     }
+
+    @Override
+    public Optional<NicknameResponse> getNicknameByAccountId(Long accountId) {
+
+        AccountProfile accountProfile = accountProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("닉네임을 찾는중 회원을 찾을 수 없습니다"));
+
+        return Optional.of(new NicknameResponse(accountProfile.getNickname()));
+    }
+
+    @Override
+    public Optional<EmailResponse> getEmailByAccountId(Long accountId) {
+
+        AccountProfile accountProfile = accountProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("이메일을 찾는중 회원을 찾을 수 없습니다"));
+
+        return Optional.of(new EmailResponse(accountProfile.getEmail()));
+    }
+
+    @Override
+    public Optional<ProfileResponse> getProfileByAccountId(Long accountId) {
+
+        AccountProfile accountProfile = accountProfileRepository.findByAccountId(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("이메일을 찾는중 회원을 찾을 수 없습니다"));
+
+
+        return Optional.of(new ProfileResponse(accountProfile.getEmail(), accountProfile.getNickname()));
+    }
+
 }
