@@ -2,6 +2,7 @@ package com.cygnus.ipoten.accountProfile.controller;
 
 import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
+import com.cygnus.ipoten.accountProfile.controller.response.ProfileResponse;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import org.junit.jupiter.api.Assertions;
@@ -77,6 +78,34 @@ public class AccountProfileControllerTest {
 
 
     }
+
+
+
+    @Test
+    @DisplayName("사용자의_회원정보를_가져옵니다")
+    void 사용자의_회원정보를_가져옵니다() {
+
+        // given
+        String testToken = "testToken";
+        Long testAccountId = 1L;
+        String testUserNickname = "testUserNickname";
+        String testUserEmail = "testUserEmail";
+
+        ProfileResponse profileResponse = new ProfileResponse(testUserEmail, testUserNickname);
+        given(redisCacheService.getValueByKey(testToken, Long.class)).willReturn(testAccountId);
+        given(accountProfileService.getProfileByAccountId(testAccountId)).willReturn(Optional.of(profileResponse));
+
+        // when
+        ResponseEntity<ProfileResponse> Profile = accountProfileController.getProfile(testToken);
+
+        // then
+        Assertions.assertNotNull(Profile.getBody());
+        Assertions.assertEquals(testUserNickname, Profile.getBody().getNickname());
+        Assertions.assertEquals(testUserEmail, Profile.getBody().getEmail());
+
+
+    }
+
 
 
 

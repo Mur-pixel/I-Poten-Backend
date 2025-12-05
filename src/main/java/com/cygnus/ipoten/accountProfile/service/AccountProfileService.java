@@ -4,6 +4,7 @@ package com.cygnus.ipoten.accountProfile.service;
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.entity.LoginType;
 import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
+import com.cygnus.ipoten.accountProfile.controller.response.ProfileResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.UpdateNicknameResponse;
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.controller.request.RegisterAccountProfileRequest;
@@ -27,5 +28,7 @@ public interface AccountProfileService {
     Optional<NicknameResponse> getNicknameByAccountId(Long accountId);
 
     Optional<EmailResponse> getEmailByAccountId(Long accountId);
+
+    Optional<ProfileResponse> getProfileByAccountId(Long accountId);
 
 }

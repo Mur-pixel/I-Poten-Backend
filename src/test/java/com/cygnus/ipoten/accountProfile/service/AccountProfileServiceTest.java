@@ -3,6 +3,7 @@ package com.cygnus.ipoten.accountProfile.service;
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.accountProfile.controller.response.EmailResponse;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
+import com.cygnus.ipoten.accountProfile.controller.response.ProfileResponse;
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.repository.AccountProfileRepository;
 import org.junit.jupiter.api.Assertions;
@@ -68,6 +69,30 @@ public class AccountProfileServiceTest{
         // then
 
         Assertions.assertEquals(testNickname, emailResponse.getEmail());
+
+    }
+
+
+    @Test
+    @DisplayName("사용자의_식별_아이디를_통해_회원정보를_찾습니다")
+    void 사용자의_식별_아이디를_통해_회원정보를_찾습니다(){
+
+        // given
+        Long testAccountId = 1L;
+        Account account = new Account();
+        String testNickname = "testEmail";
+        String testEmail = "testEmail";
+        AccountProfile accountProfile = new AccountProfile(account, testNickname, testEmail);
+        given(accountProfileRepository.findByAccountId(testAccountId)).willReturn(Optional.of(accountProfile));
+
+        // when
+        ProfileResponse profileResponse = accountProfileService.getProfileByAccountId(testAccountId)
+                .orElseThrow(() -> new IllegalArgumentException("닉네임 가져오는 기능 테스트 증 오류발생"));
+
+        // then
+
+        Assertions.assertEquals(testEmail, profileResponse.getEmail());
+        Assertions.assertEquals(testNickname, profileResponse.getNickname());
 
     }
 
