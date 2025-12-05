@@ -5,15 +5,13 @@ import com.cygnus.ipoten.wordbook.controller.request_form.AddTermToFolderRequest
 import com.cygnus.ipoten.wordbook.controller.request_form.AttachTermsBulkRequestForm;
 import com.cygnus.ipoten.wordbook.controller.request_form.MoveFavoritesRequestForm;
 import com.cygnus.ipoten.wordbook.controller.request_form.MoveFolderTermsRequestForm;
-import com.cygnus.ipoten.wordbook.controller.response_form.AttachTermsBulkResponseForm;
-import com.cygnus.ipoten.wordbook.controller.response_form.CreateUserWordbookTermResponseForm;
-import com.cygnus.ipoten.wordbook.controller.response_form.MoveFavoritesResponseForm;
-import com.cygnus.ipoten.wordbook.controller.response_form.MoveFolderTermsResponseForm;
+import com.cygnus.ipoten.wordbook.controller.response_form.*;
 import com.cygnus.ipoten.wordbook.service.WordbookFolderQueryService;
 import com.cygnus.ipoten.wordbook.service.WordbookFolderService;
 import com.cygnus.ipoten.wordbook.service.WordbookTermService;
 import com.cygnus.ipoten.wordbook.service.request.AttachTermsBulkRequest;
 import com.cygnus.ipoten.wordbook.service.request.CreateWordbookTermRequest;
+import com.cygnus.ipoten.wordbook.service.request.ListWordbookTermRequest;
 import com.cygnus.ipoten.wordbook.service.response.AttachTermsBulkResponse;
 import com.cygnus.ipoten.wordbook.service.response.CreateWordbookTermResponse;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
@@ -165,6 +163,35 @@ public class WordbookTermController {
         }
         long count = wordbookFolderQueryService.countTermsInFolderOrThrow(accountId, folderId);
         return Map.of("folderId",  folderId, "count", count);
+    }
+
+    @Operation(
+            summary = "단어장 폴더 내 단어 목록 조회",
+            description = "지정한 폴더에 포함된 단어들을 페이지네이션하여 조회합니다."
+    )
+    @GetMapping("/me/folders/{folderId}/terms")
+    public ListWordbookTermResponseForm listFolderTerms(
+            @CookieValue(name = "userToken", required = false) String userToken,
+            @PathVariable Long folderId,
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "20") int perPage,
+            @RequestParam(required = false) String sort
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+
+        var req = new ListWordbookTermRequest(
+                accountId,
+                folderId,
+                page,
+                perPage,
+                sort
+        );
+
+        var res = wordbookFolderService.list(req);
+        return ListWordbookTermResponseForm.from(res);
     }
 
     /**

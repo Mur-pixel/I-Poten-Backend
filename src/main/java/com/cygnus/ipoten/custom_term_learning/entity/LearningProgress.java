@@ -53,14 +53,14 @@ public class LearningProgress {
     @MapsId("accountId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "account_id", nullable = false,
-            foreignKey = @ForeignKey(name = "FK_utp_account_cascade"))
+            foreignKey = @ForeignKey(name = "FK_lp_account_cascade"))
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Account account;
 
     @MapsId("termId")
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "term_id", nullable = false,
-            foreignKey = @ForeignKey(name = "FK_utp_term_restrict"))
+            foreignKey = @ForeignKey(name = "FK_lp_term_restrict"))
     private Term term;
 
     @Enumerated(EnumType.STRING)

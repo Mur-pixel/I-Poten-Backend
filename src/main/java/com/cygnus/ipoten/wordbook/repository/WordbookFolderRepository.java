@@ -62,7 +62,7 @@ public interface WordbookFolderRepository extends JpaRepository<WordbookFolder, 
         f.id                                  AS id,
         f.folder_name                         AS folderName,
         COUNT(uwt.term_id)                    AS termCount,
-        COALESCE(SUM(CASE WHEN utp.status = 'DONE' THEN 1 ELSE 0 END), 0) AS learnedCount,
+        COALESCE(SUM(CASE WHEN lp.status = 'DONE' THEN 1 ELSE 0 END), 0) AS learnedCount,
         COALESCE(
           GREATEST(
             COALESCE(MAX(uwt.updated_at), f.updated_at),
@@ -70,7 +70,7 @@ public interface WordbookFolderRepository extends JpaRepository<WordbookFolder, 
           ),
           f.updated_at
         )                                     AS updatedAt,
-        MAX(utp.last_studied_at)              AS lastStudiedAt
+        MAX(lp.last_studied_at)              AS lastStudiedAt
       FROM wordbook_folder f
       LEFT JOIN wordbook_term uwt
              ON uwt.folder_id = f.id

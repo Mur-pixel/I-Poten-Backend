@@ -73,7 +73,7 @@ public class ListWordbookTermResponse {
     @Getter
     @AllArgsConstructor
     public static class Row {
-        /** user_wordbook_term.id */
+        /** wordbook_term.id */
         private Long userWordbookTermId;
 
         /** term.id — 프론트의 move, memorization에서 필수 */

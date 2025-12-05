@@ -50,7 +50,7 @@ public class CustomTermEraseService {
         // 1) 최근 본 용어 / 암기 진행 상태: 계정 기준 직접 삭제
         int delUtp = execute("DELETE FROM learning_progress WHERE account_id=:id", accountId);
 
-        // 2) 폴더를 지우기 전에, 폴더에 매달린 항목(user_wordbook_term)을 먼저 제거
+        // 2) 폴더를 지우기 전에, 폴더에 매달린 항목(wordbook_term)을 먼저 제거
         //    (현재 스키마는 CASCADE 가 없어 FK 제약 위반 방지용으로 선삭제가 필요)
         int delUwt = execute("""
             DELETE t FROM wordbook_term t

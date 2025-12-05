@@ -15,7 +15,7 @@ import java.time.Instant;
 @Getter
 @Entity
 @Table(
-        name = "user_wordbook_term",
+        name = "wordbook_term",
         uniqueConstraints = @UniqueConstraint(name="uk_owner_folder_term", columnNames = {"account_id","folder_id","term_id"}),
         indexes = {
                 @Index(name="idx_uwt_folder", columnList="folder_id"),

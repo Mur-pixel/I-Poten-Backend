@@ -26,10 +26,10 @@ public class WordbookTermQueryRepository {
             case TITLE_ASC  -> "t.title COLLATE utf8mb4_0900_ai_ci ASC, uwt.created_at DESC";
             case TITLE_DESC -> "t.title COLLATE utf8mb4_0900_ai_ci DESC, uwt.created_at DESC";
             case STATUS_ASC -> // LEARNING(기본/NULL) 먼저 -> DONE
-                    "CASE WHEN COALESCE(utp.status, 'LEARNING')='DONE' THEN 1 ELSE 0 END ASC, " +
+                    "CASE WHEN COALESCE(lp.status, 'LEARNING')='DONE' THEN 1 ELSE 0 END ASC, " +
                             "t.title COLLATE utf8mb4_0900_ai_ci ASC, uwt.created_at DESC";
             case STATUS_DESC -> // DONE 먼저
-                    "CASE WHEN COALESCE(utp.status, 'LEARNING')='DONE' THEN 0 ELSE 1 END ASC, " +
+                    "CASE WHEN COALESCE(lp.status, 'LEARNING')='DONE' THEN 0 ELSE 1 END ASC, " +
                             "t.title COLLATE utf8mb4_0900_ai_ci ASC, uwt.created_at DESC";
             case CREATED_AT_DESC -> "uwt.created_at DESC";
         };
@@ -41,7 +41,7 @@ public class WordbookTermQueryRepository {
               t.title                                  AS title,
               t.description                            AS description,
               uwt.created_at                           AS created_at,
-              COALESCE(utp.status, 'LEARNING')         AS status
+              COALESCE(lp.status, 'LEARNING')         AS status
             FROM wordbook_term uwt
             JOIN wordbook_folder f    ON f.id = uwt.folder_id
             JOIN term t                    ON t.id = uwt.term_id

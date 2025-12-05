@@ -134,9 +134,9 @@ public class WordbookFolderQueryServiceImpl implements WordbookFolderQueryServic
                         "  f.id AS id, " +
                         "  f.folder_name AS name, " +
                         "  COUNT(uwt.term_id) AS termCount, " +
-                        "  COALESCE(SUM(CASE WHEN utp.status = 'MEMORIZED' THEN 1 ELSE 0 END), 0) AS learnedCount, " +
+                        "  COALESCE(SUM(CASE WHEN lp.status = 'DONE' THEN 1 ELSE 0 END), 0) AS learnedCount, " +
                         "  COALESCE(GREATEST(COALESCE(MAX(uwt.updated_at), f.updated_at), f.updated_at), f.updated_at) AS updatedAt " +
-                        ", MAX(utp.last_studied_at) AS lastStudiedAt " +
+                        ", MAX(lp.last_studied_at) AS lastStudiedAt " +
                         "FROM wordbook_folder f " +
                         "LEFT JOIN wordbook_term uwt ON uwt.folder_id = f.id " +
                         "LEFT JOIN learning_progress lp ON lp.account_id = f.account_id AND lp.term_id = uwt.term_id " +

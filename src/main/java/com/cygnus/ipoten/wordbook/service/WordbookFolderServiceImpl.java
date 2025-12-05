@@ -80,7 +80,8 @@ public class WordbookFolderServiceImpl implements WordbookFolderService {
         if (!owns) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 폴더를 찾을 수 없습니다.");
 
         int pageIdx = Math.max(0, request.getPage());
-        int size    = Math.min(Math.max(1, request.getPerPage()), 100);
+        Integer per = request.getPerPage();
+        int size = (per == null) ? 20 : Math.min(Math.max(1, per), 100);
         Sort sort   = parseSortOrDefault(request.getSort(), Sort.by(Sort.Order.desc("createdAt")));
         Pageable pageable = PageRequest.of(pageIdx, size, sort);
 
