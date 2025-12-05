@@ -1,56 +1,44 @@
 package com.cygnus.ipoten.quiz.entity;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
-import com.cygnus.ipoten.term.entity.Category;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import jakarta.persistence.*;
 import lombok.*;
-import org.hibernate.annotations.CreationTimestamp;
-
-import java.time.LocalDateTime;
 
 @Entity
 @Getter
-@ToString
 @AllArgsConstructor
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Table(name = "quiz_set")
 public class QuizSet {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Setter
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "quiz_id", nullable = false)
+    private Quiz quiz;
+
+    /** 세트의 대표 카테고리 (카테고리 기반 세트일 때 사용) */
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "term_category_id")
+    private TermCategory termCategory;
+
     @Column(nullable = false)
     private String title;
 
-    @Column(nullable = false)
-    private boolean isRandom;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "category_id", nullable = true)
-    @ToString.Exclude
-    private Category category;
-
-    @CreationTimestamp
-    @Column(updatable = false)
-    private LocalDateTime createdAt;
-
     @Enumerated(EnumType.STRING)
-    @Column(name = "part_type", length = 20, nullable = false)
-    private QuizPartType partType;
+    @Column(name = "quiz_set_type", nullable = false)
+    private QuizSetType quizSetType;
 
-    public QuizPartType getPartType() { return partType; }
-
-    public void setPartType(QuizPartType partType) { this.partType = partType; }
-
-    public QuizSet(String title, boolean isRandom) {
+    public QuizSet(Quiz quiz, String title, QuizSetType quizSetType, TermCategory termCategory) {
+        this.quiz = quiz;
         this.title = title;
-        this.isRandom = isRandom;
+        this.quizSetType = quizSetType;
+        this.termCategory = termCategory;
     }
 
-    public QuizSet(String title, Category category, boolean isRandom) {
-        this.title = title;
-        this.category = category;
-        this.isRandom = isRandom;
+    public static QuizSet create(Quiz quiz, String title, QuizSetType quizSetType, TermCategory termCategory) {
+        return new QuizSet(quiz, title, quizSetType, termCategory);
     }
 }

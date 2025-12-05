@@ -14,10 +14,10 @@ import java.util.Optional;
 
 public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificationExecutor<Term> {
 
-    boolean existsByCategoryIdAndTitle(Long categoryId, String title);
-    Optional<Term> findByCategoryIdAndTitle(Long categoryId, String title);
+    boolean existsByTermCategory_IdAndTitle(Long categoryId, String title);
+    Optional<Term> findByTermCategoryIdAndTitle(Long categoryId, String title);
 
-    @EntityGraph(attributePaths = "category")
+    @EntityGraph(attributePaths = "termCategory")
     Page<Term> findAll(Pageable pageable);
 
     /* ---------------- 기본 LIKE / 연관도 검색 ---------------- */
@@ -88,7 +88,7 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
         value = """
           SELECT DISTINCT t
             FROM Term t
-            JOIN FETCH t.category c
+            JOIN FETCH t.termCategory c
             JOIN com.cygnus.ipoten.term.entity.TermTag tt ON tt.term = t
             JOIN tt.tag tg
            WHERE LOWER(TRIM(BOTH FROM tg.name)) = LOWER(TRIM(BOTH FROM :tag))
@@ -159,13 +159,13 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
 
     /* ---------------- 카테고리 필터 버전 ---------------- */
 
-    @Query("SELECT t FROM Term t WHERE t.category.id IN :catIds")
-    Page<Term> findByCategoryIdIn(@Param("catIds") Collection<Long> catIds, Pageable pageable);
+    @Query("SELECT t FROM Term t WHERE t.termCategory.id IN :catIds")
+    Page<Term> findByTermCategoryIdIn(@Param("catIds") Collection<Long> catIds, Pageable pageable);
 
     @Query("""
         SELECT t FROM Term t
         WHERE t.title >= :start AND t.title < :end
-          AND t.category.id IN :catIds
+          AND t.termCategory.id IN :catIds
         """)
     Page<Term> findByHangulInitialRangeInCategories(@Param("start") String start,
                                                     @Param("end") String end,
@@ -175,7 +175,7 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
     @Query("""
         SELECT t FROM Term t
         WHERE UPPER(SUBSTRING(t.title,1,1)) = UPPER(:alpha)
-          AND t.category.id IN :catIds
+          AND t.termCategory.id IN :catIds
         """)
     Page<Term> findByFirstAlphaInCategories(@Param("alpha") String alpha,
                                             @Param("catIds") Collection<Long> catIds,
@@ -184,7 +184,7 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
     @Query("""
         SELECT t FROM Term t
         WHERE SUBSTRING(t.title,1,1) = :symbol
-          AND t.category.id IN :catIds
+          AND t.termCategory.id IN :catIds
         """)
     Page<Term> findByFirstSymbolInCategories(@Param("symbol") String symbol,
                                              @Param("catIds") Collection<Long> catIds,
@@ -192,7 +192,7 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
 
     @Query("""
         SELECT t FROM Term t
-        WHERE t.category.id IN :catIds AND (
+        WHERE t.termCategory.id IN :catIds AND (
               LOWER(t.title)       LIKE LOWER(CONCAT('%', :q, '%'))
            OR LOWER(t.description) LIKE LOWER(CONCAT('%', :q, '%'))
            OR (:includeTags = TRUE AND EXISTS (

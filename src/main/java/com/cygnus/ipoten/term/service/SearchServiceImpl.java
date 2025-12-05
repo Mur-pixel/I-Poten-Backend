@@ -46,7 +46,7 @@ public class SearchServiceImpl implements SearchService {
             if (targetCatIds.isEmpty()) {
                 return toResponse(Page.empty(pageable)); // 아무 조건도 없으면 빈 결과
             }
-            Page<Term> page = termRepository.findByCategoryIdIn(targetCatIds, pageable);
+            Page<Term> page = termRepository.findByTermCategoryIdIn(targetCatIds, pageable);
             return toResponse(page);
         }
 

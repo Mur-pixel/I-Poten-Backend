@@ -1,10 +1,10 @@
 package com.cygnus.ipoten.quiz.service;
 
-import com.cygnus.ipoten.quiz.service.request.CreateQuizSessionRequest;
+import com.cygnus.ipoten.quiz_session.service.request.CreateQuizSessionRequest;
 import com.cygnus.ipoten.quiz.service.request.CreateQuizSetByCategoryRequest;
 import com.cygnus.ipoten.quiz.service.request.CreateQuizSetByFolderRequest;
 import com.cygnus.ipoten.quiz.service.response.BuiltQuizSetResponse;
-import com.cygnus.ipoten.quiz.service.response.CreateQuizSessionResponse;
+import com.cygnus.ipoten.quiz_session.service.response.CreateQuizSessionResponse;
 import com.cygnus.ipoten.quiz.service.response.CreateQuizSetByCategoryResponse;
 
 public interface QuizSetService {

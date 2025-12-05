@@ -3,7 +3,7 @@ package com.cygnus.ipoten.ebook.service.export;
 import com.cygnus.ipoten.ebook.controller.export.request_form.TermsPdfGenerateByFolderRequestForm;
 import com.cygnus.ipoten.ebook.service.export.dto.PdfExportService;
 import com.cygnus.ipoten.ebook.service.export.dto.request.PdfGenerateRequest;
-import com.cygnus.ipoten.user_term.service.UserWordbookFolderQueryService;
+import com.cygnus.ipoten.wordbook.service.WordbookFolderQueryService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpHeaders;
@@ -26,7 +26,7 @@ import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 @RequiredArgsConstructor
 public class EbookExportApplicationServiceImpl implements EbookExportApplicationService {
 
-    private final UserWordbookFolderQueryService userWordbookFolderQueryService;
+    private final WordbookFolderQueryService wordbookFolderQueryService;
     private final PdfExportService pdfExportService;
 
     @Override
@@ -36,7 +36,7 @@ public class EbookExportApplicationServiceImpl implements EbookExportApplication
     ) {
         // 1) termId 수집(필터/정렬/상한)
         final var filters = requestForm.getFilters();
-        final var collected = userWordbookFolderQueryService.collectExportTermIds(
+        final var collected = wordbookFolderQueryService.collectExportTermIds(
                 accountId,
                 requestForm.getFolderId(),
                 (filters == null) ? null : filters.getMemorization(),

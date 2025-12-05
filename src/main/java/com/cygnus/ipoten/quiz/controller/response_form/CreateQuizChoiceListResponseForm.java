@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.quiz.controller.response_form;
 
-import com.cygnus.ipoten.quiz.entity.QuizChoice;
+import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 

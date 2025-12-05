@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.term.entity;
 
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -28,11 +29,11 @@ public class Term {
     @JoinColumn(name = "category_id", 
             nullable = true,
             foreignKey = @ForeignKey(value = ConstraintMode.NO_CONSTRAINT)) // FK 생성 안 함
-    private Category category;
+    private TermCategory termCategory;
 
-    public Term(String title, String description, Category category) {
+    public Term(String title, String description, TermCategory termCategory) {
         this.title = title;
         this.description = description;
-        this.category = category;
+        this.termCategory = termCategory;
     }
 }

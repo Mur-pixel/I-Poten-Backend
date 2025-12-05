@@ -10,14 +10,12 @@ public class CreateQuizSetByCategoryResponseForm {
     private final String message;
     private final Long quizSetId;
     private final String title;
-    private final boolean isRandom;
 
     public static CreateQuizSetByCategoryResponseForm from(CreateQuizSetByCategoryResponse response) {
         return new CreateQuizSetByCategoryResponseForm(
                 response.getMessage(),
                 response.getQuizSetId(),
-                response.getTitle(),
-                response.isRandom()
+                response.getTitle()
         );
     }
 }

@@ -1,15 +1,15 @@
 //package com.cygnus.ipoten.quiz.service;
 //
-//import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+//import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 //import com.cygnus.ipoten.quiz.entity.QuizSet;
 //import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 //import com.cygnus.ipoten.quiz.repository.*;
 //import com.cygnus.ipoten.quiz.service.generator.AutoQuizGenerator;
-//import com.cygnus.ipoten.quiz.service.request.CreateQuizSessionRequest;
-//import com.cygnus.ipoten.quiz.service.response.CreateQuizSessionResponse;
-//import com.cygnus.ipoten.term.entity.Category;
+//import com.cygnus.ipoten.quiz_session.service.request.CreateQuizSessionRequest;
+//import com.cygnus.ipoten.quiz_session.service.response.CreateQuizSessionResponse;
+//import com.cygnus.ipoten.term_category.entity.Category;
 //import com.cygnus.ipoten.term.entity.Term;
-//import com.cygnus.ipoten.term.repository.CategoryRepository;
+//import com.cygnus.ipoten.term_category.repository.CategoryRepository;
 //import com.cygnus.ipoten.user_term.repository.UserWordbookTermRepository;
 //import com.cygnus.ipoten.user_term.service.UserWordbookFolderQueryService;
 //import org.junit.jupiter.api.BeforeEach;

@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz.controller.response_form;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.cygnus.ipoten.quiz.service.response.ChoiceQuestionRead;
+import com.cygnus.ipoten.quiz_question.service.response.ChoiceQuestionRead;
 
 import java.util.List;
 

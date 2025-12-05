@@ -26,8 +26,8 @@ public class TermsPdfGenerateByFolderRequestForm {
 
     @Data
     public static class Filters {
-        /** 암기 상태 필터 : LEARNING | MEMORIZED(둘 중 하나) */
-        @Pattern(regexp = "^(LEARNING|MEMORIZED)?$", message = "memorization은 LEARNING 또는 MEMORIZED만 허용됩니다.")
+        /** 암기 상태 필터 : LEARNING | DONE(둘 중 하나) */
+        @Pattern(regexp = "^(LEARNING|DONE)?$", message = "memorization은 LEARNING 또는 DONE만 허용됩니다.")
         private String memorization;
         
         /** 포함 태그(AND 매칭이 기본 - 필요시 OR 정책으로 바꿀 수 있음 */

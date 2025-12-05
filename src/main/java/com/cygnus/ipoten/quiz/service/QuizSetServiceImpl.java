@@ -1,27 +1,30 @@
 package com.cygnus.ipoten.quiz.service;
 
-import com.cygnus.ipoten.quiz.entity.QuizChoice;
-import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz.entity.Quiz;
+import com.cygnus.ipoten.quiz.repository.QuizRepository;
+import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.QuizSet;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz.entity.enums.QuizPartType;
+import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
-import com.cygnus.ipoten.quiz.repository.QuizQuestionRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz.repository.QuizSetRepository;
-import com.cygnus.ipoten.quiz.repository.SessionAnswerRepository;
+import com.cygnus.ipoten.quiz_analytics.service.RecentUsageService;
+import com.cygnus.ipoten.quiz_session.repository.SessionAnswerRepository;
 import com.cygnus.ipoten.quiz.service.generator.AutoQuizGenerator;
-import com.cygnus.ipoten.quiz.service.request.CreateQuizSessionRequest;
+import com.cygnus.ipoten.quiz_session.service.request.CreateQuizSessionRequest;
 import com.cygnus.ipoten.quiz.service.request.CreateQuizSetByCategoryRequest;
 import com.cygnus.ipoten.quiz.service.request.CreateQuizSetByFolderRequest;
 import com.cygnus.ipoten.quiz.service.response.BuiltQuizSetResponse;
-import com.cygnus.ipoten.quiz.service.response.CreateQuizSessionResponse;
+import com.cygnus.ipoten.quiz_session.service.response.CreateQuizSessionResponse;
 import com.cygnus.ipoten.quiz.service.response.CreateQuizSetByCategoryResponse;
-import com.cygnus.ipoten.term.entity.Category;
+import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
-import com.cygnus.ipoten.term.repository.CategoryRepository;
-import com.cygnus.ipoten.user_term.repository.UserWordbookTermRepository;
-import com.cygnus.ipoten.user_term.service.UserWordbookFolderQueryService;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
+import com.cygnus.ipoten.wordbook.repository.WordbookTermRepository;
+import com.cygnus.ipoten.wordbook.service.WordbookFolderQueryService;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
 import lombok.RequiredArgsConstructor;
@@ -40,14 +43,15 @@ import java.util.stream.Collectors;
 @RequiredArgsConstructor
 public class QuizSetServiceImpl implements QuizSetService {
 
-    private final CategoryRepository categoryRepository;
+    private final TermCategoryRepository termCategoryRepository;
     private final QuizSetRepository quizSetRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final AutoQuizGenerator autoQuizGenerator;
-    private final UserWordbookFolderQueryService userWordbookFolderQueryService;
+    private final WordbookFolderQueryService wordbookFolderQueryService;
     private final SessionAnswerRepository sessionAnswerRepository;
     private final QuizChoiceRepository quizChoiceRepository;
-    private final UserWordbookTermRepository userWordbookTermRepository;
+    private final WordbookTermRepository wordbookTermRepository;
+    private final QuizRepository quizRepository;
 
     /** 선택 주입: 있으면 사용(최근 옵션 텍스트 재사용 회피 등), 없으면 SessionAnswerRepository로 폴백 */
     @Autowired(required = false)
@@ -64,35 +68,38 @@ public class QuizSetServiceImpl implements QuizSetService {
     public BuiltQuizSetResponse registerQuizSetByCategoryReturningQuestions(CreateQuizSetByCategoryRequest request) {
 
         // 1) 카테고리 로드(있는 경우)
-        Category category = null;
+        TermCategory termCategory = null;
         if (request.getCategoryId() != null) {
-            category = categoryRepository.getReferenceById(request.getCategoryId());
+            termCategory = termCategoryRepository.getReferenceById(request.getCategoryId());
         }
 
         // 2) 타이틀 확정
         String title = request.getTitle();
         if (title == null || title.isBlank()) {
-            String cat = (category != null && category.getName() != null) ? category.getName() : "카테고리";
+            String cat = (termCategory != null && termCategory.getName() != null) ? termCategory.getName() : "카테고리";
             String ts  = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
             title = cat + " 퀴즈 - " + ts;
         }
 
         // 3) 세트 생성/저장
-        QuizPartType setPart;
+        QuizSetType setPart;
         var reqTypeCat = request.getQuestionType();
         if (reqTypeCat == null) {
-            setPart = QuizPartType.CHOICE;
+            setPart = QuizSetType.CHOICE;
         } else {
             switch (reqTypeCat) {
-                case INITIALS -> setPart = QuizPartType.INITIALS;
-                case OX       -> setPart = QuizPartType.OX;
-                case CHOICE   -> setPart = QuizPartType.CHOICE;
-                case MIX      -> setPart = QuizPartType.CHOICE;
-                default       -> setPart = QuizPartType.CHOICE;
+                case INITIALS -> setPart = QuizSetType.INITIALS;
+                case OX       -> setPart = QuizSetType.OX;
+                case CHOICE   -> setPart = QuizSetType.CHOICE;
+                case MIX      -> setPart = QuizSetType.CHOICE;
+                default       -> setPart = QuizSetType.CHOICE;
             }
         }
-        QuizSet quizSet = new QuizSet(title, category, request.isRandom());
-        quizSet.setPartType(setPart);
+
+        Quiz quiz = Quiz.create(title, setPart);
+        quiz = quizRepository.save(quiz);
+
+        QuizSet quizSet = QuizSet.create(quiz, title, setPart, termCategory);
         quizSetRepository.save(quizSet);
 
         // 4) 문제로 사용할 용어 선별
@@ -114,20 +121,17 @@ public class QuizSetServiceImpl implements QuizSetService {
             QuizQuestion q;
             if (qType == QuestionType.INITIALS) {
                 q = QuizQuestion.textAnswer(
-                        term, category, QuestionType.INITIALS,
+                        term, termCategory, QuestionType.INITIALS,
                         makeQuestionText(term, qType),
-                        toKoreanInitials(koreanHead(term.getTitle())),
-                        quizSet, ++order
+                        quizSet, toKoreanInitials(koreanHead(term.getTitle()))
                 );
             } else {
                 q = new QuizQuestion(
-                        term, category, qType,
+                        term, termCategory, qType,
                         makeQuestionText(term, qType),
                         quizSet
                 );
-                q.setOrderIndex(++order);
             }
-            q.setRandom(request.isRandom());
             questions.add(q);
         }
         quizQuestionRepository.saveAll(questions);
@@ -147,7 +151,6 @@ public class QuizSetServiceImpl implements QuizSetService {
                 .quizSetId(quizSet.getId())
                 .questionIds(questionIds)
                 .title(quizSet.getTitle())
-                .isRandom(quizSet.isRandom())
                 .totalQuestions(questionIds.size())
                 .build();
     }
@@ -165,7 +168,7 @@ public class QuizSetServiceImpl implements QuizSetService {
         }
 
         // 1) 폴더 소유권 확인
-        boolean owned = userWordbookFolderQueryService.existsByIdAndAccountId(
+        boolean owned = wordbookFolderQueryService.existsByIdAndAccountId(
                 request.getFolderId(), request.getAccountId()
         );
         if (!owned) {
@@ -174,7 +177,7 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 2) 폴더 용어 조회
         List<Long> candidateTermIds =
-                userWordbookTermRepository.findDistinctTermIdsByFolderAndAccountOrderByTermIdAsc(
+                wordbookTermRepository.findDistinctTermIdsByFolderAndAccountOrderByTermIdAsc(
                         request.getFolderId(), request.getAccountId());
 
         if (candidateTermIds.isEmpty()) {
@@ -193,22 +196,24 @@ public class QuizSetServiceImpl implements QuizSetService {
         }
 
         // 4) 세트 저장
-        QuizPartType setPart;
+        QuizSetType setPart;
         var reqTypeFold = request.getQuestionType();
         if (reqTypeFold == null) {
-            setPart = QuizPartType.CHOICE;
+            setPart = QuizSetType.CHOICE;
         } else {
             switch (reqTypeFold) {
-                case INITIALS -> setPart = QuizPartType.INITIALS;
-                case OX       -> setPart = QuizPartType.OX;
-                case CHOICE   -> setPart = QuizPartType.CHOICE;
-                case MIX      -> setPart = QuizPartType.CHOICE;
-                default       -> setPart = QuizPartType.CHOICE;
+                case INITIALS -> setPart = QuizSetType.INITIALS;
+                case OX       -> setPart = QuizSetType.OX;
+                case CHOICE   -> setPart = QuizSetType.CHOICE;
+                case MIX      -> setPart = QuizSetType.CHOICE;
+                default       -> setPart = QuizSetType.CHOICE;
             }
         }
-        QuizSet set = new QuizSet(title, null, request.isRandom());
-        set.setPartType(setPart);
-        set = quizSetRepository.save(set);
+        Quiz quiz = Quiz.create(title, setPart);
+        quiz = quizRepository.save(quiz);
+
+        QuizSet quizSet = QuizSet.create(quiz, title, setPart, null);
+        quizSetRepository.save(quizSet);
 
         // 5) Term 엔티티 로드 + 폴더 내 순서 보존
         List<Term> loaded = em.createQuery(
@@ -253,19 +258,19 @@ public class QuizSetServiceImpl implements QuizSetService {
             QuizQuestion q;
             if (questionType == QuestionType.INITIALS) {
                 q = QuizQuestion.textAnswer(
-                        term, null, QuestionType.INITIALS,
+                        term,
+                        null,
+                        QuestionType.INITIALS,
                         makeQuestionText(term, questionType),
-                        toKoreanInitials(koreanHead(term.getTitle())),
-                        set, ++order
+                        quizSet,
+                        toKoreanInitials(koreanHead(term.getTitle()))
                 );
             } else {
                 q = new QuizQuestion(
                         term, null, questionType,
-                        makeQuestionText(term, questionType), set
+                        makeQuestionText(term, questionType), quizSet
                 );
-                q.setOrderIndex(++order);
             }
-            q.setRandom(request.isRandom());
             questions.add(q);
         }
 
@@ -279,15 +284,14 @@ public class QuizSetServiceImpl implements QuizSetService {
         List<Long> questionIds = em.createQuery(
                 "select q.id from QuizQuestion q where q.quizSet.id = :sid order by q.id",
                 Long.class
-        ).setParameter("sid", set.getId()).getResultList();
+        ).setParameter("sid", quizSet.getId()).getResultList();
 
         // 8) 응답
         return BuiltQuizSetResponse.builder()
-                .quizSetId(set.getId())
+                .quizSetId(quizSet.getId())
                 .questionIds(questionIds)
-                .title(set.getTitle())
-                .isRandom(set.isRandom())
-                .totalQuestions(questionIds.size())   // ← 실제 생성 개수(7) 반환
+                .title(quizSet.getTitle())
+                .totalQuestions(questionIds.size())
                 .build();
     }
 
@@ -313,7 +317,7 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 1) 소유권 검증
         if (folderId != null) {
-            boolean owned = userWordbookFolderQueryService.existsByIdAndAccountId(folderId, accountId);
+            boolean owned = wordbookFolderQueryService.existsByIdAndAccountId(folderId, accountId);
             if (!owned) {
                 throw new SecurityException("폴더가 없거나 권한이 없습니다.");
             }
@@ -321,8 +325,8 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 2) 용어 조회
         List<Term> terms = (folderId == null)
-                ? userWordbookTermRepository.findTermsByAccount(accountId)
-                : userWordbookTermRepository.findTermsByAccountAndFolderStrict(accountId, folderId);
+                ? wordbookTermRepository.findTermsByAccount(accountId)
+                : wordbookTermRepository.findTermsByAccountAndFolderStrict(accountId, folderId);
 
         if (terms.isEmpty()) {
             throw new IllegalArgumentException("즐겨찾기 용어가 없습니다.");
@@ -384,8 +388,35 @@ public class QuizSetServiceImpl implements QuizSetService {
         if (questions.isEmpty()) throw new IllegalStateException("생성된 문제가 없습니다.");
 
         // 6) 세트 저장 + 문항 저장(Managed 상태로)
-        QuizSet set = quizSetRepository.save(new QuizSet("[GEN] Favorites", true));
-        questions.forEach(q -> q.setQuizSet(set));
+        String title = "[GEN] Favorites";
+
+
+        // 요청된 questionTypes 기반으로 세트 타입 추론
+        QuizSetType setPart;
+        var types = request.getQuestionTypes();
+        if (types == null || types.isEmpty()) {
+            setPart = QuizSetType.CHOICE;
+        } else if (types.size() == 1) {
+            switch (types.get(0)) {
+                case CHOICE     -> setPart = QuizSetType.CHOICE;
+                case OX         -> setPart = QuizSetType.OX;
+                case INITIALS   -> setPart = QuizSetType.INITIALS;
+                default         -> setPart = QuizSetType.CHOICE;
+            }
+        } else {
+            setPart = QuizSetType.CHOICE;
+        }
+
+        Quiz quiz = Quiz.create(title, setPart);
+        quiz = quizRepository.save(quiz);
+
+        QuizSet quizSet = QuizSet.create(quiz, title, setPart, null);
+        quizSet = quizSetRepository.save(quizSet);
+
+        // 문항에 세트 연결
+        for (QuizQuestion q : questions) {
+            q.setQuizSet(quizSet);
+        }
         quizQuestionRepository.saveAll(questions);
 
         // 7) 보기 생성·저장 (옵션 재사용 회피는 RecentUsageService 있을 때만 적용)
@@ -401,7 +432,7 @@ public class QuizSetServiceImpl implements QuizSetService {
         }
 
         return CreateQuizSessionResponse.of(
-                set.getId(),
+                quizSet.getId(),
                 questions.stream().map(QuizQuestion::getId).toList()
         );
     }
@@ -520,17 +551,17 @@ public class QuizSetServiceImpl implements QuizSetService {
             Term term = q.getTerm();
             if (term == null) continue;
 
-            if (q.getQuestionType() == QuestionType.INITIALS) {
+            QuestionType type = q.getQuestionType();
+
+            // INITIALS(초성) 타입은 텍스트 정답형이므로 보기 없음
+            if (type == QuestionType.INITIALS) {
                 continue;
             }
 
-            if (q.getQuestionType() == QuestionType.OX) {
-                String brief = oneLine(safeText(term.getDescription()), 140);
-                if (brief.isBlank()) brief = "~.";
-                QuizChoice o = new QuizChoice(q, "O", true,  brief);
-                o.setSortOrder(1);
-                QuizChoice x = new QuizChoice(q, "X", false, brief);
-                x.setSortOrder(2);
+            // OX 문제: 보기 두 개 고정
+            if (type == QuestionType.OX) {
+                QuizChoice o = QuizChoice.create(q, "O", true);
+                QuizChoice x = QuizChoice.create(q, "X", false);
                 quizChoiceRepository.saveAll(List.of(o, x));
                 continue;
             }
@@ -550,14 +581,10 @@ public class QuizSetServiceImpl implements QuizSetService {
             List<QuizChoice> toSave = new ArrayList<>();
 
             // (정답)
-            QuizChoice ans = new QuizChoice();
-            ans.setQuizQuestion(q);
-            ans.setChoiceText(correctText);
-            ans.setAnswer(true);
-            ans.setExplanation(safeText(term.getDescription()));
+            QuizChoice ans = QuizChoice.create(q, correctText, true);
             toSave.add(ans);
 
-            // (오답) 1차
+            // (오답) 1차: 풀에서 다른 용어 이름을 뽑아 3개까지 채우기
             for (Term d : candidates) {
                 if (toSave.size() >= 4) break;
                 String txt = safeText(d.getTitle());
@@ -565,10 +592,7 @@ public class QuizSetServiceImpl implements QuizSetService {
                 if (norm.isBlank() || used.contains(norm)) continue;
                 used.add(norm);
 
-                QuizChoice c = new QuizChoice();
-                c.setQuizQuestion(q);
-                c.setChoiceText(txt);
-                c.setAnswer(false);
+                QuizChoice c = QuizChoice.create(q, txt, false);
                 toSave.add(c);
             }
 
@@ -588,31 +612,22 @@ public class QuizSetServiceImpl implements QuizSetService {
                     if (norm.isBlank() || used.contains(norm)) continue;
                     used.add(norm);
 
-                    QuizChoice c = new QuizChoice();
-                    c.setQuizQuestion(q);
-                    c.setChoiceText(txt);
-                    c.setAnswer(false);
+                    QuizChoice c = QuizChoice.create(q, txt, false);
                     toSave.add(c);
                 }
             }
 
             // 3) 최종 방어: 여전히 부족하면(데이터 희소) 현재 개수로 진행하되 경고
-            if (toSave.size() < 2 && q.getQuestionType() == QuestionType.OX) {
-                // 이 케이스는 거의 없지만 로깅
-                log.warn("[choices] OX 최소지 보장 실패: qId={}", q.getId());
-            }
-            if (toSave.size() < 4 && q.getQuestionType() == QuestionType.CHOICE) {
+            if (toSave.size() < 4 && type == QuestionType.CHOICE) {
                 log.warn("[choices] CHOICE 4지 미만({}) → 데이터 희소. qId={}", toSave.size(), q.getId());
             }
 
-            // 4) 섞기 + 저장 + 정답 위치 기록
-            Collections.shuffle(toSave, new Random(q.getId()));
-            for (int i = 0; i < toSave.size(); i++) {
-                toSave.get(i).setSortOrder(i + 1);
-            }
+            // 4) 섞기 + 저장 (별도 sortOrder 컬럼 없음)
+            Collections.shuffle(toSave);
             quizChoiceRepository.saveAll(toSave);
         }
-         em.flush();
+
+        em.flush();
     }
 
     private static String safeText(String s) { return (s == null ? "" : s.trim()); }

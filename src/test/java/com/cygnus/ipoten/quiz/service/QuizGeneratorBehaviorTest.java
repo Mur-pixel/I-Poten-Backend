@@ -1,10 +1,10 @@
 package com.cygnus.ipoten.quiz.service;
 
-import com.cygnus.ipoten.quiz.entity.QuizChoice;
-import com.cygnus.ipoten.quiz.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
+import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.repository.QuizChoiceRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz.service.generator.AutoQuizGenerator;
 import com.cygnus.ipoten.quiz.service.generator.DifficultyProperties;
 import com.cygnus.ipoten.quiz.service.generator.DifficultyProperties.Profile;
