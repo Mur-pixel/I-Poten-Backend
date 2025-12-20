@@ -7,7 +7,7 @@ import java.util.List;
 @Builder
 public record AttachTermsBulkRequest(
         Long accountId,
-        Long folderId,
+        Long wordbookId,
         List<Long> termIds,
         DedupeMode dedupeMode
 ) {
@@ -29,10 +29,10 @@ public record AttachTermsBulkRequest(
     }
 
     /** 편의용 팩토리: dedupeMode는 기본 SKIP */
-    public static AttachTermsBulkRequest of(Long accountId, Long folderId, List<Long> termIds) {
+    public static AttachTermsBulkRequest of(Long accountId, Long wordbookId, List<Long> termIds) {
         return AttachTermsBulkRequest.builder()
                 .accountId(accountId)
-                .folderId(folderId)
+                .wordbookId(wordbookId)
                 .termIds(termIds)
                 .dedupeMode(DedupeMode.SKIP)
                 .build();

@@ -1,12 +1,12 @@
 package com.cygnus.ipoten.quiz_session.entity;
 
-import com.cygnus.ipoten.quiz.entity.QuizSet;
+import com.cygnus.ipoten.quiz_set.entity.QuizSet;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.cygnus.ipoten.account.entity.Account;
-import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.entity.enums.SessionMode;
-import com.cygnus.ipoten.quiz.entity.enums.SessionStatus;
+import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -17,7 +17,7 @@ import java.time.Instant;
 import java.util.List;
 
 /**
- * UserQuizSession
+ * QuizSession
  *
  * 사용자가 특정 퀴즈 세트를 푸는 한 번의 세션을 나타내는 엔티티.
  * - 사용자 × 퀴즈 세트 응시 이력 저장
@@ -30,11 +30,11 @@ import java.util.List;
 @Getter
 @NoArgsConstructor
 @Table(
-    name = "user_quiz_session",
+    name = "quiz_session",
     indexes = {
-            @Index(name = "idx_uqs_user_set", columnList = "account_id, quiz_set_id, started_at"),
-            @Index(name = "idx_uqs_started", columnList = "started_at"),
-            @Index(name = "idx_uqs_user_status_started", columnList = "account_id, session_status, started_at")
+            @Index(name = "idx_qs_user_set", columnList = "account_id, quiz_set_id, started_at"),
+            @Index(name = "idx_qs_started", columnList = "started_at"),
+            @Index(name = "idx_qs_user_status_started", columnList = "account_id, session_status, started_at")
     }
 )
 public class QuizSession {
@@ -92,7 +92,7 @@ public class QuizSession {
     private SeedMode seedMode;  // AUTO | DAILY | FIXED
 
     @Column(name ="seed_value")
-    private Long seed; // 최종 해석된 시드 값
+    private Long seedValue; // 최종 해석된 시드 값
 
     @Version
     private Long version;
@@ -140,7 +140,7 @@ public class QuizSession {
     public void begin(Account account, QuizSet quizSet,
                       SessionMode sessionMode, int attemptNo,
                       int total, String questionsSnapshotJson,
-                      SeedMode seedMode, Long seed) {
+                      SeedMode seedMode, Long seedValue) {
         this.account = account;
         this.quizSet = quizSet;
         this.sessionMode = sessionMode;
@@ -150,12 +150,13 @@ public class QuizSession {
         this.total = total;
         this.questionsSnapshotJson = questionsSnapshotJson;
         this.seedMode = seedMode;
-        this.seed = seed;
+        this.seedValue = seedValue;
         this.lastActivityAt = Instant.now();
     }
 
     public void beginWithParent(Account account, QuizSet quizSet, QuizSession parent,
-                                SessionMode mode, Integer attemptNo, Integer total, String snapshotJson) {
+                                SessionMode mode, Integer attemptNo, Integer total, String snapshotJson,
+                                SeedMode seedMode, Long seedValue) {
         this.account = account;
         this.quizSet = quizSet;
         this.parentSession = parent;
@@ -165,6 +166,8 @@ public class QuizSession {
         this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = snapshotJson;
+        this.seedMode = seedMode;
+        this.seedValue = seedValue;
         this.lastActivityAt = Instant.now();
     }
 

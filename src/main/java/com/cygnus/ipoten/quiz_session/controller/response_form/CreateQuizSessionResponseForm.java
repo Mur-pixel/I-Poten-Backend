@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz_session.controller.response_form;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz_session.service.response.StartUserQuizSessionResponse;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
+import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 
@@ -33,13 +33,13 @@ public class CreateQuizSessionResponseForm {
         private final String text;
     }
 
-    public static CreateQuizSessionResponseForm from(StartUserQuizSessionResponse s) {
-        List<StartUserQuizSessionResponse.Item> safeItems =
+    public static CreateQuizSessionResponseForm from(StartQuizSessionResponse s) {
+        List<StartQuizSessionResponse.Item> safeItems =
                 s.getItems() == null ? List.of() : s.getItems();
 
         List<Item> mapped = safeItems.stream()
                 .map(it -> {
-                    List<StartUserQuizSessionResponse.Option> safeOps =
+                    List<StartQuizSessionResponse.Option> safeOps =
                             it.getOptions() == null ? List.of() : it.getOptions();
 
                     List<Option> mappedOps = safeOps.stream()

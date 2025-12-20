@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.quiz.service.response;
 
-import com.cygnus.ipoten.quiz.entity.QuizSet;
+import com.cygnus.ipoten.quiz_set.entity.QuizSet;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;
 

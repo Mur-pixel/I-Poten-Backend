@@ -1,7 +1,8 @@
 package com.cygnus.ipoten.quiz_question.entity;
 
-import com.cygnus.ipoten.quiz.entity.QuizSet;
-import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
+import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
+import com.cygnus.ipoten.quiz_set.entity.QuizSet;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
 import jakarta.persistence.*;
@@ -48,6 +49,12 @@ public class QuizQuestion {
     @Column(name = "question_type", nullable = false)
     private QuestionType questionType;
 
+    /** 난이도 */
+    @Setter
+    @Enumerated(EnumType.STRING)
+    @Column(name = "difficulty", nullable = false)
+    private DifficultyLevel difficulty;
+
     /** 문제 본문 */
     @Setter
     @Column(name = "question_text", nullable = false, length = 1000)
@@ -66,6 +73,7 @@ public class QuizQuestion {
             Term term,
             TermCategory termCategory,
             QuestionType questionType,
+            DifficultyLevel difficulty,
             String questionText,
             QuizSet quizSet,
             String explanation
@@ -73,6 +81,7 @@ public class QuizQuestion {
         this.term = term;
         this.termCategory = termCategory;
         this.questionType = questionType;
+        this.difficulty = difficulty;
         this.questionText = questionText;
         this.quizSet = quizSet;
         this.explanation = explanation;
@@ -83,17 +92,19 @@ public class QuizQuestion {
             Term term,
             TermCategory termCategory,
             QuestionType questionType,
+            DifficultyLevel difficulty,
             String questionText,
             QuizSet quizSet,
             String explanation
     ) {
-        return new QuizQuestion(term, termCategory, questionType, questionText, quizSet, explanation);
+        return new QuizQuestion(term, termCategory, questionType, difficulty, questionText, quizSet, explanation);
     }
 
     public QuizQuestion(
             Term term,
             TermCategory termCategory,
             QuestionType questionType,
+            DifficultyLevel difficulty,
             String questionText,
             String answerText,
             QuizSet quizSet,
@@ -102,6 +113,7 @@ public class QuizQuestion {
         this.term = term;
         this.termCategory = termCategory;
         this.questionType = questionType;
+        this.difficulty = difficulty;
         this.questionText = questionText;
         this.quizSet = quizSet;
         this.explanation = explanation;
@@ -112,10 +124,11 @@ public class QuizQuestion {
             Term term,
             TermCategory termCategory,
             QuestionType questionType,
+            DifficultyLevel difficulty,
             String questionText,
             QuizSet quizSet
     ) {
-        this(term, termCategory, questionType, questionText, null, quizSet, null);
+        this(term, termCategory, questionType, difficulty, questionText, null, quizSet, null);
     }
 
     public void setQuizSet(QuizSet quizSet) {

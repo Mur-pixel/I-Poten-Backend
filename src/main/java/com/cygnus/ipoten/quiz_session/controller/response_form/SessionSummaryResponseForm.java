@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz_session.controller.response_form;
 
-import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.entity.enums.SessionStatus;
+import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import lombok.Builder;
 import lombok.Getter;
 

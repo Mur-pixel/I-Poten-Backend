@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.quiz.entity;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
+import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import jakarta.persistence.*;
 import lombok.Getter;
 

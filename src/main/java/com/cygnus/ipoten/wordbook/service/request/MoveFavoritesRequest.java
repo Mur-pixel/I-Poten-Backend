@@ -9,7 +9,7 @@ import java.util.List;
 @AllArgsConstructor
 public class MoveFavoritesRequest {
     private final Long accountId;
-    private final Long targetFolderId;
+    private final Long targetWordbookId;
     private final List<Long> termIds;
     private final List<Long> favoriteIds;
 }

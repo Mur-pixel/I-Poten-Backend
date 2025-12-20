@@ -26,9 +26,9 @@ public class QuizAdminService {
      */
     @Value
     public static class Result {
-        long wrongNotes;        // user_wrong_note (해당 계정)
+        long wrongNotes;        // wrong_note (해당 계정)
         long sessionAnswers;    // session_answer (해당 계정의 세션을 통해 삭제)
-        long sessions;          // user_quiz_session (해당 계정)
+        long sessions;          // quiz_session (해당 계정)
         long orphanChoices;     // quiz_choice (고아 세트 정리 과정에서 삭제된 개수)
         long orphanQuestions;   // quiz_question (고아 세트 정리 과정에서 삭제된 개수)
         long orphanSets;        // quiz_set (더 이상 어떤 세션에서도 참조되지 않는 세트)
@@ -36,16 +36,16 @@ public class QuizAdminService {
 
     /**
      * [핵심 규칙]
-     * - "계정 데이터"만 지운다: user_quiz_session, session_answer(해당 세션들), user_wrong_note(해당 계정).
+     * - "계정 데이터"만 지운다: quiz_session, session_answer(해당 세션들), wrong_note(해당 계정).
      * - quiz_set / quiz_question / quiz_choice는 '공유(재사용) 가능'한 구조일 수 있으므로
      *   → 먼저 "이 계정이 사용하던 세트 id"를 수집하고,
      *   → 이 계정의 세션들을 모두 지운 뒤,
      *   → 남은 세션이 아무도 참조하지 않는 '고아 세트'만 안전하게 정리(세트/문항/보기)한다.
      *
      * 삭제 순서:
-     *   1) user_wrong_note (계정 기준으로 바로 삭제)
-     *   2) session_answer (해당 계정의 user_quiz_session을 JOIN해서 삭제)
-     *   3) user_quiz_session (계정 기준 삭제)
+     *   1) wrong_note (계정 기준으로 바로 삭제)
+     *   2) session_answer (해당 계정의 quiz_session을 JOIN해서 삭제)
+     *   3) quiz_session (계정 기준 삭제)
      *   4) '고아 세트' 정리:
      *      - 이 계정의 세션들이 참조하던 quiz_set 들 중
      *        더 이상 어떤 세션도 참조하지 않는 id만 골라
@@ -57,23 +57,23 @@ public class QuizAdminService {
         //     → 나중에 고아 세트 판단에 사용
         List<Long> candidateSetIds = listLongs("""
             SELECT DISTINCT quiz_set_id
-              FROM user_quiz_session
+              FROM quiz_session
              WHERE account_id = :id
         """, accountId);
 
-        // (B) user_wrong_note : 계정 기준 바로 삭제
-        int delWrong = execute("DELETE FROM user_wrong_note WHERE account_id = :id", accountId);
+        // (B) wrong_note : 계정 기준 바로 삭제
+        int delWrong = execute("DELETE FROM wrong_note WHERE account_id = :id", accountId);
 
         // (C) session_answer : 이 계정의 세션을 통해 매핑되는 답안을 먼저 지움
         int delSa = execute("""
             DELETE a
               FROM session_answer a
-              JOIN user_quiz_session s ON s.id = a.session_id
+              JOIN quiz_session s ON s.id = a.session_id
              WHERE s.account_id = :id
         """, accountId);
 
-        // (D) user_quiz_session : 계정 기준 세션 삭제
-        int delSessions = execute("DELETE FROM user_quiz_session WHERE account_id = :id", accountId);
+        // (D) quiz_session : 계정 기준 세션 삭제
+        int delSessions = execute("DELETE FROM quiz_session WHERE account_id = :id", accountId);
 
         // (E) 고아 세트 정리
         //     - candidateSetIds 중에서 "아무 세션도 참조하지 않는" 세트만 추린다.
@@ -85,7 +85,7 @@ public class QuizAdminService {
                      WHERE qs.id IN (%s)
                        AND NOT EXISTS (
                              SELECT 1
-                               FROM user_quiz_session s
+                               FROM quiz_session s
                               WHERE s.quiz_set_id = qs.id
                            )
                 """, candidateSetIds.size()), candidateSetIds);

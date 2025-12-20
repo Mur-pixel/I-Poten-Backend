@@ -1,7 +1,8 @@
 package com.cygnus.ipoten.quiz_session.service.request;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
+import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
 import lombok.*;
 
 import java.util.List;
@@ -18,7 +19,7 @@ public class CreateQuizSessionRequest {
     private Integer initialsEach;
     private SeedMode seedMode;
     private Long fixedSeed;
-    private String difficulty;
+    private DifficultyLevel difficulty;
     private final Integer avoidRecentDays;
     private Long folderId;
 }
