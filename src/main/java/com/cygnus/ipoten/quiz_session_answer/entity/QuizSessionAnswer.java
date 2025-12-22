@@ -13,19 +13,15 @@ import java.time.Instant;
  * 특정 QuizSession 내에서 사용자가 개별 문제(QuizQuestion)에 제출한 응답을 저장하는 엔티티.
  *
  * 특징:
- * - QuizSession 과 다대일 관계 (세션 단위 응답 집합)
- * - QuizQuestion 과 다대일 관계 (어떤 문제에 대한 응답인지)
- * - QuizChoice 와 다대일 관계 (사용자가 고른 보기)
- * - 응답 시각(submittedAt)과 정답 여부(isCorrect)를 함께 기록
+ * - 특정 QuizSession 내에서 사용자가 특정 QuizQuestion에 제출한 "답안 스냅샷"을 저장한다.
+ * - WrongNote 정책과 동일하게, 제출 답은 FK로 묶지 않고 "id/text 스냅샷"으로 보존한다.
  *
- * 제약 조건:
- * - 동일 세션 내에서 같은 문제에 대한 응답은 하나만 존재하도록 UniqueConstraint(session_id, quiz_question_id)
- * - 세션별/문제별 조회를 빠르게 하기 위해 인덱스 추가
+ * 저장 정책:
+ * - 선택형(CHOICE/OX 등): submittedChoiceId
+ * - 텍스트형(INITIALS/주관식 등): submittedText 사용
  *
- * 활용 예:
- * - 채점 시 정답 여부 저장
- * - 세션 리뷰 화면에서 사용자가 어떤 보기를 선택했는지 조회
- * - 학습 통계(정답률, 오답노트) 집계의 근거 데이터
+ * 정답 여부(isCorrect)는 "제출 당시 채점 결과 스냅샷"으로 저장한다.
+ * (문항/정답이 나중에 수정되어도 과거 세션 결과가 변하지 않도록)
  */
 @Getter
 @Entity
@@ -55,9 +51,14 @@ public class QuizSessionAnswer {
     @JoinColumn(name = "quiz_question_id", nullable = false)
     private QuizQuestion quizQuestion;  // 문제 ID
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_choice_id")
-    private QuizChoice quizChoice;  // 선택한 보기 ID
+    @Column(name = "submitted_choice_id")
+    private Long submittedChoiceId;
+
+    @Column(name = "submitted_choice_text")
+    private String submittedChoiceText;
+
+    @Column(name = "submitted_text", length = 1000)
+    private String submittedText;
 
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt;  // 응답 시각
@@ -65,14 +66,56 @@ public class QuizSessionAnswer {
     @Column(name = "is_correct", nullable = false)
     private boolean isCorrect;  // 정답 여부
 
-    @Column(name = "submitted_text", length = 255)
-    private String submittedText; // INITIALS/주관식 제출값
+    @PrePersist
+    void prePersist() {
+        if (this.submittedAt == null) this.submittedAt = Instant.now();
+    }
 
-    public QuizSessionAnswer(QuizSession quizSession, QuizQuestion quizQuestion, QuizChoice quizChoice, Instant submittedAt, boolean isCorrect) {
-        this.quizSession = quizSession;
-        this.quizQuestion = quizQuestion;
-        this.quizChoice = quizChoice;
-        this.submittedAt = submittedAt;
-        this.isCorrect = isCorrect;
+    public static QuizSessionAnswer forChoice(QuizSession session,
+                                              QuizQuestion question,
+                                              Long submittedChoiceId,
+                                              String submittedChoiceText,
+                                              boolean isCorrect,
+                                              Instant submittedAt) {
+        if (session == null) throw new IllegalArgumentException("session은 필수입니다.");
+        if (question == null) throw new IllegalArgumentException("question은 필수입니다.");
+
+        boolean hasId = (submittedChoiceId != null);
+        boolean hasText = (submittedChoiceText != null && !submittedChoiceText.isBlank());
+        if (!hasId && !hasText) {
+            throw new IllegalArgumentException("선택형 제출은 submittedChoiceId 또는 submittedChoiceText 중 하나는 필요합니다.");
+        }
+
+        QuizSessionAnswer a = new QuizSessionAnswer();
+        a.quizSession = session;
+        a.quizQuestion = question;
+        a.submittedChoiceId = submittedChoiceId;
+        a.submittedChoiceText = hasText ? submittedChoiceText.trim() : null;
+        a.submittedText = null;
+        a.isCorrect = isCorrect;
+        a.submittedAt = (submittedAt != null ? submittedAt : Instant.now());
+        return a;
+    }
+
+    public static QuizSessionAnswer forText(QuizSession session,
+                                            QuizQuestion question,
+                                            String submittedText,
+                                            boolean isCorrect,
+                                            Instant submittedAt) {
+        if (session == null) throw new IllegalArgumentException("session은 필수입니다.");
+        if (question == null) throw new IllegalArgumentException("question은 필수입니다.");
+        if (submittedText == null || submittedText.isBlank()) {
+            throw new IllegalArgumentException("submittedText는 필수입니다.");
+        }
+
+        QuizSessionAnswer a = new QuizSessionAnswer();
+        a.quizSession = session;
+        a.quizQuestion = question;
+        a.submittedChoiceId = null;
+        a.submittedChoiceText = null;
+        a.submittedText = submittedText.trim();
+        a.isCorrect = isCorrect;
+        a.submittedAt = (submittedAt != null ? submittedAt : Instant.now());
+        return a;
     }
 }

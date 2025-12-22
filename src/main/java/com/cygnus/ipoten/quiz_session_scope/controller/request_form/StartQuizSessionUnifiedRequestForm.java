@@ -17,31 +17,31 @@ public class StartQuizSessionUnifiedRequestForm {
 
     @NotBlank(message = "source는 필수입니다")
     @Pattern(
-            // wordbook / term_category / set / job 만 허용
-            regexp = "(?i)wordbook|category|term_category|set|job",
-            message = "source는 wordbook|category|term_category|set|job 중 하나여야 합니다"
+            // wordbook / term_category / set 만 허용 (구버전 category/job/folder는 setSource에서 정규화)
+            regexp = "(?i)wordbook|term_category|set",
+            message = "source는 wordbook|term_category|set 중 하나여야 합니다"
     )
-    private String source;      // "wordbook" | "term_category" | "set" | "job"
+    private String source;      // "wordbook" | "term_category" | "set"
 
     @JsonAlias({"wordbookId","wordbook_id"})
     private Long wordbookId;      // source=wordbook 일 때 필수
 
-    @JsonAlias({"categoryId","category_id","termCategoryId","term_category_id"})
-    private Long categoryId;      // source=term_category 일 때 필수
+    @JsonAlias({"termCategoryId","term_category_id"})
+    private Long termCategoryId;      // source=term_category 일 때 필수
 
-    /** set/job 일부 모드에서는 무시될 수 있음 */
+    /** set 일부 모드에서는 무시될 수 있음 */
     @JsonAlias({"count", "totalQuestions", "total_questions"})
-    private Integer count;        // 1~100 (wordbook / term_category / job일 때 유효성 검증)
+    private Integer count;        // 1~100 (wordbook / term_category일 때 유효성 검증)
 
     @JsonAlias({"questionType"})
     @Pattern(
             regexp="(?i)mix|choice|ox|initials",
             message = "type은 mix|choice|ox|initials이어야 합니다"
     )
-    private String type;          // wordbook / term_category / job 에서 사용 (set은 무시)
+    private String type;          // wordbook / term_category 에서 사용 (set은 무시될 수 있음)
 
     @JsonAlias({"difficulty"})
-    private DifficultyLevel level;         // wordbook / term_category / job 일 때 필수
+    private DifficultyLevel level;         // wordbook / term_category 일 때 필수
 
     @JsonAlias({"seed_mode"})
     private String seedMode;
@@ -51,12 +51,8 @@ public class StartQuizSessionUnifiedRequestForm {
     @JsonAlias({"quizSetId","quiz_set_id","setId","set_id"})
     private Long quizSetId;           // source=set 일 때 필수
 
-    // 직무/역할 (source=job 일 때 필수, 없으면 GENERAL 등으로 처리)
-    @JsonAlias({"jobRole","job_role"})
-    private String role;          // e.g. "GENERAL", "FRONTEND", "BACKEND" ...
-
-    @JsonAlias({"topicTags","topic_tags","tagKeys","tag_keys"})
-    private List<String> topicTagKeys;   // ex) ["react"], ["vue"]
+    @JsonAlias({"labelKeys","label_keys"})
+    private List<String> labelKeys;   // ex) ["react"], ["vue"]
 
     /* ---------- NORMALIZE (검증 전에 호출됨) ---------- */
     public void setSource(String source) {
@@ -66,18 +62,18 @@ public class StartQuizSessionUnifiedRequestForm {
         }
         String s = source.trim();
 
-        // 구버전 호환: folder → wordbook, category → term_category 로 정규화
+        // 구버전 호환 정규화
+        // folder → wordbook
+        // category/job → term_category
         if ("folder".equalsIgnoreCase(s)) {
             s = "wordbook";
-        } else if ("category".equalsIgnoreCase(s)) {
+        } else if ("category".equalsIgnoreCase(s) || "job".equalsIgnoreCase(s)) {
             s = "term_category";
         }
 
         if ("wordbook".equalsIgnoreCase(s)
                 || "term_category".equalsIgnoreCase(s)
-                || "set".equalsIgnoreCase(s)
-                || "job".equalsIgnoreCase(s)
-                || "topic".equalsIgnoreCase(s)) {
+                || "set".equalsIgnoreCase(s)) {
             this.source = s.toLowerCase();
         } else {
             // 패턴에서 에러 내도록 그대로 둠
@@ -100,39 +96,37 @@ public class StartQuizSessionUnifiedRequestForm {
 
     @AssertTrue(message = "source=term_category 일 때 categoryId가 필요합니다")
     public boolean isCategoryIdValid() {
-        return !isSourceOneOf("term_category") || categoryId != null;
+        return !isSourceOneOf("term_category") || termCategoryId != null;
     }
 
     @AssertTrue(message = "source=set 일 때 quizSetId가 필요합니다")
     public boolean isSetScopeValid() {
-        if (!isSourceOneOf("set")) return true;
-        return quizSetId != null;
+        return !isSourceOneOf("set") || quizSetId != null;
     }
 
-    @AssertTrue(message = "count는 source in [wordbook, term_category, job] 일 때 1~100 사이여야 합니다")
+    @AssertTrue(message = "count는 source in [wordbook, term_category] 일 때 1~100 사이여야 합니다")
     public boolean isCountValid() {
-        if (!isSourceOneOf("wordbook", "term_category", "job")) return true;
+        if (!isSourceOneOf("wordbook", "term_category")) return true;
         return count != null && count >= 1 && count <= 100;
     }
 
-    @AssertTrue(message = "type은 source in [wordbook, term_category, job] 일 때 필수입니다")
+    @AssertTrue(message = "type은 source in [wordbook, term_category] 일 때 필수입니다")
     public boolean isTypeValid() {
-        if (!isSourceOneOf("wordbook", "term_category", "job")) return true;
+        if (!isSourceOneOf("wordbook", "term_category")) return true;
         return type != null && !type.isBlank();
     }
 
-    @AssertTrue(message = "level은 source in [wordbook, term_category, job] 일 때 필수입니다")
+    @AssertTrue(message = "level은 source in [wordbook, term_category] 일 때 필수입니다")
     public boolean isLevelValid() {
-        if (!isSourceOneOf("wordbook", "term_category", "job")) return true;
+        if (!isSourceOneOf("wordbook", "term_category")) return true;
         return level != null;
     }
-
 
     /* ---------- 기존 폼으로 위임 변환 ---------- */
 
     public StartQuizSessionByCategoryRequestForm toCategoryForm() {
         StartQuizSessionByCategoryRequestForm f = new StartQuizSessionByCategoryRequestForm();
-        f.setCategoryId(this.categoryId);
+        f.setCategoryId(this.termCategoryId);
         f.setCount(this.count != null ? this.count : 0);
         f.setQuestionType(this.type);
         f.setDifficulty(this.level != null ? this.level.name() : null);
@@ -148,18 +142,8 @@ public class StartQuizSessionUnifiedRequestForm {
         return f;
     }
 
-    public CreateQuizSetByJobRoleRequestForm toJobRoleForm() {
-        CreateQuizSetByJobRoleRequestForm f = new CreateQuizSetByJobRoleRequestForm();
-        f.setRoleRaw(this.role);
-        f.setCount(this.count != null ? this.count : 0);
-        f.setQuestionType(this.type);
-        f.setDifficulty(this.level);
-        return f;
-    }
-
     public ScopeCondition toScopeCondition(Long accountId) {
         SeedPolicy seedPolicy = SeedPolicy.fromRaw(seedMode, fixedSeed);
-
         String src = source == null ? "" : source.trim().toLowerCase();
 
         return switch (src) {
@@ -176,33 +160,23 @@ public class StartQuizSessionUnifiedRequestForm {
 
             case "term_category" -> {
                 String safeType = (type == null || type.isBlank()) ? "mix" : type;
-                DifficultyLevel safeLevel = (level == null) ? DifficultyLevel.MIX : level;
-                List<String> safeTags = (topicTagKeys == null) ? List.of() : topicTagKeys;
+                DifficultyLevel safeLevel = (level == null) ? DifficultyLevel.MEDIUM : level;
+                List<String> safeLabels = (labelKeys == null) ? List.of() : labelKeys;
 
                 yield ScopeCondition.forCategory(
                         new TermCategoryScope(
-                                categoryId,
+                                termCategoryId,
                                 count,
                                 QuestionTypeScope.fromRaw(safeType),
                                 DifficultyScope.from(safeLevel),
-                                safeTags
+                                safeLabels
                         ),
                         seedPolicy
                 );
             }
 
-            case "job" -> ScopeCondition.forJob(
-                    JobScope.fromRaw(
-                            role,
-                            count,
-                            QuestionTypeScope.fromRaw(type),
-                            DifficultyScope.from(level)
-                    ),
-                    seedPolicy
-            );
-
             case "set" -> ScopeCondition.forSet(
-                    SetScope.ofId(quizSetId, count, type, level, topicTagKeys),
+                    SetScope.ofId(quizSetId, count, type, level),
                     seedPolicy
             );
 

@@ -1,6 +1,5 @@
 package com.cygnus.ipoten.quiz_session_scope.value_objects;
 
-import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_set.service.request.CreateQuizSetByCategoryRequest;
 import lombok.Value;
 
@@ -48,13 +47,13 @@ public class TermCategoryScope {
     int count;
     QuestionTypeScope questionTypeScope;
     DifficultyScope difficultyScope;
-    List<String> topicTagKeys;
+    List<String> labelKeys;
 
     public TermCategoryScope(Long categoryId,
                              int count,
                              QuestionTypeScope questionTypeScope,
                              DifficultyScope difficultyScope,
-                             List<String> topicTagKeys) {
+                             List<String> labelKeys) {
 
         if (categoryId == null) throw new IllegalArgumentException("CategoryScope: categoryId는 필수입니다.");
         if (count <= 0 || count > 100) throw new IllegalArgumentException("CategoryScope: count는 1~100 사이어야 합니다.");
@@ -64,8 +63,8 @@ public class TermCategoryScope {
         this.questionTypeScope = questionTypeScope;
         this.difficultyScope = difficultyScope;
 
-        this.topicTagKeys = (topicTagKeys == null) ? List.of()
-                : topicTagKeys.stream()
+        this.labelKeys = (labelKeys == null) ? List.of()
+                : labelKeys.stream()
                 .filter(s -> s != null && !s.isBlank())
                 .map(s -> s.trim().toLowerCase())
                 .distinct()
@@ -85,13 +84,5 @@ public class TermCategoryScope {
     public String getTypeRaw() {
         // resolveTypes()가 lower-case도 처리하니까 "CHOICE/OX/INITIALS/MIX"로 줘도 OK
         return (questionTypeScope == null) ? "MIX" : questionTypeScope.toString();
-    }
-
-    public QuizSetType getTypeAsQuizSetType() {
-        // QuizSetType.fromParam은 null/blank -> CHOICE로 가버리니까,
-        // scope에서 null이면 MIX로 보정하는 게 안전함
-        String raw = getTypeRaw();
-        if (raw == null || raw.isBlank()) return QuizSetType.MIX;
-        return QuizSetType.fromParam(raw);
     }
 }

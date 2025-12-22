@@ -1,7 +1,5 @@
 package com.cygnus.ipoten.batch.quiz;
 
-import com.cygnus.ipoten.quiz.entity.Quiz;
-import com.cygnus.ipoten.quiz.repository.QuizRepository;
 import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz_question.entity.QuizTextAnswer;
@@ -10,15 +8,10 @@ import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
-import com.cygnus.ipoten.quiz_set.entity.QuizSet;
-import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
-import com.cygnus.ipoten.quiz_set.repository.QuizSetRepository;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
-import com.cygnus.ipoten.term_topic_tag.entity.TopicTag;
-import com.cygnus.ipoten.term_topic_tag.repository.TopicTagRepository;
 import jakarta.persistence.EntityManager;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -37,27 +30,21 @@ import java.util.*;
 @RequiredArgsConstructor
 public class QuizTsvImportRunner implements CommandLineRunner {
 
-    private final QuizSetRepository quizSetRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizChoiceRepository quizChoiceRepository;
+    private final QuizTextAnswerRepository quizTextAnswerRepository;
+
     private final TermCategoryRepository termCategoryRepository;
     private final TermRepository termRepository;
-    private final QuizTextAnswerRepository quizTextAnswerRepository;
-    private final QuizRepository quizRepository;
-    private final TopicTagRepository topicTagRepository;
+
     private final TransactionTemplate txTemplate;
     private final EntityManager em;
 
-    // ✅ row 단위 트랜잭션에서도 안전하게 쓰기 위해 "엔티티" 대신 "ID" 캐시
-    private final Map<String, Long> setIdCache = new LinkedHashMap<>();
+    // row 단위 트랜잭션에서도 안전하게 쓰기 위해 "ID" 캐시
     private final Map<String, Long> termIdCache = new HashMap<>();
-    private final Map<String, Long> topicTagIdCache = new HashMap<>();
-
-    // Term별로 이미 붙인 tagKey (row 반복 중 중복 attach 방지)
-    private final Map<Long, Set<String>> appliedByTerm = new HashMap<>();
 
     @Override
-    public void run(String... args) throws Exception {
+    public void run(String... args) {
         String quizPath = null;
         for (String arg : args) {
             if (arg.startsWith("--quiz=")) {
@@ -70,19 +57,15 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         }
 
         try {
-            importQuizzes(quizPath);
+            importQuestions(quizPath);
         } catch (Exception e) {
             // 애플리케이션 부팅이 죽지 않게 보호
-            log.error("[QUIZ-IMPORT] fatal error while importing quizzes from {}.", quizPath, e);
+            log.error("[QUIZ-IMPORT] fatal error while importing questions from {}.", quizPath, e);
         }
     }
 
-    private void importQuizzes(String quizPath) throws Exception {
-        // 캐시 초기화
-        setIdCache.clear();
+    private void importQuestions(String quizPath) throws Exception {
         termIdCache.clear();
-        topicTagIdCache.clear();
-        appliedByTerm.clear();
 
         File file = new File(quizPath);
         if (!file.exists()) {
@@ -90,7 +73,7 @@ public class QuizTsvImportRunner implements CommandLineRunner {
             return;
         }
 
-        log.info("[QUIZ-IMPORT] Importing quizzes from {}", quizPath);
+        log.info("[QUIZ-IMPORT] Importing QUESTION BANK from {}", quizPath);
 
         int lineNo = 0;
         int ok = 0, skip = 0, err = 0;
@@ -98,31 +81,31 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         try (BufferedReader br = new BufferedReader(new FileReader(file, Charset.forName("UTF-8")))) {
             String header = br.readLine(); // 첫 줄은 헤더
             lineNo++;
-            Map<String, Integer> col = buildHeaderIndex(header);
+
+            if (header == null || header.isBlank()) {
+                throw new IllegalArgumentException("헤더가 비어 있습니다. file=" + quizPath);
+            }
+
+            String delimRegex = detectDelimiterRegex(header);
+            Map<String, Integer> col = buildHeaderIndex(header, delimRegex);
 
             String line;
             while ((line = br.readLine()) != null) {
                 lineNo++;
-                if (line.isBlank()) { skip++; continue; }
+                if (line.isBlank()) {
+                    skip++;
+                    continue;
+                }
 
-                String[] c = line.split("\t", -1);
+                String[] c = line.split(delimRegex, -1);
 
                 try {
                     final int currentLineNo = lineNo;
-
                     txTemplate.executeWithoutResult(status -> {
                         QuizImportRow row = parseRow(c, col);
-
-                        // ✅ QuizSet: title -> setId 캐시
-                        String setTitle = nvl(row.getQuizSetTitle(), "퀴즈 세트");
-                        Long setId = setIdCache.computeIfAbsent(setTitle, k -> resolveOrCreateSetId(row, setTitle));
-                        QuizSet setRef = em.getReference(QuizSet.class, setId);
-
-                        createOneQuestion(setRef, row);
+                        createOneQuestion(row, currentLineNo);
                     });
-
                     ok++;
-
                 } catch (Exception ex) {
                     err++;
                     log.warn("[QUIZ-IMPORT] line {} failed: {}", lineNo, ex.getMessage(), ex);
@@ -136,47 +119,58 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         log.info("[QUIZ-IMPORT] done. ok={}, skip={}, err={}", ok, skip, err);
     }
 
-    // =============================
-    // QuizSet resolve/create (ID 반환)
-    // =============================
+    // =========================================================
+    // Header parsing (TSV/CSV 자동 판별 + (필수)/(선택) 제거)
+    // =========================================================
 
-    private Long resolveOrCreateSetId(QuizImportRow row, String title) {
-        return quizSetRepository.findFirstByTitle(title)
-                .map(QuizSet::getId)
-                .orElseGet(() -> {
-                    QuizSetType setType = QuizSetType.CHOICE;
-                    String rawType = row.getQuizSetType();
-                    if (rawType != null && !rawType.isBlank()) {
-                        try { setType = QuizSetType.fromParam(rawType); } catch (Exception ignore) {}
-                    }
+    private String detectDelimiterRegex(String headerLine) {
+        int tabCount = headerLine.length() - headerLine.replace("\t", "").length();
+        int commaCount = headerLine.length() - headerLine.replace(",", "").length();
 
-                    Quiz quiz = quizRepository.save(Quiz.create(title, setType));
-                    QuizSet newSet = quizSetRepository.save(QuizSet.create(quiz, title, setType, null));
-
-                    log.info("[QUIZ-IMPORT] Created new QuizSet. title={}, id={}", title, newSet.getId());
-                    return newSet.getId();
-                });
+        // 탭이 있으면 TSV 우선
+        if (tabCount > 0 && tabCount >= commaCount) return "\\t";
+        // 콤마가 많으면 CSV
+        if (commaCount > 0) return ",";
+        // 그 외는 탭으로 가정
+        return "\\t";
     }
 
-    // =============================
-    // Header parsing
-    // =============================
+    private Map<String, Integer> buildHeaderIndex(String header, String delimRegex) {
+        String[] heads = header.split(delimRegex, -1);
 
-    private Map<String, Integer> buildHeaderIndex(String header) {
-        if (header == null) throw new IllegalArgumentException("헤더가 비어 있습니다.");
-        String[] heads = header.split("\t");
         Map<String, Integer> map = new HashMap<>();
         for (int i = 0; i < heads.length; i++) {
-            map.put(heads[i].trim().toLowerCase(Locale.ROOT), i);
+            String key = normalizeHeaderKey(heads[i]);
+            if (!key.isBlank()) {
+                map.put(key, i);
+            }
         }
 
-        // 최소 컬럼 검증
-        require(map, "quiz_set_title");
+        // 디버그: 지금 어떤 헤더로 읽혔는지 바로 보이게
+        log.info("[QUIZ-IMPORT] header(raw)={}", header);
+        log.info("[QUIZ-IMPORT] header(keys)={}", new TreeSet<>(map.keySet()));
+
+        // 최소 컬럼 검증 (문제은행 시트 기준)
+        require(map, "question_temp_key");
         require(map, "question_type");
-        require(map, "question_text");
         require(map, "difficulty");
+        require(map, "question_text");
 
         return map;
+    }
+
+    private String normalizeHeaderKey(String raw) {
+        if (raw == null) return "";
+        String s = raw.replace("\uFEFF", "").trim().toLowerCase(Locale.ROOT); // BOM 제거 + 소문자
+
+        // "question_temp_key (필수)" 같은 꼬리표 제거
+        // (필수), (선택), (표시용) 등 뭐든 괄호로 끝나면 제거해버림
+        s = s.replaceAll("\\s*\\(.*\\)\\s*$", "");
+
+        // "term category id" 같은 케이스 대비: 공백 -> _
+        s = s.replaceAll("\\s+", "_");
+
+        return s;
     }
 
     private void require(Map<String, Integer> map, String key) {
@@ -199,74 +193,79 @@ public class QuizTsvImportRunner implements CommandLineRunner {
 
     private Long parseLong(String s) {
         if (s == null || s.isBlank()) return null;
-        return Long.valueOf(s);
+        try {
+            return Long.valueOf(s.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     private String nvl(String s, String def) {
         return (s == null || s.isBlank()) ? def : s;
     }
 
-    // =============================
-    // Row parsing
-    // =============================
+    // =========================================================
+    // Row parsing (문제은행 TSV/CSV)
+    // =========================================================
 
     private QuizImportRow parseRow(String[] c, Map<String, Integer> col) {
 
-        String quizKey       = get(c, col, "quiz_key");
-        String quizTitle     = get(c, col, "quiz_title");
+        String questionTempKey = get(c, col, "question_temp_key");
 
-        String quizSetKey    = get(c, col, "quiz_set_key");
-        String quizSetTitle  = get(c, col, "quiz_set_title");
-        String quizSetType   = get(c, col, "quiz_set_type");
+        String termTitle = get(c, col, "term_title");
+        Long termId = parseLong(get(c, col, "term_id"));
 
-        String questionKey   = get(c, col, "question_key");
-        String questionType  = get(c, col, "question_type");
-        String difficulty    = get(c, col, "difficulty");
-        String questionText  = get(c, col, "question_text");
-        String explanation   = get(c, col, "explanation");
+        String termCategory = get(c, col, "term_category");
+        Long termCategoryId = parseLong(get(c, col, "term_category_id"));
 
-        Long   termId        = parseLong(get(c, col, "term_id"));
-        String termTitle     = get(c, col, "term_title");
-        Long   termCategoryId= parseLong(get(c, col, "term_category_id"));
-        String termTopicTagKeys = get(c, col, "term_topic_tag_keys");
+        String questionType = get(c, col, "question_type");
+        String difficulty = get(c, col, "difficulty");
+        String questionText = get(c, col, "question_text");
+        String explanation = get(c, col, "explanation");
 
-        String  choice1Text      = get(c, col, "choice_1_text");
-        Boolean choice1IsAnswer  = parseBool(get(c, col, "choice_1_is_answer"));
+        String textAnswer = get(c, col, "text_answer");
 
-        String  choice2Text      = get(c, col, "choice_2_text");
-        Boolean choice2IsAnswer  = parseBool(get(c, col, "choice_2_is_answer"));
+        String choice1Text = get(c, col, "choice_1_text");
+        Boolean choice1IsAnswer = parseBool(get(c, col, "choice_1_is_answer"));
+        String choice2Text = get(c, col, "choice_2_text");
+        Boolean choice2IsAnswer = parseBool(get(c, col, "choice_2_is_answer"));
+        String choice3Text = get(c, col, "choice_3_text");
+        Boolean choice3IsAnswer = parseBool(get(c, col, "choice_3_is_answer"));
+        String choice4Text = get(c, col, "choice_4_text");
+        Boolean choice4IsAnswer = parseBool(get(c, col, "choice_4_is_answer"));
 
-        String  choice3Text      = get(c, col, "choice_3_text");
-        Boolean choice3IsAnswer  = parseBool(get(c, col, "choice_3_is_answer"));
-
-        String  choice4Text      = get(c, col, "choice_4_text");
-        Boolean choice4IsAnswer  = parseBool(get(c, col, "choice_4_is_answer"));
-
-        String textAnswer    = get(c, col, "text_answer");
-        String memo          = get(c, col, "memo");
+        String label1Key = get(c, col, "label_1_key");
+        String label2Key = get(c, col, "label_2_key");
+        String label3Key = get(c, col, "label_3_key");
+        String label4Key = get(c, col, "label_4_key");
 
         return new QuizImportRow(
-                quizKey, quizTitle,
-                quizSetKey, quizSetTitle, quizSetType,
-                questionKey, questionType, difficulty, questionText, explanation,
-                termId, termTitle, termCategoryId,
-                termTopicTagKeys,
+                questionTempKey,
+                termTitle, termId,
+                termCategory, termCategoryId,
+                questionType, difficulty, questionText, explanation,
+                textAnswer,
                 choice1Text, choice1IsAnswer,
                 choice2Text, choice2IsAnswer,
                 choice3Text, choice3IsAnswer,
                 choice4Text, choice4IsAnswer,
-                textAnswer, memo
+                label1Key, label2Key, label3Key, label4Key
         );
     }
 
-    // =============================
+    // =========================================================
     // Term/Category resolve
-    // =============================
+    // =========================================================
 
-    private TermCategory resolveCategory(Long termCategoryId) {
+    private TermCategory resolveCategory(QuizImportRow row) {
+        Long termCategoryId = row.getTermCategoryId();
         if (termCategoryId == null) return null;
+
         return termCategoryRepository.findById(termCategoryId)
-                .orElseThrow(() -> new IllegalArgumentException("없는 term_category_id=" + termCategoryId));
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "없는 term_category_id=" + termCategoryId +
+                                " (question_temp_key=" + safe(row.getQuestionTempKey()) + ")"
+                ));
     }
 
     private Long resolveOrCreateTermId(QuizImportRow row, TermCategory cat) {
@@ -292,7 +291,7 @@ public class QuizTsvImportRunner implements CommandLineRunner {
                 t = termRepository.save(
                         Term.builder()
                                 .title(title)
-                                .description("(imported)")
+                                .description(safe(row.getExplanation()).isBlank() ? "(imported)" : safe(row.getExplanation()))
                                 .termCategory(null)
                                 .build()
                 );
@@ -302,135 +301,97 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         });
     }
 
-    // =============================
-    // TopicTag attach (ID cache + getReference)
-    // =============================
+    // =========================================================
+    // Question create (문제은행 적재)
+    // =========================================================
 
-    private void attachTopicTagsToTerm(Term term, List<String> keys) {
-        if (term == null || keys == null || keys.isEmpty()) return;
-
-        Set<String> applied = appliedByTerm.computeIfAbsent(term.getId(), k -> new HashSet<>());
-
-        List<String> toAdd = keys.stream()
-                .filter(k -> !applied.contains(k))
-                .toList();
-
-        if (toAdd.isEmpty()) return;
-
-        for (String key : toAdd) {
-            Long tagId = topicTagIdCache.computeIfAbsent(key, kk ->
-                    topicTagRepository.findByKey(kk)
-                            .map(TopicTag::getId)
-                            .orElseGet(() -> topicTagRepository.save(TopicTag.create(kk)).getId())
-            );
-
-            TopicTag tagRef = em.getReference(TopicTag.class, tagId);
-            term.getTopicTags().add(tagRef);
-            applied.add(key);
+    private void createOneQuestion(QuizImportRow row, int lineNo) {
+        String qTempKey = safe(row.getQuestionTempKey());
+        if (qTempKey.isBlank()) {
+            throw new IllegalArgumentException("question_temp_key는 필수입니다. line=" + lineNo);
         }
 
-        // 관계 저장
-        termRepository.save(term);
-    }
+        // 타입 파싱
+        QuestionType type;
+        try {
+            type = QuestionType.from(row.getQuestionType());
+        } catch (Exception e) {
+            throw new IllegalArgumentException("question_type 파싱 실패: '" + safe(row.getQuestionType()) +
+                    "' (question_temp_key=" + qTempKey + ")");
+        }
 
-    // =============================
-    // Question create
-    // =============================
+        // 카테고리 resolve (없으면 null 허용)
+        TermCategory termCategory = resolveCategory(row);
 
-    protected void createOneQuestion(QuizSet set, QuizImportRow row) {
-        QuestionType type = QuestionType.from(row.getQuestionType());
-
-        TermCategory termCategory = resolveCategory(row.getTermCategoryId());
-
-        // 1) termId 결정 (있으면 사용, 없으면 title로 생성 후 ID 확보)
+        // termId 결정 (있으면 사용, 없으면 title로 생성 후 ID 확보)
         Long termId = row.getTermId();
         if (termId == null) {
             if (safe(row.getTermTitle()).isBlank()) {
-                throw new IllegalArgumentException("term_id가 없으면 term_title은 필수입니다. question_key=" + row.getQuestionKey());
+                throw new IllegalArgumentException("term_id가 없으면 term_title은 필수입니다. question_temp_key=" + qTempKey);
             }
             termId = resolveOrCreateTermId(row, termCategory);
         }
 
         if (termId == null) {
-            throw new IllegalArgumentException("termId resolve 실패. question_key=" + row.getQuestionKey());
+            throw new IllegalArgumentException("termId resolve 실패. question_temp_key=" + qTempKey);
         }
 
-        // 2) row 트랜잭션 안에서 reference로 붙여 사용
         Term term = em.getReference(Term.class, termId);
 
-        // 3) term에 카테고리 없으면 채워두기 (getReference라 setter OK)
-        if (termCategory != null && term.getTermCategory() == null) {
-            term.setTermCategory(termCategory);
-            termRepository.save(term);
-        }
-
-        // 4) 토픽태그 attach
-        attachTopicTagsToTerm(term, parseTopicTagKeys(row.getTermTopicTagKeys()));
-
-        // 5) questionText 정규화 + 중복 스킵
+        // questionText 정규화 + 중복 스킵
         String questionText = nvl(row.getQuestionText(), "(빈 문제)").trim();
         questionText = questionText.replaceAll("\\s+", " ");
 
-        if (quizQuestionRepository.existsByQuizSet_IdAndQuestionTypeAndQuestionTextAndTerm_Id(
-                set.getId(),
-                type,
-                questionText,
-                termId
-        )) {
-            log.info("[QUIZ-IMPORT] duplicate skip. setId={}, termId={}, type={}, text={}",
-                    set.getId(), termId, type, questionText);
+        if (quizQuestionRepository.existsByQuestionTypeAndQuestionTextAndTerm_Id(type, questionText, termId)) {
+            log.info("[QUIZ-IMPORT] duplicate skip. termId={}, type={}, tempKey={}, text={}",
+                    termId, type, qTempKey, questionText);
             return;
+        }
+
+        // 난이도 파싱
+        DifficultyLevel difficulty = DifficultyLevel.MEDIUM;
+        String diffStr = safe(row.getDifficulty());
+        if (!diffStr.isBlank()) {
+            try {
+                difficulty = DifficultyLevel.valueOf(diffStr.trim().toUpperCase(Locale.ROOT));
+            } catch (IllegalArgumentException e) {
+                log.warn("[QUIZ-IMPORT] invalid difficulty '{}', default MEDIUM. tempKey={}", diffStr, qTempKey);
+            }
         }
 
         String explanation = safe(row.getExplanation());
 
-        // 6) 난이도 파싱
-        DifficultyLevel difficulty = DifficultyLevel.MEDIUM;
-        String diffStr = row.getDifficulty();
-        if (diffStr != null && !diffStr.isBlank()) {
-            try {
-                difficulty = DifficultyLevel.valueOf(diffStr.trim().toUpperCase(Locale.ROOT));
-            } catch (IllegalArgumentException e) {
-                log.warn("[QUIZ-IMPORT] invalid difficulty '{}', default MEDIUM", diffStr);
-            }
-        }
-
-        // 7) 문제 저장
+        // 문제 저장
         QuizQuestion q = new QuizQuestion(
                 term,
                 termCategory,
                 type,
                 difficulty,
                 questionText,
-                set,
                 explanation
         );
         quizQuestionRepository.save(q);
 
-        // 8) 타입별 정답/보기 저장
+        // 타입별 정답/보기 저장
         switch (type) {
             case OX -> createOxChoices(q, row);
             case CHOICE -> createChoiceChoices(q, row);
-            case INITIALS -> createInitialsAnswer(q, row);
+            case INITIALS -> createTextAnswerRequired(q, row, type);
+            default -> createTextAnswerOptional(q, row, type);
         }
     }
 
     private void createOxChoices(QuizQuestion q, QuizImportRow row) {
+        // OX는 "text_answer"에 O/X 또는 TRUE/FALSE 가능, 또는 choice_is_answer로 지정 가능
         String at = safe(row.getTextAnswer());
         int answerIdx = 1; // 기본 O
 
         if (!at.isBlank()) {
-            if ("o".equalsIgnoreCase(at)) {
-                answerIdx = 1;
-            } else if ("x".equalsIgnoreCase(at)) {
-                answerIdx = 2;
-            }
+            if ("o".equalsIgnoreCase(at) || "true".equalsIgnoreCase(at)) answerIdx = 1;
+            else if ("x".equalsIgnoreCase(at) || "false".equalsIgnoreCase(at)) answerIdx = 2;
         } else {
-            if (Boolean.TRUE.equals(row.getChoice1IsAnswer())) {
-                answerIdx = 1;
-            } else if (Boolean.TRUE.equals(row.getChoice2IsAnswer())) {
-                answerIdx = 2;
-            }
+            if (Boolean.TRUE.equals(row.getChoice1IsAnswer())) answerIdx = 1;
+            else if (Boolean.TRUE.equals(row.getChoice2IsAnswer())) answerIdx = 2;
         }
 
         quizChoiceRepository.saveAll(List.of(
@@ -449,11 +410,12 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         addOption(texts, flags, row.getChoice4Text(), row.getChoice4IsAnswer());
 
         if (texts.size() < 2) {
-            throw new IllegalArgumentException("CHOICE는 최소 2개 보기가 필요합니다.");
+            throw new IllegalArgumentException("CHOICE는 최소 2개 보기가 필요합니다. question_temp_key=" + safe(row.getQuestionTempKey()));
         }
 
         boolean hasCorrect = flags.stream().anyMatch(Boolean::booleanValue);
 
+        // 정답 플래그가 하나도 없으면 text_answer로 매칭
         if (!hasCorrect) {
             String at = safe(row.getTextAnswer());
             if (!at.isBlank()) {
@@ -467,6 +429,7 @@ public class QuizTsvImportRunner implements CommandLineRunner {
             }
         }
 
+        // 그래도 없으면 1번 정답 처리 (데이터 실수 보호)
         if (!hasCorrect) {
             flags.set(0, true);
         }
@@ -476,13 +439,18 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         }
     }
 
-    private void createInitialsAnswer(QuizQuestion q, QuizImportRow row) {
+    private void createTextAnswerRequired(QuizQuestion q, QuizImportRow row, QuestionType type) {
         String at = safe(row.getTextAnswer());
         if (at.isBlank()) {
-            throw new IllegalArgumentException("INITIALS는 text_answer(텍스트 정답)가 필요합니다.");
+            throw new IllegalArgumentException(type + "는 text_answer(텍스트 정답)가 필요합니다. question_temp_key=" + safe(row.getQuestionTempKey()));
         }
-        QuizTextAnswer textAnswer = QuizTextAnswer.create(q, at);
-        quizTextAnswerRepository.save(textAnswer);
+        quizTextAnswerRepository.save(QuizTextAnswer.create(q, at));
+    }
+
+    private void createTextAnswerOptional(QuizQuestion q, QuizImportRow row, QuestionType type) {
+        String at = safe(row.getTextAnswer());
+        if (at.isBlank()) return;
+        quizTextAnswerRepository.save(QuizTextAnswer.create(q, at));
     }
 
     private void addOption(List<String> texts, List<Boolean> flags, String text, Boolean isAns) {
@@ -492,24 +460,7 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         flags.add(Boolean.TRUE.equals(isAns));
     }
 
-    // =============================
-    // Utils
-    // =============================
-
     private String safe(String s) {
         return s == null ? "" : s.trim();
-    }
-
-    private List<String> parseTopicTagKeys(String raw) {
-        if (raw == null) return List.of();
-        String s = raw.trim();
-        if (s.isEmpty()) return List.of();
-
-        return Arrays.stream(s.split("[|,;]", -1))
-                .map(String::trim)
-                .map(String::toLowerCase)
-                .filter(x -> !x.isBlank())
-                .distinct()
-                .toList();
     }
 }

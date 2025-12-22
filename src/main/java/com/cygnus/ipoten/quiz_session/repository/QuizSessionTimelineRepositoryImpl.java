@@ -9,11 +9,9 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
-import org.springframework.util.StringUtils;
 
 import java.util.Collection;
 import java.util.List;
-import java.util.Locale;
 import java.util.Optional;
 
 @RequiredArgsConstructor
@@ -23,15 +21,12 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
 
     @Override
     public Page<QuizSession> findTimelinePage(Long accountId, String q, QuizSetType part, Pageable pageable) {
+
         String base =
                 " FROM QuizSession s " +
-                        " JOIN s.quizSet qs " +
-                        " LEFT JOIN qs.termCategory c " +
                         " WHERE s.account.id = :accountId " +
                         " AND s.sessionStatus = :submitted " +
-                        (part != null ? " AND qs.quizSetType = :part " : "") +
-                        (StringUtils.hasText(q)
-                                ? " AND (LOWER(qs.title) LIKE :kw OR LOWER(c.name) LIKE :kw) " : "");
+                        (part != null ? " AND s.partType = :part " : "");
 
         String jpql = "SELECT s " + base + " ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
         TypedQuery<QuizSession> dataQ = em.createQuery(jpql, QuizSession.class)
@@ -46,12 +41,6 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
         if (part != null) {
             dataQ.setParameter("part", part);
             cntQ.setParameter("part", part);
-        }
-
-        if (StringUtils.hasText(q)) {
-            String kw = "%" + q.trim().toLowerCase(Locale.ROOT) + "%";
-            dataQ.setParameter("kw", kw);
-            cntQ.setParameter("kw", kw);
         }
 
         dataQ.setFirstResult((int) pageable.getOffset());
@@ -112,21 +101,6 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
     }
 
     @Override
-    public List<Object[]> findRecentRaw(Long accountId, int limit) {
-        String jpql = "SELECT COALESCE(c.name, qs.title), COALESCE(s.submittedAt, s.startedAt) " +
-                "FROM QuizSession s " +
-                "JOIN s.quizSet qs " +
-                "LEFT JOIN qs.termCategory c " +
-                "WHERE s.account.id = :aid AND s.sessionStatus = :st " +
-                "ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
-        return em.createQuery(jpql, Object[].class)
-                .setParameter("aid", accountId)
-                .setParameter("st", SessionStatus.SUBMITTED)
-                .setMaxResults(limit)
-                .getResultList();
-    }
-
-    @Override
     public List<Object[]> countCorrectBySessionIds(Collection<Long> sessionIds) {
         if (sessionIds == null || sessionIds.isEmpty()) return List.of();
         String jpql = "SELECT a.quizSession.id, " +
@@ -148,6 +122,19 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
                 "GROUP BY a.quizSession.id";
         return em.createQuery(jpql, Object[].class)
                 .setParameter("ids", sessionIds)
+                .getResultList();
+    }
+
+    @Override
+    public List<QuizSession> findRecentSessions(Long accountId, int limit) {
+        String jpql =
+                "SELECT s FROM QuizSession s " +
+                        "WHERE s.account.id = :aid AND s.sessionStatus = :st " +
+                        "ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
+        return em.createQuery(jpql, QuizSession.class)
+                .setParameter("aid", accountId)
+                .setParameter("st", SessionStatus.SUBMITTED)
+                .setMaxResults(Math.max(1, limit))
                 .getResultList();
     }
 }

@@ -1,11 +1,9 @@
 package com.cygnus.ipoten.quiz_set.entity;
 
-import com.cygnus.ipoten.quiz.entity.Quiz;
-import com.cygnus.ipoten.job.enums.JobRole;
-import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
-import com.cygnus.ipoten.term_category.entity.TermCategory;
 import jakarta.persistence.*;
 import lombok.*;
+
+import java.time.Instant;
 
 @Entity
 @Getter
@@ -17,37 +15,35 @@ public class QuizSet {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_id", nullable = false)
-    private Quiz quiz;
-
-    /** 세트의 대표 카테고리 (카테고리 기반 세트일 때 사용) */
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "term_category_id")
-    private TermCategory termCategory;
-
     @Column(nullable = false)
     private String title;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "quiz_set_type", nullable = false)
-    private QuizSetType quizSetType;
+    /** 생성일 */
+    @Column(name = "created_at", updatable = false, nullable = false)
+    private Instant createdAt;
 
-    @Enumerated(EnumType.STRING)
-    @Column(name = "job_role", length = 64)
-    private JobRole jobRole;
+    /** 수정일 */
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
 
-    @Column(name = "quiz_set_key", length = 128, unique = true)
-    private String quizSetKey;
-
-    public QuizSet(Quiz quiz, String title, QuizSetType quizSetType, TermCategory termCategory) {
-        this.quiz = quiz;
+    private QuizSet(String title) {
+        if (title == null || title.isBlank()) throw new IllegalArgumentException("title은 필수입니다.");
         this.title = title;
-        this.quizSetType = quizSetType;
-        this.termCategory = termCategory;
     }
 
-    public static QuizSet create(Quiz quiz, String title, QuizSetType quizSetType, TermCategory termCategory) {
-        return new QuizSet(quiz, title, quizSetType, termCategory);
+    public static QuizSet create(String title) {
+        return new QuizSet(title);
+    }
+
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
     }
 }

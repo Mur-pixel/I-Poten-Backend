@@ -51,7 +51,7 @@ public class QuizAnalyticsController {
             @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "type", required = false, defaultValue = "ALL") String type,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "size", defaultValue = "5") int size,
             @CookieValue(name = "userToken", required = false) String userToken
     ) {
         Long accountId = resolveAccountId(userToken);

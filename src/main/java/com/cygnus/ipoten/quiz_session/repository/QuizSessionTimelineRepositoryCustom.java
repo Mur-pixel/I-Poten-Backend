@@ -14,7 +14,7 @@ public interface QuizSessionTimelineRepositoryCustom {
     long countSubmittedRetry(Long accountId);
     long sumTotalQuestionsOfSubmitted(Long accountId);
     long sumCorrectAnswersOfSubmitted(Long accountId);
-    List<Object[]> findRecentRaw(Long accountId, int limit);
     List<Object[]> countCorrectBySessionIds(Collection<Long> sessionIds);
     List<Object[]> countAnswersBySessionIds(Collection<Long> sessionIds);
+    List<QuizSession> findRecentSessions(Long accountId, int limit);
 }

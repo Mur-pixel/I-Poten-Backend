@@ -13,5 +13,5 @@ public interface QuizScopeService {
     StartQuizSessionResponse startScopedSession(Long accountId, ScopeCondition condition);
 
     /** 이미 존재하는 세트(setId)에서 바로 세션 시작 */
-    StartQuizSessionResponse startFromSet(Long accountId, Long quizSetId, Integer count, String typeRaw, DifficultyLevel level, SeedPolicy seedPolicy, List<String> tagKeys);
+    StartQuizSessionResponse startFromSet(Long accountId, Long quizSetId, Integer count, String typeRaw, DifficultyLevel level, SeedPolicy seedPolicy);
 }

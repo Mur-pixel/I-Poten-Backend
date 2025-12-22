@@ -5,7 +5,7 @@ import com.cygnus.ipoten.quiz_session_generator.service.util.OptionQualityChecke
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Service;
 
-import java.time.LocalDateTime;
+import java.time.*;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -14,17 +14,30 @@ import java.util.stream.Collectors;
 public class RecentUsageServiceImpl implements RecentUsageService {
 
     private final QuizSessionAnswerRepository quizSessionAnswerRepository;
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
 
     @Override
     public Set<Long> findRecentTermIds(Long accountId, int lastNDays) {
-        LocalDateTime from = LocalDateTime.now().minusDays(Math.max(1, lastNDays));
+        int days = Math.max(1, lastNDays);
+
+        Instant from = LocalDate.now(KST)
+                .minusDays(days)
+                .atStartOfDay(KST)
+                .toInstant();
+
         return quizSessionAnswerRepository.findRecentTermIdsByAccountSince(accountId, from)
                 .stream().collect(Collectors.toSet());
     }
 
     @Override
     public Set<String> findRecentChoiceNorms(Long accountId, int lastNDays) {
-        LocalDateTime from = LocalDateTime.now().minusDays(Math.max(1, lastNDays));
+        int days = Math.max(1, lastNDays);
+
+        Instant from = LocalDate.now(KST)
+                .minusDays(days)
+                .atStartOfDay(KST)
+                .toInstant();
+
         return quizSessionAnswerRepository.findRecentChoiceTextsByAccountSince(accountId, from)
                 .stream()
                 .map(OptionQualityChecker::normalize)

@@ -1,9 +1,8 @@
 package com.cygnus.ipoten.quiz_set.service;
 
-import com.cygnus.ipoten.quiz.entity.Quiz;
-import com.cygnus.ipoten.quiz.repository.QuizRepository;
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
-import com.cygnus.ipoten.quiz_set.service.request.CreateQuizSetByJobRoleRequest;
+import com.cygnus.ipoten.quiz_set.entity.QuizSetQuestion;
+import com.cygnus.ipoten.quiz_set.repository.QuizSetQuestionRepository;
 import com.cygnus.ipoten.quiz_set.service.request.CreateQuizSetByWordbookRequest;
 import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
@@ -15,8 +14,8 @@ import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz_set.repository.QuizSetRepository;
 import com.cygnus.ipoten.quiz_analytics.service.RecentUsageService;
 import com.cygnus.ipoten.quiz_set.service.request.CreateQuizSetByCategoryRequest;
-import com.cygnus.ipoten.quiz.service.response.BuiltQuizSetResponse;
-import com.cygnus.ipoten.quiz.service.response.CreateQuizSetByCategoryResponse;
+import com.cygnus.ipoten.quiz_set.service.response.BuiltQuizSetResponse;
+import com.cygnus.ipoten.quiz_set.service.response.CreateQuizSetByCategoryResponse;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
@@ -24,6 +23,7 @@ import com.cygnus.ipoten.wordbook.service.WordbookQueryService;
 import com.cygnus.ipoten.wordbook_term.repository.WordbookTermRepository;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.PersistenceContext;
+import lombok.AllArgsConstructor;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -42,11 +42,11 @@ public class QuizSetServiceImpl implements QuizSetService {
 
     private final TermCategoryRepository termCategoryRepository;
     private final QuizSetRepository quizSetRepository;
+    private final QuizSetQuestionRepository quizSetQuestionRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final WordbookQueryService wordbookQueryService;
     private final QuizChoiceRepository quizChoiceRepository;
     private final WordbookTermRepository wordbookTermRepository;
-    private final QuizRepository quizRepository;
 
     /** 선택 주입: 있으면 사용(최근 옵션 텍스트 재사용 회피 등), 없으면 SessionAnswerRepository로 폴백 */
     @Autowired(required = false)
@@ -91,10 +91,7 @@ public class QuizSetServiceImpl implements QuizSetService {
             }
         }
 
-        Quiz quiz = Quiz.create(title, setPart);
-        quiz = quizRepository.save(quiz);
-
-        QuizSet quizSet = QuizSet.create(quiz, title, setPart, termCategory);
+        QuizSet quizSet = QuizSet.create(title);
         quizSetRepository.save(quizSet);
 
         // 4) 문제로 사용할 용어 선별
@@ -108,21 +105,20 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 5) QuizQuestion 생성/저장
         List<QuizQuestion> questions = new ArrayList<>(pickedTerms.size());
-        int order = 0;
         for (Term term : pickedTerms) {
             QuestionType qType = resolveQuestionType(request.getQuestionType(), term);
             DifficultyLevel difficulty = DifficultyLevel.MEDIUM;
 
             QuizQuestion q;
             if (qType == QuestionType.INITIALS) {
-                q = QuizQuestion.textAnswer(
+                q = new QuizQuestion(
                         term,
                         termCategory,
                         QuestionType.INITIALS,
                         difficulty,
-                        makeQuestionText(term, qType),
-                        quizSet,
-                        toKoreanInitials(koreanHead(term.getTitle()))
+                        makeQuestionText(term, QuestionType.INITIALS), // 문제 텍스트에만 초성 힌트 포함
+                        koreanHead(term.getTitle()),                   // 정답은 '원 단어'
+                        null
                 );
             } else {
                 q = new QuizQuestion(
@@ -130,8 +126,7 @@ public class QuizSetServiceImpl implements QuizSetService {
                         termCategory,
                         qType,
                         difficulty,
-                        makeQuestionText(term, qType),
-                        quizSet
+                        makeQuestionText(term, qType)
                 );
             }
             questions.add(q);
@@ -143,10 +138,18 @@ public class QuizSetServiceImpl implements QuizSetService {
         createChoicesForQuestions(questions, pool);
 
         // 7) 질문 ID 조회
-        List<Long> questionIds = em.createQuery(
-                "select q.id from QuizQuestion q where q.quizSet.id = :sid order by q.id",
-                Long.class
-        ).setParameter("sid", quizSet.getId()).getResultList();
+        quizQuestionRepository.saveAll(questions);
+        em.flush(); // id 확정(안전하게)
+
+        List<QuizSetQuestion> links = new ArrayList<>();
+        for (QuizQuestion q : questions) {
+            links.add(QuizSetQuestion.create(quizSet, q));
+        }
+        quizSetQuestionRepository.saveAll(links);
+
+        List<Long> questionIds = questions.stream()
+                .map(QuizQuestion::getId)
+                .toList();
 
         // 8) 결과 반환
         return BuiltQuizSetResponse.builder()
@@ -211,10 +214,8 @@ public class QuizSetServiceImpl implements QuizSetService {
                 default       -> setPart = QuizSetType.CHOICE;
             }
         }
-        Quiz quiz = Quiz.create(title, setPart);
-        quiz = quizRepository.save(quiz);
 
-        QuizSet quizSet = QuizSet.create(quiz, title, setPart, null);
+        QuizSet quizSet = QuizSet.create(title);
         quizSetRepository.save(quizSet);
 
         // 5) Term 엔티티 로드 + 폴더 내 순서 보존
@@ -239,7 +240,6 @@ public class QuizSetServiceImpl implements QuizSetService {
 
         // 6) 문항 생성/저장
         List<QuizQuestion> questions = new ArrayList<>(picked.size());
-        int order = 0;
         for (Term term : picked) {
             QuestionType questionType = mixByTerm(term);
 
@@ -258,14 +258,14 @@ public class QuizSetServiceImpl implements QuizSetService {
 
             QuizQuestion q;
             if (questionType == QuestionType.INITIALS) {
-                q = QuizQuestion.textAnswer(
+                q = new QuizQuestion(
                         term,
                         null,
                         QuestionType.INITIALS,
                         difficulty,
-                        makeQuestionText(term, questionType),
-                        quizSet,
-                        toKoreanInitials(koreanHead(term.getTitle()))
+                        makeQuestionText(term, QuestionType.INITIALS),
+                        koreanHead(term.getTitle()),
+                        null
                 );
             } else {
                 q = new QuizQuestion(
@@ -273,8 +273,7 @@ public class QuizSetServiceImpl implements QuizSetService {
                         null,
                         questionType,
                         difficulty,
-                        makeQuestionText(term, questionType),
-                        quizSet
+                        makeQuestionText(term, questionType)
                 );
             }
             questions.add(q);
@@ -286,124 +285,19 @@ public class QuizSetServiceImpl implements QuizSetService {
         // 6-1) 보기 생성  ← 추가
         createChoicesForQuestions(questions, pool);
 
-        // 7) questionIds 조회
-        List<Long> questionIds = em.createQuery(
-                "select q.id from QuizQuestion q where q.quizSet.id = :sid order by q.id",
-                Long.class
-        ).setParameter("sid", quizSet.getId()).getResultList();
+        em.flush();
 
-        // 8) 응답
-        return BuiltQuizSetResponse.builder()
-                .quizSetId(quizSet.getId())
-                .questionIds(questionIds)
-                .title(quizSet.getTitle())
-                .totalQuestions(questionIds.size())
-                .build();
-    }
-
-    /**
-     * (세트 전용 응답) 필요한 경우 위 메서드를 호출해 DTO 변환만 수행
-     */
-    @Override
-    @Transactional
-    public CreateQuizSetByCategoryResponse registerQuizSetByCategory(CreateQuizSetByCategoryRequest request) {
-        BuiltQuizSetResponse built = registerQuizSetByCategoryReturningQuestions(request);
-        QuizSet set = quizSetRepository.getReferenceById(built.getQuizSetId());
-        return CreateQuizSetByCategoryResponse.from(set, built.getQuestionIds());
-    }
-
-    @Override
-    @Transactional
-    public BuiltQuizSetResponse registerQuizSetByJobRole(CreateQuizSetByJobRoleRequest request) {
-
-        if (request == null || request.getJobRole() == null) {
-            throw new IllegalArgumentException("jobRole 정보가 없습니다.");
+        List<QuizSetQuestion> links = new ArrayList<>();
+        for (QuizQuestion q : questions) {
+            links.add(QuizSetQuestion.create(quizSet, q));
         }
+        quizSetQuestionRepository.saveAll(links);
 
-        int targetCount = Math.max(1, Math.min(100, request.getCount()));
 
-        // 1) 타이틀 생성 (JobRole 기반)
-        String ts = LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm"));
-        String title = "[Job] " + request.getJobRole().name() + " 퀴즈 - " + ts;
+        List<Long> questionIds = questions.stream()
+                .map(QuizQuestion::getId)
+                .toList();
 
-        // 2) 세트 타입 결정 (카테고리/폴더 로직과 동일)
-        QuizSetType setPart;
-        var reqType = request.getQuestionType();
-        if (reqType == null) {
-            setPart = QuizSetType.CHOICE;
-        } else {
-            switch (reqType) {
-                case INITIALS -> setPart = QuizSetType.INITIALS;
-                case OX       -> setPart = QuizSetType.OX;
-                case CHOICE   -> setPart = QuizSetType.CHOICE;
-                case MIX      -> setPart = QuizSetType.CHOICE;
-                default       -> setPart = QuizSetType.CHOICE;
-            }
-        }
-
-        // 3) Quiz / QuizSet 생성
-        Quiz quiz = Quiz.create(title, setPart);
-        quiz = quizRepository.save(quiz);
-
-        // job 기반이므로 TermCategory는 일단 null
-        QuizSet quizSet = QuizSet.create(quiz, title, setPart, null);
-        quizSetRepository.save(quizSet);
-
-        // 4) 문항에 사용할 용어 선택
-        //   현재는 "직무별 추천 용어" 테이블이 없으므로,
-        //   전체 Term 풀에서 랜덤으로 뽑는 정책 사용 (나중에 JobRecommendedTerm 로 교체 가능)
-        List<Term> pickedTerms = pickTermsByCategoryPolicy(null, targetCount);
-        if (pickedTerms.isEmpty()) {
-            throw new IllegalStateException("출제할 용어가 없습니다.");
-        }
-
-        // 5) QuizQuestion 생성/저장
-        List<QuizQuestion> questions = new ArrayList<>(pickedTerms.size());
-        for (Term term : pickedTerms) {
-            // 카테고리 기반 로직 재사용
-            QuestionType qType = resolveQuestionType(request.getQuestionType(), term);
-
-            DifficultyLevel difficulty =
-                    request.getDifficulty() != null ? request.getDifficulty() : DifficultyLevel.MEDIUM;
-
-            QuizQuestion q;
-            if (qType == QuestionType.INITIALS) {
-                q = QuizQuestion.textAnswer(
-                        term,
-                        null,
-                        QuestionType.INITIALS,
-                        difficulty,
-                        makeQuestionText(term, qType),
-                        quizSet,
-                        toKoreanInitials(koreanHead(term.getTitle()))
-                );
-            } else {
-                q = new QuizQuestion(
-                        term,
-                        null,
-                        qType,
-                        difficulty,
-                        makeQuestionText(term, qType),
-                        quizSet
-                );
-            }
-            questions.add(q);
-        }
-        quizQuestionRepository.saveAll(questions);
-
-        // 6) 보기 생성 (카테고리 풀 로직 재사용: categoryId=null → pickedTerms 사용)
-        List<Term> pool = buildPoolForCategory(null, pickedTerms);
-        createChoicesForQuestions(questions, pool);
-
-        // 7) questionIds 조회
-        List<Long> questionIds = em.createQuery(
-                        "select q.id from QuizQuestion q where q.quizSet.id = :sid order by q.id",
-                        Long.class
-                )
-                .setParameter("sid", quizSet.getId())
-                .getResultList();
-
-        // 8) 응답
         return BuiltQuizSetResponse.builder()
                 .quizSetId(quizSet.getId())
                 .questionIds(questionIds)
@@ -483,11 +377,6 @@ public class QuizSetServiceImpl implements QuizSetService {
             default:
                 return (desc.isBlank() ? ("다음 설명에 해당하는 용어는? - " + title) : desc);
         }
-    }
-
-    /** 정답(있다면) 산출: 선택지 생성 시 확정하려면 null 유지 */
-    private Integer makeCorrectAnswer(Term term, QuestionType qType) {
-        return null;
     }
 
     /* ---------- 한글 초성 유틸 ---------- */
@@ -673,16 +562,4 @@ public class QuizSetServiceImpl implements QuizSetService {
         return t;
     }
 
-    /** INITIALS 정답 비교: 좌우 공백만 무시(trim) */
-    private static boolean isCorrectInitialsByTrim(String expected, String userInput) {
-        String e = (expected == null) ? "" : expected.trim();
-        String u = (userInput == null) ? "" : userInput.trim();
-        return e.equals(u);
-    }
-
-    private static boolean isCorrectInitialsIgnoreSpaces(String expected, String userInput) {
-        String e = (expected == null) ? "" : expected.replaceAll("\\s+", "").trim();
-        String u = (userInput == null) ? "" : userInput.replaceAll("\\s+", "").trim();
-        return e.equals(u);
-    }
 }

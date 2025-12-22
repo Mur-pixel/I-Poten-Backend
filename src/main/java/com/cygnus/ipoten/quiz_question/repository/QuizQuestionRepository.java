@@ -13,20 +13,40 @@ import java.util.List;
 
 public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long> {
 
-    List<QuizQuestion> findByQuizSet_IdAndQuestionTypeInOrderByIdAsc(Long setId, Collection<QuestionType> types);
-    List<QuizQuestion> findByQuizSet_IdAndQuestionTypeOrderByIdAsc(Long setId, QuestionType type);
+    @Query("""
+        select q
+        from QuizSetQuestion link
+        join link.quizQuestion q
+        where link.quizSet.id = :setId
+          and q.questionType in :types
+        order by link.id asc
+    """)
+    List<QuizQuestion> findBySetIdAndQuestionTypeInOrderByOrderNoAsc(
+            @Param("setId") Long setId,
+            @Param("types") Collection<QuestionType> types
+    );
 
-    /* =========================
-     *  SET: no-tags / with-tags
-     * ========================= */
+    @Query("""
+        select q
+        from QuizSetQuestion link
+        join link.quizQuestion q
+        where link.quizSet.id = :setId
+          and q.questionType = :type
+        order by link.id asc
+    """)
+    List<QuizQuestion> findBySetIdAndQuestionTypeOrderByOrderNoAsc(
+            @Param("setId") Long setId,
+            @Param("type") QuestionType type
+    );
 
     @Query("""
         select distinct q.id
-        from QuizQuestion q
-        where q.quizSet.id = :setId
+        from QuizSetQuestion link
+        join link.quizQuestion q
+        where link.quizSet.id = :setId
           and (:dl is null or q.difficulty = :dl)
           and (:allTypes = true or q.questionType in :types)
-        order by q.id asc
+        order by link.id asc
     """)
     List<Long> findIdsBySetFilters(
             @Param("setId") Long setId,
@@ -34,30 +54,6 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
             @Param("allTypes") boolean allTypes,
             @Param("types") List<QuestionType> types
     );
-
-    @Query("""
-        select distinct q.id
-        from QuizQuestion q
-        left join q.term t
-        left join t.topicTags tag
-        where q.quizSet.id = :setId
-          and (:dl is null or q.difficulty = :dl)
-          and (:allTypes = true or q.questionType in :types)
-          and (:hasTags = false or lower(tag.key) in :tagKeys)
-        order by q.id asc
-    """)
-    List<Long> findIdsBySetFiltersAndTopicTags(
-            @Param("setId") Long setId,
-            @Param("dl") DifficultyLevel dl,
-            @Param("allTypes") boolean allTypes,
-            @Param("types") List<QuestionType> types,
-            @Param("hasTags") boolean hasTags,
-            @Param("tagKeys") List<String> tagKeys
-    );
-
-    /* =========================
-     *  CATEGORY: no-tags / with-tags
-     * ========================= */
 
     @Query("""
         select distinct q.id
@@ -76,35 +72,36 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
     @Query("""
         select distinct q.id
         from QuizQuestion q
-        left join q.term t
-        left join t.topicTags tag
         where q.termCategory.id = :categoryId
           and (:dl is null or q.difficulty = :dl)
           and (:type is null or q.questionType = :type)
-          and (:hasTags = false or lower(tag.key) in :tagKeys)
+          and (:hasLabels = false or exists (
+                select 1
+                from QuizQuestionLabel qql
+                join qql.quizLabel l
+                where qql.quizQuestion = q
+                  and l.key in :labelKeys
+          ))
         order by q.id asc
     """)
-    List<Long> findIdsByCategoryFiltersAndTopicTags(
+    List<Long> findIdsByCategoryFiltersAndLabels(
             @Param("categoryId") Long categoryId,
             @Param("dl") DifficultyLevel dl,
             @Param("type") QuestionType type,
-            @Param("hasTags") boolean hasTags,
-            @Param("tagKeys") List<String> tagKeys
+            @Param("hasLabels") boolean hasLabels,
+            @Param("labelKeys") List<String> labelKeys
     );
 
-    /* =========================
-     *  CATEGORY: eligible set pick (no-tags / with-tags)
-     * ========================= */
-
     @Query("""
-        select q.quizSet.id
-        from QuizQuestion q
+        select link.quizSet.id
+        from QuizSetQuestion link
+        join link.quizQuestion q
         where q.termCategory.id = :categoryId
           and (:type is null or q.questionType = :type)
           and (:dl is null or q.difficulty = :dl)
-        group by q.quizSet.id
+        group by link.quizSet.id
         having count(distinct q.id) >= :minCount
-        order by q.quizSet.id desc
+        order by link.quizSet.id desc
     """)
     List<Long> findEligibleSetIdsByCategory(
             @Param("categoryId") Long categoryId,
@@ -115,34 +112,50 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
     );
 
     @Query("""
-        select q.quizSet.id
-        from QuizQuestion q
-        left join q.term t
-        left join t.topicTags tag
+        select link.quizSet.id
+        from QuizSetQuestion link
+        join link.quizQuestion q
         where q.termCategory.id = :categoryId
           and (:type is null or q.questionType = :type)
           and (:dl is null or q.difficulty = :dl)
-          and (:hasTags = false or lower(tag.key) in :tagKeys)
-        group by q.quizSet.id
+          and (:hasLabels = false or exists (
+                select 1
+                from QuizQuestionLabel qql
+                join qql.quizLabel l
+                where qql.quizQuestion = q
+                  and l.key in :labelKeys
+          ))
+        group by link.quizSet.id
         having count(distinct q.id) >= :minCount
-        order by q.quizSet.id desc
+        order by link.quizSet.id desc
     """)
-    List<Long> findEligibleSetIdsByCategoryAndTopicTags(
+    List<Long> findEligibleSetIdsByCategoryAndLabels(
             @Param("categoryId") Long categoryId,
             @Param("type") QuestionType type,
             @Param("dl") DifficultyLevel dl,
-            @Param("hasTags") boolean hasTags,
-            @Param("tagKeys") List<String> tagKeys,
+            @Param("hasLabels") boolean hasLabels,
+            @Param("labelKeys") List<String> labelKeys,
             @Param("minCount") long minCount,
             Pageable pageable
     );
 
-    /* =========================
-     *  MISC
-     * ========================= */
+    @Query("""
+        select case when count(link.id) > 0 then true else false end
+        from QuizSetQuestion link
+        join link.quizQuestion q
+        where link.quizSet.id = :quizSetId
+          and q.questionType = :questionType
+          and q.questionText = :questionText
+          and q.term.id = :termId
+    """)
+    boolean existsBySetAndQuestionTypeAndQuestionTextAndTermId(
+            @Param("quizSetId") Long quizSetId,
+            @Param("questionType") QuestionType questionType,
+            @Param("questionText") String questionText,
+            @Param("termId") Long termId
+    );
 
-    boolean existsByQuizSet_IdAndQuestionTypeAndQuestionTextAndTerm_Id(
-            Long quizSetId,
+    boolean existsByQuestionTypeAndQuestionTextAndTerm_Id(
             QuestionType questionType,
             String questionText,
             Long termId

@@ -2,17 +2,10 @@ package com.cygnus.ipoten.quiz_set.controller;
 
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
 import com.cygnus.ipoten.quiz_set.controller.response_form.ResolveQuizSetResponseForm;
-import com.cygnus.ipoten.quiz_set.entity.QuizSet;
 import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
-import com.cygnus.ipoten.quiz_set.controller.request_form.CreateQuizSetByCategoryRequestForm;
-import com.cygnus.ipoten.quiz_set.controller.response_form.CreateQuizSetByCategoryResponseForm;
-import com.cygnus.ipoten.quiz_set.service.request.CreateQuizSetByCategoryRequest;
-import com.cygnus.ipoten.quiz.service.response.*;
 import com.cygnus.ipoten.quiz_set.service.QuizSetQueryService;
-import com.cygnus.ipoten.quiz_set.service.QuizSetService;
 import com.cygnus.ipoten.quiz_set.service.response.ResolveQuizSetResult;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
-import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;

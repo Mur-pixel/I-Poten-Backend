@@ -11,7 +11,6 @@ import java.util.Optional;
 
 public interface QuizSetQueryService {
     List<ChoiceQuestionRead> findChoiceQuestionsBySetId(Long setId);
-    List<Long> findQuestionIdsBySetId(Long setId);
     Optional<QuizSetType> findPartTypeBySetId(Long setId);
     List<QuizQuestion> findInitialsQuestionsBySetId(Long setId);
     ResolveQuizSetResult resolve(Long termCategoryId, QuizSetType type, DifficultyLevel level, int count);

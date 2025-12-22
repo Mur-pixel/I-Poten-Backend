@@ -4,17 +4,17 @@ import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.service.response.BuiltQuizSetResponse;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType;
 import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
 import com.cygnus.ipoten.quiz_session_answer.service.QuizSessionAnswerService;
 import com.cygnus.ipoten.quiz_session_scope.value_objects.ScopeCondition;
 import com.cygnus.ipoten.quiz_session_scope.value_objects.SeedPolicy;
+import com.cygnus.ipoten.quiz_session_scope.value_objects.SessionSource;
 import com.cygnus.ipoten.quiz_session_scope.value_objects.SetScope;
 import com.cygnus.ipoten.quiz_session_scope.value_objects.TermCategoryScope;
+import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.springframework.data.domain.PageRequest;
-import org.springframework.data.domain.Pageable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -29,7 +29,6 @@ import java.util.concurrent.ThreadLocalRandom;
 @RequiredArgsConstructor
 public class QuizScopeServiceImpl implements QuizScopeService {
 
-    private final JobRoleScopeService jobRoleScopeService;
     private final QuizSessionAnswerService quizSessionAnswerService;
     private final QuizQuestionRepository quizQuestionRepository;
     private final WordbookScopeService wordbookScopeService;
@@ -44,13 +43,38 @@ public class QuizScopeServiceImpl implements QuizScopeService {
 
         log.info("[START] sourceType={}", condition.getSourceType());
 
-        BuiltQuizSetResponse built;
-
         switch (condition.getSourceType()) {
 
             case WORDBOOK -> {
-                if (condition.getWordbookScope() == null) throw new IllegalArgumentException("WORDBOOK 스코프가 없습니다.");
-                built = wordbookScopeService.buildQuizSet(condition.getWordbookScope());
+                if (condition.getWordbookScope() == null) {
+                    throw new IllegalArgumentException("WORDBOOK 스코프가 없습니다.");
+                }
+
+                // WORDBOOK은 "빌드된 세트"를 사용 (기존 정책 유지)
+                var built = wordbookScopeService.buildQuizSet(condition.getWordbookScope());
+
+                SeedPolicy seed = (condition.getSeedPolicy() != null)
+                        ? condition.getSeedPolicy()
+                        : SeedPolicy.fromRaw(null, null);
+
+                SeedMode mode = (seed.getSeedMode() != null) ? seed.getSeedMode() : SeedMode.AUTO;
+
+                if (mode == SeedMode.FIXED && seed.getFixedSeed() == null) {
+                    throw new IllegalArgumentException("FIXED seedMode에는 fixedSeed가 필요합니다.");
+                }
+
+                long seedValue = resolveSeedValue(mode, seed.getFixedSeed(), accountId);
+
+                List<Long> ids = new ArrayList<>(built.getQuestionIds());
+                Collections.shuffle(ids, new Random(seedValue));
+
+                return quizSessionAnswerService.startFromQuizSet(
+                        accountId,
+                        built.getQuizSetId(),
+                        ids,
+                        mode,
+                        seedValue
+                );
             }
 
             case TERM_CATEGORY -> {
@@ -58,63 +82,75 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                 var s = condition.getTermCategoryScope();
                 if (s == null) throw new IllegalArgumentException("TERM_CATEGORY 스코프가 없습니다.");
 
-                log.info("[TERM_CATEGORY] rawType='{}'", s.getTypeRaw());
+                var typeScope = s.getQuestionTypeScope();
 
-                String rawType = (s.getTypeRaw() == null) ? null : s.getTypeRaw().trim();
-                if (rawType == null || rawType.isBlank() || "mix".equalsIgnoreCase(rawType)) {
+                // 1) VO 기준 MIX 판별 (우선)
+                boolean isMixByScope = (typeScope == null) || typeScope.isMix();
+
+                // 2) 혹시 옛 데이터/요청이 typeRaw만 주는 경우 fallback
+                String rawType = normalizeTypeRaw(s.getTypeRaw());
+                boolean isMixByRaw = (rawType == null || "mix".equalsIgnoreCase(rawType));
+
+                if (isMixByScope || isMixByRaw) {
                     return startFromCategoryMix(accountId, s, condition.getSeedPolicy());
                 }
 
                 int take = Math.max(1, Math.min(100, s.getCount()));
-                DifficultyLevel dl = (s.getDifficultyScope().getLevel() == null || s.getDifficultyScope().getLevel() == DifficultyLevel.MIX)
-                        ? null : s.getDifficultyScope().getLevel();
+                DifficultyLevel dl = (s.getDifficultyScope() == null) ? null : s.getDifficultyScope().forRepoOrNull();
 
-                List<String> normalizedTagKeys = normalizeTagKeys(s.getTopicTagKeys());
+                // qt: VO 우선, 없으면 raw fallback
+                QuestionType qt = (typeScope != null)
+                        ? typeScope.toEntityOrNull()
+                        : toQuestionTypeOrNull(s.getTypeRaw());
 
-                log.info("[TERM_CATEGORY] categoryId={}, take={}, typeRaw='{}', level={}, tags={}",
-                        s.getCategoryId(), take, s.getTypeRaw(),
-                        s.getDifficultyScope().getLevel(), normalizedTagKeys);
+                if (qt == null) {
+                    return startFromCategoryMix(accountId, s, condition.getSeedPolicy());
+                }
 
-                // seed 준비(DAILY는 결정적으로) - (여기선 set pick에 직접 쓰진 않지만 유지)
-                SeedPolicy seed = (condition.getSeedPolicy() != null) ? condition.getSeedPolicy() : SeedPolicy.fromRaw(null, null);
+                List<String> normalizedLabelKeys = normalizeLabelKeys(s.getLabelKeys());
+                boolean hasLabels = !normalizedLabelKeys.isEmpty();
+
+                SeedPolicy seed = (condition.getSeedPolicy() != null)
+                        ? condition.getSeedPolicy()
+                        : SeedPolicy.fromRaw(null, null);
+
                 SeedMode mode = (seed.getSeedMode() != null) ? seed.getSeedMode() : SeedMode.AUTO;
                 long seedValue = resolveSeedValue(mode, seed.getFixedSeed(), accountId);
 
-                // 기존 단일 타입 흐름 유지
-                QuestionType qt = toQuestionTypeOrNull(s.getTypeRaw());
+                log.info("[TERM_CATEGORY] categoryId={}, take={}, dl={}, qt={}, labels={} (hasLabels={})",
+                        s.getCategoryId(), take, dl, qt, normalizedLabelKeys, hasLabels);
 
-                Pageable one = PageRequest.of(0, 1);
-
-                // ✅ tagKeys 비었으면 "노태그" 쿼리, 있으면 "태그" 쿼리
-                var setIds = findEligibleSetIdsByCategory(
-                        s.getCategoryId(),
-                        qt,
-                        dl,
-                        normalizedTagKeys,
-                        take,
-                        one
+                List<Long> candidates = hasLabels
+                        ? quizQuestionRepository.findIdsByCategoryFiltersAndLabels(
+                        s.getCategoryId(), dl, qt, true, normalizedLabelKeys
+                )
+                        : quizQuestionRepository.findIdsByCategoryFilters(
+                        s.getCategoryId(), dl, qt
                 );
 
-                if (setIds.isEmpty()) {
-                    throw new IllegalArgumentException("조건에 맞는 퀴즈 세트가 없습니다. categoryId=" + s.getCategoryId());
+                if (candidates.size() < take) {
+                    throw new IllegalArgumentException("문항 수가 부족합니다. 요청=" + take + ", 확보=" + candidates.size());
                 }
 
-                Long pickedSetId = setIds.get(0);
+                log.info("[TERM_CATEGORY] candidates.size()={}", candidates.size());
 
-                return startFromSet(
-                        accountId,
-                        pickedSetId,
-                        take,
-                        rawType,
-                        s.getDifficultyScope().getLevel(),
-                        condition.getSeedPolicy(),
-                        s.getTopicTagKeys()
+                List<Long> picked = new ArrayList<>(candidates);
+                Collections.shuffle(picked, new Random(seedValue));
+                picked = picked.subList(0, take);
+
+                SessionSource source = SessionSource.of(
+                        SessionSourceType.TERM_CATEGORY,
+                        s.getCategoryId(),
+                        null // partType은 null로 두면 AnswerServiceImpl에서 질문 타입으로 유추 가능
                 );
-            }
 
-            case JOB -> {
-                if (condition.getJobScope() == null) throw new IllegalArgumentException("Job 스코프가 없습니다.");
-                built = jobRoleScopeService.buildQuizSet(condition.getJobScope());
+                return quizSessionAnswerService.startFromScope(
+                        accountId,
+                        source,
+                        picked,
+                        mode,
+                        seedValue
+                );
             }
 
             case SET -> {
@@ -127,35 +163,12 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         ss.getCount(),
                         ss.getTypeRaw(),
                         ss.getLevel(),
-                        condition.getSeedPolicy(),
-                        ss.getTopicTagKeys()
+                        condition.getSeedPolicy()
                 );
             }
 
             default -> throw new IllegalStateException("지원하지 않는 SourceType: " + condition.getSourceType());
         }
-
-        SeedPolicy seed = (condition.getSeedPolicy() != null) ? condition.getSeedPolicy() : SeedPolicy.fromRaw(null, null);
-        SeedMode mode = (seed.getSeedMode() != null) ? seed.getSeedMode() : SeedMode.AUTO;
-
-        if (mode == SeedMode.FIXED && seed.getFixedSeed() == null) {
-            throw new IllegalArgumentException("FIXED seedMode에는 fixedSeed가 필요합니다.");
-        }
-
-        long seedValue = (mode == SeedMode.FIXED)
-                ? seed.getFixedSeed()
-                : ThreadLocalRandom.current().nextLong();
-
-        List<Long> ids = new ArrayList<>(built.getQuestionIds());
-        Collections.shuffle(ids, new Random(seedValue));
-
-        return quizSessionAnswerService.startFromQuizSet(
-                accountId,
-                built.getQuizSetId(),
-                ids,
-                mode,
-                seedValue
-        );
     }
 
     @Override
@@ -166,8 +179,7 @@ public class QuizScopeServiceImpl implements QuizScopeService {
             Integer count,
             String typeRaw,
             DifficultyLevel level,
-            SeedPolicy seedPolicy,
-            List<String> tagKeys
+            SeedPolicy seedPolicy
     ) {
         if (quizSetId == null) throw new IllegalArgumentException("quizSetId는 필수입니다.");
 
@@ -178,12 +190,9 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         boolean allTypes = (types == null || types.isEmpty());
         List<QuestionType> typesParam = allTypes ? List.of(QuestionType.CHOICE) : types;
 
-        List<String> normalizedTagKeys = normalizeTagKeys(tagKeys);
-        boolean hasTags = !normalizedTagKeys.isEmpty();
-
-        List<Long> candidates = hasTags
-                ? quizQuestionRepository.findIdsBySetFiltersAndTopicTags(quizSetId, dl, allTypes, typesParam, true, normalizedTagKeys)
-                : quizQuestionRepository.findIdsBySetFilters(quizSetId, dl, allTypes, typesParam);
+        List<Long> candidates = quizQuestionRepository.findIdsBySetFilters(
+                quizSetId, dl, allTypes, typesParam
+        );
 
         if (candidates.isEmpty()) {
             throw new IllegalArgumentException("필터 조건에 맞는 문항이 없습니다. setId=" + quizSetId);
@@ -194,7 +203,9 @@ public class QuizScopeServiceImpl implements QuizScopeService {
 
         long seedValue;
         if (mode == SeedMode.FIXED) {
-            if (seedPolicy.getFixedSeed() == null) throw new IllegalArgumentException("FIXED seedMode에는 fixedSeed가 필요합니다.");
+            if (seedPolicy.getFixedSeed() == null) {
+                throw new IllegalArgumentException("FIXED seedMode에는 fixedSeed가 필요합니다.");
+            }
             seedValue = seedPolicy.getFixedSeed();
         } else {
             seedValue = ThreadLocalRandom.current().nextLong();
@@ -223,9 +234,9 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         };
     }
 
-    private static List<String> normalizeTagKeys(List<String> tagKeys) {
-        if (tagKeys == null) return List.of();
-        return tagKeys.stream()
+    private static List<String> normalizeLabelKeys(List<String> labelKeys) {
+        if (labelKeys == null) return List.of();
+        return labelKeys.stream()
                 .filter(s -> s != null && !s.isBlank())
                 .map(s -> s.trim().toLowerCase(java.util.Locale.ROOT))
                 .distinct()
@@ -266,22 +277,18 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         return x ^ (x >>> 31);
     }
 
+    /**
+     * TERM_CATEGORY MIX 생성
+     */
     private StartQuizSessionResponse startFromCategoryMix(
             Long accountId,
             TermCategoryScope s,
             SeedPolicy seedPolicy
     ) {
-
-        List<String> tagKeys = normalizeTagKeys(s.getTopicTagKeys());
-
-        log.info("[MIX] ENTER categoryId={}, take={}, level={}, tags={}",
-                s.getCategoryId(), s.getCount(), s.getDifficultyScope().getLevel(), tagKeys);
+        List<String> labelKeys = normalizeLabelKeys(s.getLabelKeys());
 
         int take = Math.max(1, Math.min(100, s.getCount()));
-
-        DifficultyLevel dl = (s.getDifficultyScope().getLevel() == null
-                || s.getDifficultyScope().getLevel() == DifficultyLevel.MIX)
-                ? null : s.getDifficultyScope().getLevel();
+        DifficultyLevel dl = (s.getDifficultyScope() == null) ? null : s.getDifficultyScope().forRepoOrNull();
 
         if (seedPolicy == null) seedPolicy = SeedPolicy.fromRaw(null, null);
         SeedMode mode = (seedPolicy.getSeedMode() != null) ? seedPolicy.getSeedMode() : SeedMode.AUTO;
@@ -297,10 +304,9 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         Long categoryId = s.getCategoryId();
         int poolSize = Math.min(500, Math.max(50, take * 10));
 
-        // ✅ 타입별 풀(태그 유/무 분기)
-        List<Long> choicePool = new ArrayList<>(findIdsByCategory(categoryId, dl, QuestionType.CHOICE, tagKeys));
-        List<Long> oxPool = new ArrayList<>(findIdsByCategory(categoryId, dl, QuestionType.OX, tagKeys));
-        List<Long> initialsPool = new ArrayList<>(findIdsByCategory(categoryId, dl, QuestionType.INITIALS, tagKeys));
+        List<Long> choicePool = new ArrayList<>(findIdsByCategory(categoryId, dl, QuestionType.CHOICE, labelKeys));
+        List<Long> oxPool = new ArrayList<>(findIdsByCategory(categoryId, dl, QuestionType.OX, labelKeys));
+        List<Long> initialsPool = new ArrayList<>(findIdsByCategory(categoryId, dl, QuestionType.INITIALS, labelKeys));
 
         choicePool = limit(choicePool, poolSize);
         oxPool = limit(oxPool, poolSize);
@@ -337,9 +343,6 @@ public class QuizScopeServiceImpl implements QuizScopeService {
 
         Collections.shuffle(picked, new Random(seedValue));
 
-        // ✅ baseSetId도 태그 유/무 분기
-        Long baseSetId = pickBaseSetIdForCategory(categoryId, dl, tagKeys);
-
         log.info("[MIX] pool sizes: choice={}, ox={}, initials={}",
                 choicePool.size(), oxPool.size(), initialsPool.size());
 
@@ -350,9 +353,16 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         .toList()
         );
 
-        return quizSessionAnswerService.startFromQuizSet(
+        // MIX도 동일하게 SessionSource로 감싸서 startFromScope로 호출
+        SessionSource source = SessionSource.of(
+                SessionSourceType.TERM_CATEGORY,
+                categoryId,
+                QuizSetType.MIX
+        );
+
+        return quizSessionAnswerService.startFromScope(
                 accountId,
-                baseSetId,
+                source,
                 picked,
                 mode,
                 seedValue
@@ -366,48 +376,17 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         return k;
     }
 
-    private Long pickBaseSetIdForCategory(Long categoryId, DifficultyLevel dl, List<String> tagKeys) {
-        Pageable one = PageRequest.of(0, 1);
-
-        var choiceSet = findEligibleSetIdsByCategory(categoryId, QuestionType.CHOICE, dl, tagKeys, 1, one);
-        if (!choiceSet.isEmpty()) return choiceSet.get(0);
-
-        var anySet = findEligibleSetIdsByCategory(categoryId, null, dl, tagKeys, 1, one);
-        if (!anySet.isEmpty()) return anySet.get(0);
-
-        throw new IllegalArgumentException("categoryId=" + categoryId + " 에 해당하는 quizSet을 찾지 못했습니다.");
-    }
-
-    private List<Long> findEligibleSetIdsByCategory(
-            Long categoryId,
-            QuestionType type,
-            DifficultyLevel dl,
-            List<String> normalizedTagKeys,
-            long minCount,
-            Pageable pageable
-    ) {
-        boolean hasTags = normalizedTagKeys != null && !normalizedTagKeys.isEmpty();
-
-        return hasTags
-                ? quizQuestionRepository.findEligibleSetIdsByCategoryAndTopicTags(
-                categoryId, type, dl, true, normalizedTagKeys, minCount, pageable
-        )
-                : quizQuestionRepository.findEligibleSetIdsByCategory(
-                categoryId, type, dl, minCount, pageable
-        );
-    }
-
     private List<Long> findIdsByCategory(
             Long categoryId,
             DifficultyLevel dl,
             QuestionType type,
-            List<String> normalizedTagKeys
+            List<String> normalizedLabelKeys
     ) {
-        boolean hasTags = normalizedTagKeys != null && !normalizedTagKeys.isEmpty();
+        boolean hasLabels = normalizedLabelKeys != null && !normalizedLabelKeys.isEmpty();
 
-        return hasTags
-                ? quizQuestionRepository.findIdsByCategoryFiltersAndTopicTags(
-                categoryId, dl, type, true, normalizedTagKeys
+        return hasLabels
+                ? quizQuestionRepository.findIdsByCategoryFiltersAndLabels(
+                categoryId, dl, type, true, normalizedLabelKeys
         )
                 : quizQuestionRepository.findIdsByCategoryFilters(
                 categoryId, dl, type
@@ -418,5 +397,16 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         if (list == null || list.isEmpty()) return List.of();
         int end = Math.min(max, list.size());
         return new ArrayList<>(list.subList(0, end));
+    }
+
+    private static String normalizeTypeRaw(String raw) {
+        if (raw == null) return null;
+        String r = raw.trim();
+        if (r.isBlank()) return null;
+
+        String upper = r.toUpperCase();
+        if (upper.contains("MIX")) return "mix";
+
+        return r;
     }
 }

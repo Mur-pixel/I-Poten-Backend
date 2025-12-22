@@ -10,7 +10,8 @@ import java.time.Instant;
 @RequiredArgsConstructor
 public class SubmitAnswerResponse {
     private final Long questionId;
-    private final Long selectedChoiceId;
+    private final Long submittedChoiceId;
+    private final String submittedText;
     private final Long userAnswerId;
     private final boolean isCorrect;
     private final Instant submittedAt;
@@ -18,7 +19,8 @@ public class SubmitAnswerResponse {
     public static SubmitAnswerResponse from(QuizSessionAnswer answer) {
         return new SubmitAnswerResponse(
                 answer.getQuizQuestion().getId(),
-                answer.getQuizChoice().getId(),
+                answer.getSubmittedChoiceId(),
+                answer.getSubmittedText(),
                 answer.getId(),
                 answer.isCorrect(),
                 answer.getSubmittedAt()

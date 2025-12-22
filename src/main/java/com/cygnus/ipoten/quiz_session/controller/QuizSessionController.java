@@ -9,7 +9,6 @@ import com.cygnus.ipoten.quiz_session_scope.value_objects.ScopeCondition;
 import com.cygnus.ipoten.quiz_session.controller.response_form.*;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionQueryService;
 import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
-import com.cygnus.ipoten.quiz_session_scope.value_objects.SeedPolicy;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -20,10 +19,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
-import java.util.Collections;
-import java.util.List;
-import java.util.NoSuchElementException;
-import java.util.Optional;
+import java.util.*;
 
 @Slf4j
 @RestController
@@ -41,7 +37,7 @@ public class QuizSessionController {
             description = "source 값(wordbook/term_category/set/job)에 따라 단어장/카테고리/세트/직무 기반으로 퀴즈 세션을 시작합니다."
     )
     @PostMapping("/me/quiz/sessions/start")
-    public ResponseEntity<CreateQuizSessionResponseForm> startQuizUnified(
+    public ResponseEntity<?> startQuizUnified(
             @Valid @RequestBody StartQuizSessionUnifiedRequestForm requestForm,
             @CookieValue(name = "userToken", required = false) String userToken
     ) {
@@ -62,9 +58,12 @@ public class QuizSessionController {
             return ResponseEntity.status(HttpStatus.CREATED).body(CreateQuizSessionResponseForm.from(started));
 
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().build();
+            log.warn("startQuizUnified bad request: {}", e.getMessage(), e);
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+
         } catch (NoSuchElementException e) {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+
         } catch (Exception e) {
             log.error("startQuizUnified failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
@@ -87,36 +86,6 @@ public class QuizSessionController {
         }
         StartQuizSessionResponse started = quizSessionRetryService.startRetryAll(sessionId, accountId);
         return ResponseEntity.status(HttpStatus.CREATED).body(CreateQuizSessionResponseForm.from(started));
-    }
-
-    @Operation(
-            summary = "오답만 다시 풀기",
-            description = "기존 세션의 오답만 모아서 새로운 오답 전용 세션을 생성합니다."
-    )
-    @PostMapping("/me/quiz/sessions/{sessionId}/retry-wrong")
-    public ResponseEntity<CreateQuizSessionResponseForm> retryWrongOnly(
-            @Parameter(description = "기준이 될 기존 세션 ID", example = "1")
-            @PathVariable Long sessionId,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            log.warn("인증 실패: 계정 식별 불가");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        try {
-            StartQuizSessionResponse started = quizSessionRetryService.startRetryWrongOnly(sessionId, accountId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(CreateQuizSessionResponseForm.from(started));
-        } catch(SecurityException e) {
-            log.warn("세션 접근 거부", e);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn("오답세션 생성 유효성 오류", e);
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("오답세션 생성 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
     }
 
     @Operation(

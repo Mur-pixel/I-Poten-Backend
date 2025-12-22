@@ -36,7 +36,14 @@ public class SessionReviewResponseForm {
         private Long quizQuestionId;        // 문제 ID
         private QuestionType questionType;  // 문제 유형
         private String questionText;        // 문제 텍스트
-        private Long myChoiceId;            // 사용자가 선택한 보기 ID
+
+        // 선택형(CHOICE/OX)
+        private Long myChoiceId;
+
+        // 텍스트형(INITIALS/주관식)
+        private String mySubmittedText;
+        private String expectedText;
+
         private Boolean correct;            // 정답 여부
         private Long answerChoiceId;        // 정답 보기 ID
         private String explanation;         // 해설

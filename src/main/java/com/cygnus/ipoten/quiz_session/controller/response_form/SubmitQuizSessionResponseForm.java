@@ -29,7 +29,7 @@ public class SubmitQuizSessionResponseForm {
         private final Long correctChoiceId;
         private final List<Long> correctChoiceIds;
 
-        // ✅ INITIALS 전용(선택형은 null로 내려감)
+        // INITIALS 전용(선택형은 null로 내려감)
         private final String submittedText;
         private final String correctText;
 

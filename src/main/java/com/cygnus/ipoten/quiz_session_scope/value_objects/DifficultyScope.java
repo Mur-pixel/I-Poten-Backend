@@ -52,4 +52,12 @@ public class DifficultyScope {
     public boolean isHard() {
         return level == DifficultyLevel.HARD;
     }
+
+    public boolean isMix() {
+        return level == DifficultyLevel.MIX;
+    }
+
+    public DifficultyLevel forRepoOrNull() {
+        return isMix() ? null : level;
+    }
 }

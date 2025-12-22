@@ -21,7 +21,13 @@ public class CreateQuizQuestionRequest {
     private final String answerText;
 
     public QuizQuestion toQuizQuestion(Term term, TermCategory termCategory) {
-        QuizQuestion q = new QuizQuestion(term, termCategory, questionType, DifficultyLevel.MEDIUM, questionText, (QuizSet) null);
-        return q;
+        return new QuizQuestion(
+                term,
+                termCategory,
+                questionType,
+                DifficultyLevel.MEDIUM,
+                questionText,
+                null // explanation
+        );
     }
 }

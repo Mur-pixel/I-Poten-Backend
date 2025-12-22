@@ -8,6 +8,7 @@ import com.cygnus.ipoten.quiz_set.entity.QuizSet;
 import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
+import com.cygnus.ipoten.quiz_set.repository.QuizSetQuestionRepository;
 import com.cygnus.ipoten.quiz_set.repository.QuizSetRepository;
 import com.cygnus.ipoten.quiz_question.service.response.ChoiceQuestionRead;
 import com.cygnus.ipoten.quiz_set.service.response.ResolveQuizSetResult;
@@ -26,6 +27,7 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizChoiceRepository quizChoiceRepository;
     private final QuizSetRepository quizSetRepository;
+    private final QuizSetQuestionRepository quizSetQuestionRepository;
     private final EntityManager em;
 
     @Override
@@ -34,14 +36,14 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
 
         // 1) 세트의 CHOICE 문항(정렬 보장)
         List<QuizQuestion> questions =
-                quizQuestionRepository.findByQuizSet_IdAndQuestionTypeInOrderByIdAsc(
+                quizQuestionRepository.findBySetIdAndQuestionTypeInOrderByOrderNoAsc(
                         setId, List.of(QuestionType.CHOICE, QuestionType.OX)
                 );
         if (questions.isEmpty()) return List.of();
 
         // 2) 보기를 한 번에 로드(정렬: id ASC)
         List<Long> qIds = questions.stream().map(QuizQuestion::getId).toList();
-        List<QuizChoice> choices = quizChoiceRepository.findByQuizQuestionIdInOrderByIdAsc(qIds);
+        List<QuizChoice> choices = quizChoiceRepository.findByQuizQuestionIdInOrderByQuizQuestionIdAscIdAsc(qIds);
 
         Map<Long, List<QuizChoice>> byQ = choices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId(),
@@ -65,22 +67,15 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
             }
             correctIdx0 = Math.min(Math.max(0, correctIdx0), Math.max(0, choiceTexts.size() - 1));
 
-            String explanation = Optional.ofNullable(q.getExplanation()).orElse(null);
-
             out.add(new ChoiceQuestionRead(
                     q.getId(),
                     Optional.ofNullable(q.getQuestionText()).orElse(""),
                     choiceTexts,
                     correctIdx0,
-                    explanation
+                    q.getExplanation()
             ));
         }
         return out;
-    }
-
-    @Override
-    public List<Long> findQuestionIdsBySetId(Long setId) {
-        return quizSetRepository.findQuestionIdsBySetId(setId);
     }
 
     @Override
@@ -94,7 +89,7 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
 
     @Override
     public List<QuizQuestion> findInitialsQuestionsBySetId(Long setId) {
-        return quizQuestionRepository.findByQuizSet_IdAndQuestionTypeOrderByIdAsc(setId, QuestionType.INITIALS);
+        return quizQuestionRepository.findBySetIdAndQuestionTypeOrderByOrderNoAsc(setId, QuestionType.INITIALS);
     }
 
     @Override
@@ -118,15 +113,16 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
         DifficultyLevel dl = (levelFilter == DifficultyLevel.MIX) ? null : levelFilter;
 
         Long setId = em.createQuery("""
-        select q.quizSet.id
-        from QuizQuestion q
-        where q.termCategory.id = :cid
-          and (:qt is null or q.questionType = :qt)
-          and (:dl is null or q.difficulty = :dl)
-        group by q.quizSet.id
-        having count(q.id) >= :cnt
-        order by q.quizSet.id desc
-    """, Long.class)
+            select link.quizSet.id
+            from QuizSetQuestion link
+            join link.quizQuestion q
+            where q.termCategory.id = :cid
+              and (:qt is null or q.questionType = :qt)
+              and (:dl is null or q.difficulty = :dl)
+            group by link.quizSet.id
+            having count(distinct q.id) >= :cnt
+            order by link.quizSet.id desc
+        """, Long.class)
                 .setParameter("cid", termCategoryId)
                 .setParameter("qt", qt)
                 .setParameter("dl", dl)
@@ -140,12 +136,13 @@ public class QuizSetQueryServiceImpl implements QuizSetQueryService {
                 .orElseThrow(() -> new NoSuchElementException("set not found: " + setId));
 
         Long total = em.createQuery("""
-        select count(q.id)
-        from QuizQuestion q
-        where q.quizSet.id = :sid
-          and (:qt is null or q.questionType = :qt)
-          and (:dl is null or q.difficulty = :dl)
-    """, Long.class)
+            select count(distinct q.id)
+            from QuizSetQuestion link
+            join link.quizQuestion q
+            where link.quizSet.id = :sid
+              and (:qt is null or q.questionType = :qt)
+              and (:dl is null or q.difficulty = :dl)
+        """, Long.class)
                 .setParameter("sid", setId)
                 .setParameter("qt", qt)
                 .setParameter("dl", dl)

@@ -1,25 +1,31 @@
 package com.cygnus.ipoten.quiz_session.service;
 
-import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
-import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_analytics.controller.response_form.QuizTimelineResponseForm;
 import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_question.entity.QuizTextAnswer;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
-import com.cygnus.ipoten.quiz_session.service.response.InitialsQuestionsResponse;
-import com.cygnus.ipoten.quiz_session_answer.entity.QuizSessionAnswer;
-import com.cygnus.ipoten.quiz_session.entity.QuizSession;
-import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
-import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
-import com.cygnus.ipoten.quiz_analytics.controller.response_form.QuizTimelineResponseForm;
+import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionItemsPageResponseForm;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionListResponseForm;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionReviewResponseForm;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionSummaryResponseForm;
-import com.cygnus.ipoten.quiz_session_answer.repository.QuizSessionAnswerRepository;
+import com.cygnus.ipoten.quiz_session.entity.QuizSession;
+import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import com.cygnus.ipoten.quiz_session.repository.QuizSessionRepository;
 import com.cygnus.ipoten.quiz_session.repository.QuizSessionTimelineRepository;
+import com.cygnus.ipoten.quiz_session.service.response.InitialsQuestionsResponse;
+import com.cygnus.ipoten.quiz_session_answer.entity.QuizSessionAnswer;
+import com.cygnus.ipoten.quiz_session_answer.repository.QuizSessionAnswerRepository;
+import com.cygnus.ipoten.quiz_set.entity.QuizSet;
+import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
+import com.cygnus.ipoten.quiz_set.repository.QuizSetRepository;
 import com.cygnus.ipoten.quiz_set.service.QuizSetQueryService;
+import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -45,9 +51,12 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     private final QuizSessionRepository quizSessionRepository;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizChoiceRepository quizChoiceRepository;
+    private final QuizSetRepository quizSetRepository;
     private final QuizSessionAnswerRepository quizSessionAnswerRepository;
+    private final QuizTextAnswerRepository quizTextAnswerRepository;
     private final QuizSessionTimelineRepository timelineRepository;
     private final QuizSetQueryService quizSetQueryService;
+    private final TermCategoryRepository termCategoryRepository;
     private final ObjectMapper objectMapper;
 
     private static final Duration EXPIRE_AFTER = Duration.ofMinutes(60);
@@ -109,6 +118,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
         // 운영 안전: 제출 완료 + includeAnswers=true 일 때만 공개
         boolean canReveal = (effective == SessionStatus.SUBMITTED) && includeAnswers;
+        boolean canRevealExplanation = (effective == SessionStatus.SUBMITTED);
 
         List<SessionItemsPageResponseForm.Item> items = new ArrayList<>();
 
@@ -134,6 +144,16 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             } else {
                 List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
 
+                if (qt == QuestionType.OX) {
+                    qChoices = qChoices.stream()
+                            .sorted(Comparator.comparing((QuizChoice c) -> {
+                                String t = Optional.ofNullable(c.getChoiceText()).orElse("")
+                                        .trim().toUpperCase();
+                                return "O".equals(t) ? 0 : "X".equals(t) ? 1 : 2;
+                            }).thenComparingLong(QuizChoice::getId))
+                            .toList();
+                }
+
                 QuizChoice answerChoice = canReveal
                         ? qChoices.stream().filter(QuizChoice::isAnswer).findFirst().orElse(null)
                         : null;
@@ -155,7 +175,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .questionText(question.getQuestionText())
                     .correctChoiceId(correctChoiceId)
                     .expectedText(expectedText)
-                    .explanation(canReveal ? question.getExplanation() : null)
+                    .explanation(canRevealExplanation ? question.getExplanation() : null)
                     .choices(choiceList)
                     .build());
         }
@@ -189,9 +209,12 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 ? quizSessionRepository.findByAccount_Id(accountId, pr)
                 : quizSessionRepository.findByAccount_IdAndSessionStatus(accountId, status, pr);
 
+        var sessions = page.getContent();
+        Map<Long, String> setTitleById = loadSetTitleById(sessions);
+
         // 매핑
         List<SessionListResponseForm.Item> items = new ArrayList<>(page.getNumberOfElements());
-        for (QuizSession s : page.getContent()) {
+        for (QuizSession s : sessions) {
             // 총 문항 수: total 저장값 우선, 없으면 스냅샷 크기
             Integer total = Optional.ofNullable(s.getTotal())
                     .orElse(Optional.ofNullable(s.getSnapshotQuestionIds()).map(List::size).orElse(0));
@@ -206,7 +229,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 correct = c;
                 if (total != null && total > 0) {
                     score = c * 100.0 / total;              // 소수 가능
-                    scorePercent = (int) Math.round(score);  // 퍼센트 정수
+                    scorePercent = (int) Math.round(score); // 퍼센트 정수
                 }
             }
 
@@ -220,12 +243,11 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .startedAt(s.getStartedAt())
                     .submittedAt(s.getSubmittedAt())
                     .score(score)
-                    .scorePercent(scorePercent) // 추가 필드
-                    .title(Optional.ofNullable(s.getQuizSet()).map(qs -> qs.getTitle()).orElse(null))
+                    .scorePercent(scorePercent)
+                    .title(resolveTitle(s, setTitleById))
                     .build());
         }
 
-        // 응답
         return SessionListResponseForm.builder()
                 .items(items)
                 .build();
@@ -261,6 +283,21 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         Map<Long, List<QuizChoice>> choicesByQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
+        List<Long> initialsQids = qById.values().stream()
+                .filter(qq -> qq.getQuestionType() == QuestionType.INITIALS)
+                .map(QuizQuestion::getId)
+                .toList();
+
+        // INITIALS expectedText를 quiz_text_answer에서 가져오기
+        Map<Long, String> expectedTextByQid = initialsQids.isEmpty()
+                ? Map.of()
+                : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                .collect(Collectors.toMap(
+                        a -> a.getQuizQuestion().getId(),
+                        QuizTextAnswer::getAnswerText,
+                        (oldV, newV) -> oldV
+                ));
+
         List<QuizSessionAnswer> answers = quizSessionAnswerRepository.findByQuizSession_Id(sessionId);
         Map<Long, QuizSessionAnswer> ansByQ = answers.stream()
                 .collect(Collectors.toMap(a -> a.getQuizQuestion().getId(), a -> a, (a, b) -> a, LinkedHashMap::new));
@@ -272,29 +309,58 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             QuizQuestion q = qById.get(qid);
             if (q == null) continue;
 
-            List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
-            QuizChoice answerChoice = qChoices.stream().filter(QuizChoice::isAnswer).findFirst().orElse(null);
             QuizSessionAnswer my = ansByQ.get(qid);
-
-            Long myChoiceId = (my == null || my.getQuizChoice() == null) ? null : my.getQuizChoice().getId();
             boolean myCorrect = (my != null && my.isCorrect());
             if (myCorrect) correctCnt++;
 
-            List<SessionReviewResponseForm.Choice> optionList = qChoices.stream()
-                    .map(c -> SessionReviewResponseForm.Choice.builder()
-                            .id(c.getId())
-                            .text(c.getChoiceText())
-                            .answer(c.isAnswer())
-                            .build())
-                    .toList();
+            QuestionType qt = q.getQuestionType();
+            boolean isInitials = (qt == QuestionType.INITIALS);
+
+            Long myChoiceId = (my != null) ? my.getSubmittedChoiceId() : null;
+            String mySubmittedText = (my != null) ? my.getSubmittedText() : null;
+
+            // INITIALS expectedText
+            String expectedText = isInitials ? expectedTextByQid.get(qid) : null;
+
+            // choice 기반 데이터
+            List<SessionReviewResponseForm.Choice> optionList = List.of();
+            Long answerChoiceId = null;
+
+            if (!isInitials) {
+                List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
+
+                // OX는 보기 순서 고정
+                if (qt == QuestionType.OX) {
+                    qChoices = qChoices.stream()
+                            .sorted(Comparator.comparing((QuizChoice c) -> {
+                                String t = Optional.ofNullable(c.getChoiceText()).orElse("")
+                                        .trim().toUpperCase();
+                                return "O".equals(t) ? 0 : "X".equals(t) ? 1 : 2;
+                            }).thenComparingLong(QuizChoice::getId))
+                            .toList();
+                }
+
+                QuizChoice answerChoice = qChoices.stream().filter(QuizChoice::isAnswer).findFirst().orElse(null);
+                answerChoiceId = (answerChoice == null) ? null : answerChoice.getId();
+
+                optionList = qChoices.stream()
+                        .map(c -> SessionReviewResponseForm.Choice.builder()
+                                .id(c.getId())
+                                .text(c.getChoiceText())
+                                .answer(c.isAnswer())
+                                .build())
+                        .toList();
+            }
 
             items.add(SessionReviewResponseForm.Item.builder()
                     .quizQuestionId(qid)
-                    .questionType(q.getQuestionType())
+                    .questionType(qt)
                     .questionText(q.getQuestionText())
-                    .myChoiceId(myChoiceId)
+                    .myChoiceId(isInitials ? null : myChoiceId)
+                    .mySubmittedText(isInitials ? mySubmittedText : null)
+                    .expectedText(expectedText)
                     .correct(myCorrect)
-                    .answerChoiceId(answerChoice == null ? null : answerChoice.getId())
+                    .answerChoiceId(answerChoiceId)
                     .explanation(q.getExplanation())
                     .termId(Optional.ofNullable(q.getTerm()).map(t -> t.getId()).orElse(null))
                     .termTitle(Optional.ofNullable(q.getTerm()).map(t -> t.getTitle()).orElse(null))
@@ -307,6 +373,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         int total = qids.size();
         return SessionReviewResponseForm.builder()
                 .sessionId(s.getId())
+                .status(s.getSessionStatus())
                 .total(total)
                 .correct(correctCnt)
                 .items(items)
@@ -319,6 +386,18 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         var pr = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(50, size)));
         var pageRes = timelineRepository.findTimelinePage(accountId, nullIfBlank(q), part, pr);
         var sessions = pageRes.getContent();
+
+        Map<Long, String> setTitleById = loadSetTitleById(sessions);
+
+        Set<Long> catIds = sessions.stream()
+                .map(this::resolveTermCategoryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, String> catNameById = catIds.isEmpty()
+                ? Map.of()
+                : termCategoryRepository.findAllById(catIds).stream()
+                .collect(Collectors.toMap(c -> c.getId(), c -> c.getName()));
 
         List<Long> ids = sessions.stream().map(QuizSession::getId).toList();
 
@@ -335,25 +414,26 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         }
 
         var items = sessions.stream().map(s -> {
-            var qs = s.getQuizSet();
+
             int total = Optional.ofNullable(s.getTotal())
                     .orElse(answersBySession.getOrDefault(s.getId(), 0));
             int correct = correctBySession.getOrDefault(s.getId(), 0);
 
             Instant when = (s.getSubmittedAt() != null) ? s.getSubmittedAt() : s.getStartedAt();
 
+            QuizSetType pt = Optional.ofNullable(s.getPartType()).orElse(QuizSetType.CHOICE);
+
+            Long termCategoryId = resolveTermCategoryId(s);
+            String categoryName = (termCategoryId != null) ? catNameById.get(termCategoryId) : null;
+
             return QuizTimelineResponseForm.Item.builder()
                     .id(s.getId())
-                    .title(qs != null ? qs.getTitle() : "제목없음")
-                    .partType(
-                            qs != null && qs.getQuizSetType() != null
-                                    ? qs.getQuizSetType().name()
-                                    : QuizSetType.CHOICE.name()
-                    )
+                    .title(resolveTitle(s, setTitleById))
+                    .partType(pt.name())
                     .date(when)
                     .correct(correct)
                     .total(total)
-                    .category(qs != null && qs.getTermCategory() != null ? qs.getTermCategory().getName() : null)
+                    .category(categoryName)
                     .build();
         }).toList();
 
@@ -374,22 +454,37 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 .retryRate(retryRounded)
                 .build();
 
-        var recentRaw = timelineRepository.findRecentRaw(accountId, 10);
-        var recent = recentRaw.stream()
-                .map(r -> {
-                    String whenStr;
-                    Object ts = r[1];
-                    if (ts instanceof java.time.Instant i) {
-                        whenStr = D.format(i);
-                    } else if (ts instanceof java.time.LocalDateTime ldt) {
-                        whenStr = D.format(ldt.atZone(KST).toInstant());
-                    } else if (ts instanceof java.time.ZonedDateTime zdt) {
-                        whenStr = D.format(zdt.toInstant());
+        var recentSessions = timelineRepository.findRecentSessions(accountId, 5);
+        Map<Long, String> recentSetTitleById = loadSetTitleById(recentSessions);
+
+        Set<Long> recentCatIds = recentSessions.stream()
+                .map(this::resolveTermCategoryId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        Map<Long, String> recentCatNameById = recentCatIds.isEmpty()
+                ? Map.of()
+                : termCategoryRepository.findAllById(recentCatIds).stream()
+                .collect(Collectors.toMap(c -> c.getId(), c -> c.getName()));
+
+        var recent = recentSessions.stream()
+                .map(s -> {
+                    Instant when = (s.getSubmittedAt() != null) ? s.getSubmittedAt() : s.getStartedAt();
+                    String whenStr = D.format(when);
+
+                    String label;
+                    if (s.getSourceType() == SessionSourceType.SET) {
+                        label = recentSetTitleById.getOrDefault(s.getSourceId(), "세트#" + s.getSourceId());
+                    } else if (s.getSourceType() == SessionSourceType.TERM_CATEGORY) {
+                        label = recentCatNameById.getOrDefault(s.getSourceId(), "카테고리#" + s.getSourceId());
+                    } else if (s.getSourceType() == SessionSourceType.WORDBOOK) {
+                        label = "단어장#" + s.getSourceId();
                     } else {
-                        whenStr = String.valueOf(ts);
+                        label = "기타";
                     }
+
                     return QuizTimelineResponseForm.Recent.builder()
-                            .label(String.valueOf(r[0]))
+                            .label(label)
                             .when(whenStr)
                             .build();
                 })
@@ -411,14 +506,20 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         if (session.getSeedMode() != SeedMode.DAILY)
             throw new IllegalArgumentException("DAILY only");
 
-        if (session.getQuizSet() == null || session.getQuizSet().getQuizSetType() != QuizSetType.INITIALS)
+        if (session.getSourceType() != SessionSourceType.SET)
+            throw new IllegalArgumentException("SET only");
+
+        if (session.getPartType() != QuizSetType.INITIALS)
             throw new IllegalArgumentException("INITIALS only");
+
+        Long setId = session.getSourceId();
+        if (setId == null) throw new IllegalStateException("SET 세션인데 sourceId가 비었습니다.");
 
         // 1) 세션 스냅샷(id 리스트) 뽑기
         var qids = extractQuestionIds(session);
 
         // 2) 세트의 전체 INITIALS 문항 엔티티 조회
-        var all = quizSetQueryService.findInitialsQuestionsBySetId(session.getQuizSet().getId());
+        var all = quizSetQueryService.findInitialsQuestionsBySetId(setId);
 
         // 3) 스냅샷 순서를 우선 보장
         var orderMap = new java.util.HashMap<Long, Integer>();
@@ -521,5 +622,39 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             log.warn("[initials] snapshot parse failed: {}", snap, e);
             return List.of();
         }
+    }
+
+    private Long resolveTermCategoryId(QuizSession s) {
+        if (s == null) return null;
+        if (s.getSourceType() == SessionSourceType.TERM_CATEGORY) {
+            return s.getSourceId();
+        }
+        return null; // SET/WORDBOOK 등은 여기서 카테고리로 단정하지 않음
+    }
+
+    private Map<Long, String> loadSetTitleById(List<QuizSession> sessions) {
+        Set<Long> setIds = sessions.stream()
+                .filter(s -> s.getSourceType() == SessionSourceType.SET)
+                .map(QuizSession::getSourceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (setIds.isEmpty()) return Map.of();
+
+        return quizSetRepository.findAllById(setIds).stream()
+                .collect(Collectors.toMap(QuizSet::getId, QuizSet::getTitle));
+    }
+
+    private String resolveTitle(QuizSession s, Map<Long, String> setTitleById) {
+        if (s.getSourceType() == SessionSourceType.SET) {
+            return setTitleById.getOrDefault(s.getSourceId(), "세트#" + s.getSourceId());
+        }
+        if (s.getSourceType() == SessionSourceType.TERM_CATEGORY) {
+            return "카테고리 퀴즈";
+        }
+        if (s.getSourceType() == SessionSourceType.WORDBOOK) {
+            return "단어장 퀴즈";
+        }
+        return "제목없음";
     }
 }

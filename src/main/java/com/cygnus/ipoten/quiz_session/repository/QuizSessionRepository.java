@@ -1,6 +1,5 @@
 package com.cygnus.ipoten.quiz_session.repository;
 
-import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import org.springframework.data.domain.Page;
@@ -96,11 +95,11 @@ public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> 
 
     // 최대 attemptNo 조회
     @Query("""
-        select coalesce(max(s.attemptNo), 0)
-        from QuizSession s
-        where s.account.id = :accountId
-          and s.quizSet.id = :quizSetId
+      select coalesce(max(qs.attemptNo), 0)
+      from QuizSession qs
+      where qs.account.id = :accountId
+        and qs.sourceKey = :sourceKey
     """)
-    int findMaxAttemptNo(@Param("accountId") Long accountId,
-                         @Param("quizSetId") Long quizSetId);
+    int findMaxAttemptNoBySourceKey(@Param("accountId") Long accountId,
+                                    @Param("sourceKey") String sourceKey);
 }

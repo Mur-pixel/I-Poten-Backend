@@ -23,33 +23,32 @@ public interface QuizSessionAnswerRepository extends CrudRepository<QuizSessionA
         select distinct sa.quizQuestion.id
         from QuizSessionAnswer sa
         where sa.quizSession.id = :sessionId
-        and sa.isCorrect = false
+          and sa.isCorrect = false
     """)
     List<Long> findWrongQuestionIds(@Param("sessionId") Long sessionId);
 
     @Query("""
-    select distinct q.term.id
-    from QuizSessionAnswer sa
-    join sa.quizQuestion q
-    where sa.quizSession.account.id = :accountId
-      and sa.submittedAt >= :since
-""")
+        select distinct q.term.id
+        from QuizSessionAnswer sa
+        join sa.quizQuestion q
+        where sa.quizSession.account.id = :accountId
+          and sa.submittedAt >= :since
+    """)
     List<Long> findRecentTermIdsByAccountSince(
             @Param("accountId") Long accountId,
-            @Param("since") LocalDateTime since
+            @Param("since") Instant since
     );
 
     @Query("""
-        select distinct c.choiceText
+        select distinct sa.submittedChoiceText
         from QuizSessionAnswer sa
-        join sa.quizChoice c
         where sa.quizSession.account.id = :accountId
-            and sa.submittedAt >= :since
-            and c.choiceText is not null
+          and sa.submittedAt >= :since
+          and sa.submittedChoiceText is not null
     """)
     List<String> findRecentChoiceTextsByAccountSince(
             @Param("accountId") Long accountId,
-            @Param("since") LocalDateTime since
+            @Param("since") Instant since
     );
     List<QuizSessionAnswer> findByQuizSession_Id(Long sessionId);
 }

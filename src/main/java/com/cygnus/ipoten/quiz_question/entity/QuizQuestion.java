@@ -1,7 +1,6 @@
 package com.cygnus.ipoten.quiz_question.entity;
 
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
-import com.cygnus.ipoten.quiz_set.entity.QuizSet;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
@@ -17,7 +16,6 @@ import lombok.Setter;
 @Table(
         name = "quiz_question",
         indexes = {
-                @Index(name = "idx_quiz_question_set", columnList = "quiz_set_id"),
                 @Index(name = "idx_quiz_question_category", columnList = "term_category_id"),
                 @Index(name = "idx_quiz_question_term", columnList = "term_id")
         }
@@ -37,11 +35,6 @@ public class QuizQuestion {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "term_category_id")
     private TermCategory termCategory;
-
-    /** 소속 세트(FK) */
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "quiz_set_id", nullable = false)
-    private QuizSet quizSet;
 
     /** 문제 유형 */
     @Setter
@@ -75,7 +68,6 @@ public class QuizQuestion {
             QuestionType questionType,
             DifficultyLevel difficulty,
             String questionText,
-            QuizSet quizSet,
             String explanation
     ) {
         this.term = term;
@@ -83,21 +75,7 @@ public class QuizQuestion {
         this.questionType = questionType;
         this.difficulty = difficulty;
         this.questionText = questionText;
-        this.quizSet = quizSet;
         this.explanation = explanation;
-    }
-
-    /** 텍스트 정답형 문제 생성용 (정답 자체는 QuizTextAnswer로 따로) */
-    public static QuizQuestion textAnswer(
-            Term term,
-            TermCategory termCategory,
-            QuestionType questionType,
-            DifficultyLevel difficulty,
-            String questionText,
-            QuizSet quizSet,
-            String explanation
-    ) {
-        return new QuizQuestion(term, termCategory, questionType, difficulty, questionText, quizSet, explanation);
     }
 
     public QuizQuestion(
@@ -107,7 +85,6 @@ public class QuizQuestion {
             DifficultyLevel difficulty,
             String questionText,
             String answerText,
-            QuizSet quizSet,
             String explanation
     ) {
         this.term = term;
@@ -115,8 +92,11 @@ public class QuizQuestion {
         this.questionType = questionType;
         this.difficulty = difficulty;
         this.questionText = questionText;
-        this.quizSet = quizSet;
         this.explanation = explanation;
+
+        if (answerText != null && !answerText.isBlank()) {
+            this.upsertTextAnswer(answerText);
+        }
     }
 
     /** AutoQuizGenerator/기본 생성용(answerText, explanation 없이) */
@@ -125,13 +105,23 @@ public class QuizQuestion {
             TermCategory termCategory,
             QuestionType questionType,
             DifficultyLevel difficulty,
-            String questionText,
-            QuizSet quizSet
+            String questionText
     ) {
-        this(term, termCategory, questionType, difficulty, questionText, null, quizSet, null);
+        this(term, termCategory, questionType, difficulty, questionText, null);
     }
 
-    public void setQuizSet(QuizSet quizSet) {
-        this.quizSet = quizSet;
+    public QuizTextAnswer upsertTextAnswer(String answerText) {
+        if (answerText == null || answerText.isBlank()) {
+            throw new IllegalArgumentException("텍스트 정답은 필수입니다.");
+        }
+
+        if (this.quizTextAnswer == null) {
+            QuizTextAnswer created = QuizTextAnswer.create(this, answerText);
+            this.quizTextAnswer = created;
+            return created;
+        }
+
+        this.quizTextAnswer.changeAnswerText(answerText);
+        return this.quizTextAnswer;
     }
 }

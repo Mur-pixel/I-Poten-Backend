@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_session_scope.value_objects;
 
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_set.service.request.CreateQuizSetByCategoryRequest;
 import lombok.Value;
 
@@ -28,6 +29,9 @@ public class QuestionTypeScope {
     CreateQuizSetByCategoryRequest.QuestionType type;
 
     public static QuestionTypeScope fromRaw(String raw) {
+        if (raw == null || raw.isBlank() || "mix".equalsIgnoreCase(raw)) {
+            return new QuestionTypeScope(CreateQuizSetByCategoryRequest.QuestionType.MIX);
+        }
         return new QuestionTypeScope(CreateQuizSetByCategoryRequest.QuestionType.from(raw));
     }
 
@@ -37,5 +41,15 @@ public class QuestionTypeScope {
 
     public CreateQuizSetByCategoryRequest.QuestionType forCategory() {
         return type;
+    }
+
+    public QuestionType toEntityOrNull() {
+        if (isMix()) return null;
+        return switch (type) {
+            case CHOICE -> com.cygnus.ipoten.quiz_question.entity.enums.QuestionType.CHOICE;
+            case OX -> com.cygnus.ipoten.quiz_question.entity.enums.QuestionType.OX;
+            case INITIALS -> com.cygnus.ipoten.quiz_question.entity.enums.QuestionType.INITIALS;
+            default -> null;
+        };
     }
 }
