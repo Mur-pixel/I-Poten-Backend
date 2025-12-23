@@ -199,13 +199,18 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         Map<Long, QuizChoice> cMap = quizChoiceRepository.findAllById(choiceIds)
                 .stream().collect(Collectors.toMap(QuizChoice::getId, c -> c));
 
-        // INITIALS 정답 텍스트 배치 조회 (너 구조 유지: QuizTextAnswer.id == quizQuestionId)
+        // INITIALS 정답 텍스트 배치 조회
         List<Long> initialsQids = submittedQids.stream()
                 .filter(qid -> qMap.get(qid) != null && qMap.get(qid).getQuestionType() == QuestionType.INITIALS)
                 .toList();
 
-        Map<Long, String> expectedTextByQid = quizTextAnswerRepository.findAllById(initialsQids).stream()
-                .collect(Collectors.toMap(QuizTextAnswer::getId, QuizTextAnswer::getAnswerText));
+        Map<Long, String> expectedTextByQid =
+                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                QuizTextAnswer::getAnswerText,
+                                (a,b) -> a
+                        ));
 
         // 정답 보기들(선택형)
         Map<Long, List<Long>> correctIdsByQid = quizChoiceRepository.findByQuizQuestionIdIn(submittedQids)
@@ -235,7 +240,7 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
                         .orElseThrow(() -> new IllegalArgumentException("주관식 정답이 등록되지 않았습니다: " + q.getId()))
                         .trim();
 
-                boolean isCorrect = submitted.equals(expected);
+                boolean isCorrect = submitted.trim().equalsIgnoreCase(expected.trim());
                 if (isCorrect) correctCount++;
 
                 answersToSave.add(QuizSessionAnswer.forText(session, q, submitted, isCorrect, now));

@@ -120,6 +120,27 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         boolean canReveal = (effective == SessionStatus.SUBMITTED) && includeAnswers;
         boolean canRevealExplanation = (effective == SessionStatus.SUBMITTED);
 
+        // INITIALS expectedText(정답) 배치 조회는 "필요할 때만" + "한 번만"
+        Map<Long, String> expectedByQid = Map.of();
+
+        if (canReveal) {
+            List<Long> initialsIds = pageIds.stream()
+                    .filter(id -> {
+                        QuizQuestion q = byId.get(id);
+                        return q != null && q.getQuestionType() == QuestionType.INITIALS;
+                    })
+                    .toList();
+
+            if (!initialsIds.isEmpty()) {
+                expectedByQid = quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsIds).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                QuizTextAnswer::getAnswerText,
+                                (oldV, newV) -> oldV
+                        ));
+            }
+        }
+
         List<SessionItemsPageResponseForm.Item> items = new ArrayList<>();
 
         for (Long qid : pageIds) {
@@ -133,13 +154,13 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             Long correctChoiceId = null;
             String expectedText = null;
 
+            if (canReveal && expectedText == null) {
+                log.warn("[sessionItems] initials expectedText missing. qid={}", qid);
+            }
+
             if (isInitials) {
-                // INITIALS: choices 비움
                 if (canReveal) {
-                    // (현재 가정) 정답은 term.title
-                    expectedText = Optional.ofNullable(question.getTerm())
-                            .map(t -> t.getTitle())
-                            .orElse(null);
+                    expectedText = expectedByQid.get(qid);
                 }
             } else {
                 List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
@@ -310,8 +331,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             if (q == null) continue;
 
             QuizSessionAnswer my = ansByQ.get(qid);
-            boolean myCorrect = (my != null && my.isCorrect());
-            if (myCorrect) correctCnt++;
 
             QuestionType qt = q.getQuestionType();
             boolean isInitials = (qt == QuestionType.INITIALS);
@@ -340,7 +359,15 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                             .toList();
                 }
 
-                QuizChoice answerChoice = qChoices.stream().filter(QuizChoice::isAnswer).findFirst().orElse(null);
+                List<QuizChoice> answersChoiceList = qChoices.stream()
+                        .filter(QuizChoice::isAnswer)
+                        .toList();
+
+                if (answersChoiceList.size() > 1) {
+                    log.warn("[review] multiple correct choices. qid={}, answerIds={}", qid, answersChoiceList.stream().map(QuizChoice::getId).toList());
+                }
+
+                QuizChoice answerChoice = answersChoiceList.isEmpty() ? null : answersChoiceList.get(0);
                 answerChoiceId = (answerChoice == null) ? null : answerChoice.getId();
 
                 optionList = qChoices.stream()
@@ -352,6 +379,26 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                         .toList();
             }
 
+            boolean computedCorrect;
+
+            if (isInitials) {
+                String submitted = Optional.ofNullable(mySubmittedText).orElse("").trim();
+                String expected  = Optional.ofNullable(expectedText).orElse("").trim();
+
+                // 원하면 대소문자 무시/공백 정규화도 가능
+                computedCorrect = !submitted.isEmpty() && submitted.equalsIgnoreCase(expected);
+            } else {
+                computedCorrect = (myChoiceId != null && answerChoiceId != null && myChoiceId.equals(answerChoiceId));
+            }
+
+            if (computedCorrect) correctCnt++;
+
+            Boolean storedCorrect = (my != null) ? my.isCorrect() : null;
+            if (storedCorrect != null && storedCorrect.booleanValue() != computedCorrect) {
+                log.warn("[review mismatch] qid={}, storedCorrect={}, computedCorrect={}, myChoiceId={}, answerChoiceId={}, myText={}, expectedText={}",
+                        qid, storedCorrect, computedCorrect, myChoiceId, answerChoiceId, mySubmittedText, expectedText);
+            }
+
             items.add(SessionReviewResponseForm.Item.builder()
                     .quizQuestionId(qid)
                     .questionType(qt)
@@ -359,7 +406,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .myChoiceId(isInitials ? null : myChoiceId)
                     .mySubmittedText(isInitials ? mySubmittedText : null)
                     .expectedText(expectedText)
-                    .correct(myCorrect)
+                    .correct(computedCorrect)
                     .answerChoiceId(answerChoiceId)
                     .explanation(q.getExplanation())
                     .termId(Optional.ofNullable(q.getTerm()).map(t -> t.getId()).orElse(null))
