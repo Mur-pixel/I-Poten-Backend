@@ -151,6 +151,26 @@ public class QuizSessionController {
     }
 
     @Operation(
+            summary = "퀴즈 세션 리뷰용 조회",
+            description = "각 문항별 정답, 해설, 사용자의 선택 내역을 포함한 세션 리뷰 정보를 조회합니다."
+    )
+    @GetMapping("/me/quiz/sessions/{sessionId}/review")
+    public ResponseEntity<SessionReviewResponseForm> getSessionReview(
+            @Parameter(description = "리뷰를 조회할 세션 ID", example = "1")
+            @PathVariable Long sessionId,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        var review = quizSessionQueryService.getReview(sessionId, accountId);
+        return ResponseEntity.ok(review);
+    }
+
+    @Operation(
             summary = "오늘의 초성퀴즈 문항 조회",
             description = "DAILY/INITIALS 타입 세션에 대해, 세션 스냅샷 기준 3개의 초성 퀴즈 문항을 조회합니다."
     )
