@@ -28,6 +28,8 @@ public class SessionItemsPageResponseForm {
         private final QuestionType questionType;
         private final String questionText;
 
+        private final String initialsHint; // 초성 힌트(정답 노출X)
+
         private Long correctChoiceId;    // 선택형일 때만
         private String expectedText;     // 초성(INITIALS) 정답(제출/리뷰에서만)
         private String explanation;

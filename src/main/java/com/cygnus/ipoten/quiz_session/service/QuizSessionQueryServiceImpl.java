@@ -89,7 +89,8 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     @Override
     @Transactional
     public SessionItemsPageResponseForm getSessionItems(
-            Long sessionId, Long accountId, int offset, int limit, boolean includeAnswers) {
+            Long sessionId, Long accountId, int offset, int limit, boolean includeAnswers
+    ) {
 
         QuizSession quizsession =
                 quizSessionRepository.findByIdAndAccount_Id(sessionId, accountId)
@@ -103,45 +104,55 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             quizsession.touchActivity();
         }
 
+        // 1) 페이징
         List<Long> allIds = Optional.ofNullable(quizsession.getSnapshotQuestionIds()).orElse(List.of());
         int total = allIds.size();
         int from = Math.max(0, Math.min(offset, total));
         int to   = Math.max(from, Math.min(from + limit, total));
         List<Long> pageIds = allIds.subList(from, to);
 
-        Map<Long, QuizQuestion> byId = quizQuestionRepository.findAllById(pageIds)
-                .stream().collect(Collectors.toMap(QuizQuestion::getId, q -> q));
+        if (pageIds.isEmpty()) {
+            return SessionItemsPageResponseForm.builder()
+                    .sessionId(quizsession.getId())
+                    .offset(offset)
+                    .limit(limit)
+                    .total(total)
+                    .items(List.of())
+                    .build();
+        }
 
+        // 2) 질문 로드 + 순서 보존을 위해 map만 만들고, 실제 순서는 pageIds로 돌림
+        Map<Long, QuizQuestion> byId = quizQuestionRepository.findAllById(pageIds).stream()
+                .collect(Collectors.toMap(QuizQuestion::getId, q -> q));
+
+        // 3) 보기 로드
         List<QuizChoice> allChoices = quizChoiceRepository.findByQuizQuestionIdIn(pageIds);
         Map<Long, List<QuizChoice>> choicesByQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
-        // 운영 안전: 제출 완료 + includeAnswers=true 일 때만 공개
-        boolean canReveal = (effective == SessionStatus.SUBMITTED) && includeAnswers;
-        boolean canRevealExplanation = (effective == SessionStatus.SUBMITTED);
+        // 4) 노출 정책
+        boolean canRevealAnswers = (effective == SessionStatus.SUBMITTED) && includeAnswers; // 정답(OX/객관식 + 초성 expectedText)
+        boolean canRevealExplanation = (effective == SessionStatus.SUBMITTED);              // 해설은 제출 후만
 
-        // INITIALS expectedText(정답) 배치 조회는 "필요할 때만" + "한 번만"
-        Map<Long, String> expectedByQid = Map.of();
+        // 5) INITIALS 정답 텍스트는 "힌트 생성"을 위해서도 필요하므로 pageIds 내 INITIALS만 배치 조회
+        List<Long> initialsIds = pageIds.stream()
+                .filter(id -> {
+                    QuizQuestion q = byId.get(id);
+                    return q != null && q.getQuestionType() == QuestionType.INITIALS;
+                })
+                .toList();
 
-        if (canReveal) {
-            List<Long> initialsIds = pageIds.stream()
-                    .filter(id -> {
-                        QuizQuestion q = byId.get(id);
-                        return q != null && q.getQuestionType() == QuestionType.INITIALS;
-                    })
-                    .toList();
+        Map<Long, String> expectedByQid = initialsIds.isEmpty()
+                ? Map.of()
+                : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsIds).stream()
+                .collect(Collectors.toMap(
+                        a -> a.getQuizQuestion().getId(),
+                        QuizTextAnswer::getAnswerText,
+                        (oldV, newV) -> oldV
+                ));
 
-            if (!initialsIds.isEmpty()) {
-                expectedByQid = quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsIds).stream()
-                        .collect(Collectors.toMap(
-                                a -> a.getQuizQuestion().getId(),
-                                QuizTextAnswer::getAnswerText,
-                                (oldV, newV) -> oldV
-                        ));
-            }
-        }
-
-        List<SessionItemsPageResponseForm.Item> items = new ArrayList<>();
+        // 6) 아이템 구성
+        List<SessionItemsPageResponseForm.Item> items = new ArrayList<>(pageIds.size());
 
         for (Long qid : pageIds) {
             QuizQuestion question = byId.get(qid);
@@ -152,19 +163,30 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
             List<SessionItemsPageResponseForm.Choice> choiceList = List.of();
             Long correctChoiceId = null;
+
+            // 초성 힌트
+            String initialsHint = null;
+
+            // 제출/리뷰에서만 내려갈 정답 텍스트(초성 정답)
             String expectedText = null;
 
-            if (canReveal && expectedText == null) {
-                log.warn("[sessionItems] initials expectedText missing. qid={}", qid);
-            }
-
             if (isInitials) {
-                if (canReveal) {
-                    expectedText = expectedByQid.get(qid);
+                String ans = expectedByQid.get(qid);
+
+                // 힌트는 항상 내려줌(정답 텍스트가 아니라 초성만)
+                initialsHint = toInitialsHint(ans);
+
+                // 제출 완료 + includeAnswers=true 일 때만 정답 텍스트 노출
+                if (canRevealAnswers) {
+                    expectedText = ans;
+                    if (expectedText == null) {
+                        log.warn("[sessionItems] initials expectedText missing. qid={}", qid);
+                    }
                 }
             } else {
                 List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
 
+                // OX는 보기 순서 고정
                 if (qt == QuestionType.OX) {
                     qChoices = qChoices.stream()
                             .sorted(Comparator.comparing((QuizChoice c) -> {
@@ -175,7 +197,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                             .toList();
                 }
 
-                QuizChoice answerChoice = canReveal
+                QuizChoice answerChoice = canRevealAnswers
                         ? qChoices.stream().filter(QuizChoice::isAnswer).findFirst().orElse(null)
                         : null;
 
@@ -185,7 +207,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                         .map(c -> SessionItemsPageResponseForm.Choice.builder()
                                 .id(c.getId())
                                 .text(c.getChoiceText())
-                                .isAnswer(canReveal ? c.isAnswer() : null)
+                                .isAnswer(canRevealAnswers ? c.isAnswer() : null)
                                 .build())
                         .toList();
             }
@@ -194,6 +216,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .questionId(qid)
                     .questionType(qt)
                     .questionText(question.getQuestionText())
+                    .initialsHint(initialsHint)
                     .correctChoiceId(correctChoiceId)
                     .expectedText(expectedText)
                     .explanation(canRevealExplanation ? question.getExplanation() : null)
@@ -703,5 +726,43 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             return "단어장 퀴즈";
         }
         return "제목없음";
+    }
+
+    private static final char HANGUL_BASE = 0xAC00;
+    private static final char HANGUL_LAST = 0xD7A3;
+    private static final int  CHO_COUNT = 19;
+    private static final int  JUNG_COUNT = 21;
+    private static final int  JONG_COUNT = 28;
+    private static final int  SYLLABLE_BLOCK = JUNG_COUNT * JONG_COUNT; // 588
+
+    private static final String[] CHO = {
+            "ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"
+    };
+
+    private String toInitialsHint(String answerText) {
+        if (answerText == null || answerText.isBlank()) return null;
+
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < answerText.length(); i++) {
+            char ch = answerText.charAt(i);
+
+            if (Character.isWhitespace(ch)) {
+                sb.append(' ');
+                continue;
+            }
+
+            if (ch >= HANGUL_BASE && ch <= HANGUL_LAST) {
+                int syllableIndex = ch - HANGUL_BASE;
+                int choIndex = syllableIndex / SYLLABLE_BLOCK;
+                if (choIndex >= 0 && choIndex < CHO_COUNT) sb.append(CHO[choIndex]);
+                else sb.append(ch);
+            } else {
+                // 한글이 아니면 그대로(영문/숫자/기호)
+                sb.append(ch);
+            }
+        }
+
+        String out = sb.toString().trim();
+        return out.isEmpty() ? null : out;
     }
 }
