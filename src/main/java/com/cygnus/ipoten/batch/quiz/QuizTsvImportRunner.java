@@ -1,5 +1,9 @@
 package com.cygnus.ipoten.batch.quiz;
 
+import com.cygnus.ipoten.quiz_label.entity.QuizLabel;
+import com.cygnus.ipoten.quiz_label.entity.QuizQuestionLabel;
+import com.cygnus.ipoten.quiz_label.repository.QuizLabelRepository;
+import com.cygnus.ipoten.quiz_label.repository.QuizQuestionLabelRepository;
 import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz_question.entity.QuizTextAnswer;
@@ -37,11 +41,15 @@ public class QuizTsvImportRunner implements CommandLineRunner {
     private final TermCategoryRepository termCategoryRepository;
     private final TermRepository termRepository;
 
+    private final QuizLabelRepository quizLabelRepository;
+    private final QuizQuestionLabelRepository quizQuestionLabelRepository;
+
     private final TransactionTemplate txTemplate;
     private final EntityManager em;
 
     // row 단위 트랜잭션에서도 안전하게 쓰기 위해 "ID" 캐시
     private final Map<String, Long> termIdCache = new HashMap<>();
+    private final Map<String, Long> labelIdCache = new HashMap<>();
 
     @Override
     public void run(String... args) {
@@ -66,6 +74,7 @@ public class QuizTsvImportRunner implements CommandLineRunner {
 
     private void importQuestions(String quizPath) throws Exception {
         termIdCache.clear();
+        labelIdCache.clear();
 
         File file = new File(quizPath);
         if (!file.exists()) {
@@ -320,10 +329,8 @@ public class QuizTsvImportRunner implements CommandLineRunner {
                     "' (question_temp_key=" + qTempKey + ")");
         }
 
-        // 카테고리 resolve (없으면 null 허용)
         TermCategory termCategory = resolveCategory(row);
 
-        // termId 결정 (있으면 사용, 없으면 title로 생성 후 ID 확보)
         Long termId = row.getTermId();
         if (termId == null) {
             if (safe(row.getTermTitle()).isBlank()) {
@@ -331,20 +338,20 @@ public class QuizTsvImportRunner implements CommandLineRunner {
             }
             termId = resolveOrCreateTermId(row, termCategory);
         }
-
         if (termId == null) {
             throw new IllegalArgumentException("termId resolve 실패. question_temp_key=" + qTempKey);
         }
 
-        Term term = em.getReference(Term.class, termId);
-
-        // questionText 정규화 + 중복 스킵
+        // questionText 정규화 (중복판정과 동일하게)
         String questionText = nvl(row.getQuestionText(), "(빈 문제)").trim();
         questionText = questionText.replaceAll("\\s+", " ");
 
-        if (quizQuestionRepository.existsByQuestionTypeAndQuestionTextAndTerm_Id(type, questionText, termId)) {
-            log.info("[QUIZ-IMPORT] duplicate skip. termId={}, type={}, tempKey={}, text={}",
-                    termId, type, qTempKey, questionText);
+        // 중복이면 “라벨만 붙이고 종료”
+        Optional<QuizQuestion> existing =
+                quizQuestionRepository.findFirstByQuestionTypeAndQuestionTextAndTerm_Id(type, questionText, termId);
+
+        if (existing.isPresent()) {
+            applyLabels(existing.get(), row);
             return;
         }
 
@@ -359,9 +366,9 @@ public class QuizTsvImportRunner implements CommandLineRunner {
             }
         }
 
+        Term term = em.getReference(Term.class, termId);
         String explanation = safe(row.getExplanation());
 
-        // 문제 저장
         QuizQuestion q = new QuizQuestion(
                 term,
                 termCategory,
@@ -372,13 +379,15 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         );
         quizQuestionRepository.save(q);
 
-        // 타입별 정답/보기 저장
         switch (type) {
             case OX -> createOxChoices(q, row);
             case CHOICE -> createChoiceChoices(q, row);
             case INITIALS -> createTextAnswerRequired(q, row, type);
             default -> createTextAnswerOptional(q, row, type);
         }
+
+        // 새로 만든 경우에도 라벨 붙이기
+        applyLabels(q, row);
     }
 
     private void createOxChoices(QuizQuestion q, QuizImportRow row) {
@@ -462,5 +471,39 @@ public class QuizTsvImportRunner implements CommandLineRunner {
 
     private String safe(String s) {
         return s == null ? "" : s.trim();
+    }
+
+    private void applyLabels(QuizQuestion q, QuizImportRow row) {
+        Set<String> keys = new LinkedHashSet<>();
+        addLabelKey(keys, row.getLabel1Key());
+        addLabelKey(keys, row.getLabel2Key());
+        addLabelKey(keys, row.getLabel3Key());
+        addLabelKey(keys, row.getLabel4Key());
+
+        if (keys.isEmpty()) return;
+
+        for (String key : keys) {
+            Long labelId = labelIdCache.get(key);
+            QuizLabel label;
+
+            if (labelId != null) {
+                label = em.getReference(QuizLabel.class, labelId);
+            } else {
+                label = quizLabelRepository.findByKey(key)
+                        .orElseGet(() -> quizLabelRepository.save(QuizLabel.create(key)));
+                labelIdCache.put(key, label.getId());
+            }
+
+            // unique constraint(quiz_question_id, label_id) 있으니 중복 방지
+            if (!quizQuestionLabelRepository.existsByQuizQuestion_IdAndQuizLabel_Id(q.getId(), label.getId())) {
+                quizQuestionLabelRepository.save(QuizQuestionLabel.create(q, label));
+            }
+        }
+    }
+
+    private void addLabelKey(Set<String> keys, String raw) {
+        if (raw == null) return;
+        String k = raw.trim().toLowerCase(Locale.ROOT);
+        if (!k.isBlank()) keys.add(k);
     }
 }

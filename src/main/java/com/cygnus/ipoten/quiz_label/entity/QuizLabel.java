@@ -31,14 +31,13 @@ public class QuizLabel {
     @Column(name = "created_at", updatable = false, nullable = false)
     private Instant createdAt;
 
-    private QuizLabel(String key, String name) {
+    private QuizLabel(String key) {
         this.key = normalizeKey(key);
     }
 
-    public static QuizLabel create(String key, String name) {
+    public static QuizLabel create(String key) {
         if (key == null || key.isBlank()) throw new IllegalArgumentException("QuizLabel.key는 필수입니다.");
-        if (name == null || name.isBlank()) throw new IllegalArgumentException("QuizLabel.name은 필수입니다.");
-        return new QuizLabel(key, name);
+        return new QuizLabel(key);
     }
 
     private static String normalizeKey(String key) {

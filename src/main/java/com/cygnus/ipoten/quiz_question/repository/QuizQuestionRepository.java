@@ -10,6 +10,7 @@ import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long> {
 
@@ -159,6 +160,10 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
             QuestionType questionType,
             String questionText,
             Long termId
+    );
+
+    Optional<QuizQuestion> findFirstByQuestionTypeAndQuestionTextAndTerm_Id(
+            QuestionType type, String questionText, Long termId
     );
 
     @Query("""
