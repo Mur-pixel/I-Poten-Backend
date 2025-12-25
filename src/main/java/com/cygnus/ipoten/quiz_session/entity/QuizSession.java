@@ -113,7 +113,7 @@ public class QuizSession {
     private Instant lastActivityAt;
 
     public void changeTitle(String title) {
-        this.title = title;
+        this.title = normalizeTitle(title);
     }
 
     private String normalizeTitle(String raw) {

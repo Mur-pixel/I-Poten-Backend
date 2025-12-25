@@ -22,18 +22,25 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
     @Override
     public Page<QuizSession> findTimelinePage(Long accountId, String q, QuizSetType part, Pageable pageable) {
 
-        String base =
-                " FROM QuizSession s " +
-                        " WHERE s.account.id = :accountId " +
-                        " AND s.sessionStatus = :submitted " +
-                        (part != null ? " AND s.partType = :part " : "");
+        boolean hasQ = (q != null && !q.isBlank());
 
-        String jpql = "SELECT s " + base + " ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
+        String where =
+                " WHERE s.account.id = :accountId " +
+                        " AND s.sessionStatus = :submitted " +
+                        (part != null ? " AND s.partType = :part " : "") +
+                        (hasQ ? " AND lower(coalesce(s.title,'')) like :q " : "");
+
+        String jpql =
+                "SELECT s FROM QuizSession s " +
+                        "LEFT JOIN FETCH s.parentSession p " +
+                        where +
+                        " ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
+
         TypedQuery<QuizSession> dataQ = em.createQuery(jpql, QuizSession.class)
                 .setParameter("accountId", accountId)
                 .setParameter("submitted", SessionStatus.SUBMITTED);
 
-        String countJpql = "SELECT COUNT(s) " + base;
+        String countJpql = "SELECT COUNT(s) FROM QuizSession s " + where;
         TypedQuery<Long> cntQ = em.createQuery(countJpql, Long.class)
                 .setParameter("accountId", accountId)
                 .setParameter("submitted", SessionStatus.SUBMITTED);
@@ -41,6 +48,12 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
         if (part != null) {
             dataQ.setParameter("part", part);
             cntQ.setParameter("part", part);
+        }
+
+        if (hasQ) {
+            String like = "%" + q.toLowerCase() + "%";
+            dataQ.setParameter("q", like);
+            cntQ.setParameter("q", like);
         }
 
         dataQ.setFirstResult((int) pageable.getOffset());

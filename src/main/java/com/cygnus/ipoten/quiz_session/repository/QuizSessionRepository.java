@@ -21,8 +21,8 @@ public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> 
             "WHERE u.account.id = :accountId " +
             "AND u.startedAt BETWEEN :start AND :end")
     long countMonthlyByAccountId(@Param("accountId") Long accountId,
-                                 @Param("start") LocalDateTime start,
-                                 @Param("end") LocalDateTime end);
+                                 @Param("start") Instant start,
+                                 @Param("end") Instant end);
 
     Optional<QuizSession> findByIdAndAccount_Id(Long id, Long accountId);
 

@@ -254,26 +254,27 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 : quizSessionRepository.findByAccount_IdAndSessionStatus(accountId, status, pr);
 
         var sessions = page.getContent();
-        Map<Long, String> setTitleById = loadSetTitleById(sessions);
+
+        Map<Long, String> setTitleById = loadSetTitleByIdIncludingAncestors(sessions);
+        Map<Long, String> catNameById  = loadCatNameByIdIncludingAncestors(sessions);
 
         // 매핑
         List<SessionListResponseForm.Item> items = new ArrayList<>(page.getNumberOfElements());
         for (QuizSession s : sessions) {
-            // 총 문항 수: total 저장값 우선, 없으면 스냅샷 크기
             Integer total = Optional.ofNullable(s.getTotal())
                     .orElse(Optional.ofNullable(s.getSnapshotQuestionIds()).map(List::size).orElse(0));
 
-            // 제출된 세션만 정답 수/점수 계산
             Integer correct = null;
             Double score = null;
             Integer scorePercent = null;
+
             if (s.getSessionStatus() == SessionStatus.SUBMITTED) {
                 List<QuizSessionAnswer> ans = quizSessionAnswerRepository.findByQuizSession_Id(s.getId());
                 int c = (int) ans.stream().filter(QuizSessionAnswer::isCorrect).count();
                 correct = c;
                 if (total != null && total > 0) {
-                    score = c * 100.0 / total;              // 소수 가능
-                    scorePercent = (int) Math.round(score); // 퍼센트 정수
+                    score = c * 100.0 / total;
+                    scorePercent = (int) Math.round(score);
                 }
             }
 
@@ -288,7 +289,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .submittedAt(s.getSubmittedAt())
                     .score(score)
                     .scorePercent(scorePercent)
-                    .title(resolveTitle(s, setTitleById))
+                    .title(resolveTitle(s, setTitleById, catNameById))
                     .build());
         }
 
@@ -457,18 +458,31 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         var pageRes = timelineRepository.findTimelinePage(accountId, nullIfBlank(q), part, pr);
         var sessions = pageRes.getContent();
 
-        Map<Long, String> setTitleById = loadSetTitleById(sessions);
+        // SET 제목: 현재/부모(SET)까지 포함해서 로딩
+        Map<Long, String> setTitleById = loadSetTitleByIdIncludingAncestors(sessions);
 
-        Set<Long> catIds = sessions.stream()
-                .map(this::resolveTermCategoryId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+        // 카테고리명: 현재/부모(TERM_CATEGORY)까지 포함해서 로딩
+        Set<Long> catIds = new HashSet<>();
+        for (QuizSession s : sessions) {
+            if (s.getSourceType() == SessionSourceType.TERM_CATEGORY && s.getSourceId() != null) {
+                catIds.add(s.getSourceId());
+            }
+            QuizSession p = s.getParentSession();
+            if (p != null && p.getSourceType() == SessionSourceType.TERM_CATEGORY && p.getSourceId() != null) {
+                catIds.add(p.getSourceId());
+            }
+        }
 
         Map<Long, String> catNameById = catIds.isEmpty()
                 ? Map.of()
                 : termCategoryRepository.findAllById(catIds).stream()
-                .collect(Collectors.toMap(c -> c.getId(), c -> c.getName()));
+                .collect(Collectors.toMap(
+                        c -> c.getId(),
+                        c -> c.getName(),
+                        (a, b) -> a
+                ));
 
+        // 정답/응답 수 집계(페이지에 있는 세션들)
         List<Long> ids = sessions.stream().map(QuizSession::getId).toList();
 
         Map<Long, Integer> correctBySession = new HashMap<>();
@@ -483,6 +497,35 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             }
         }
 
+        // 타임라인 타이틀 결정(부모 세션 기준 포함)
+        // - 커스텀 타이틀 있으면 그걸 우선
+        // - SET이면 setTitleById
+        // - TERM_CATEGORY면 catNameById (없으면 "카테고리 퀴즈")
+        // - WORDBOOK/기타는 기존 규칙
+        java.util.function.Function<QuizSession, String> timelineTitleOf = (QuizSession base) -> {
+            if (base == null) return "제목없음";
+
+            if (base.getTitle() != null && !base.getTitle().isBlank()) {
+                return base.getTitle().trim();
+            }
+
+            if (base.getSourceType() == SessionSourceType.SET) {
+                return setTitleById.getOrDefault(base.getSourceId(), "세트#" + base.getSourceId());
+            }
+
+            if (base.getSourceType() == SessionSourceType.TERM_CATEGORY) {
+                String name = (base.getSourceId() == null) ? null : catNameById.get(base.getSourceId());
+                return (name != null && !name.isBlank()) ? name : "카테고리 퀴즈";
+                // 원하면: return (name != null && !name.isBlank()) ? (name + " 퀴즈") : "카테고리 퀴즈";
+            }
+
+            if (base.getSourceType() == SessionSourceType.WORDBOOK) {
+                return "단어장 퀴즈";
+            }
+
+            return "제목없음";
+        };
+
         var items = sessions.stream().map(s -> {
 
             int total = Optional.ofNullable(s.getTotal())
@@ -493,17 +536,29 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
             QuizSetType pt = Optional.ofNullable(s.getPartType()).orElse(QuizSetType.CHOICE);
 
-            Long termCategoryId = resolveTermCategoryId(s);
-            String categoryName = (termCategoryId != null) ? catNameById.get(termCategoryId) : null;
+            // 카테고리(라벨칩) 표시용: 현재 세션이 TERM_CATEGORY일 때만
+            String categoryName = null;
+            if (s.getSourceType() == SessionSourceType.TERM_CATEGORY && s.getSourceId() != null) {
+                categoryName = catNameById.get(s.getSourceId());
+            }
+
+            boolean isRetry = (s.getParentSession() != null);
+            Long parentSessionId = isRetry ? s.getParentSession().getId() : null;
+
+            QuizSession root = resolveRootSession(s);
+            String title = timelineTitleOf.apply(root);
 
             return QuizTimelineResponseForm.Item.builder()
                     .id(s.getId())
-                    .title(resolveTitle(s, setTitleById))
+                    .title(title)
                     .partType(pt.name())
                     .date(when)
                     .correct(correct)
                     .total(total)
                     .category(categoryName)
+                    .isRetry(isRetry)
+                    .parentSessionId(parentSessionId)
+                    .sessionMode(s.getSessionMode())
                     .build();
         }).toList();
 
@@ -516,7 +571,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         double retryRate = (submitted > 0) ? (retry * 100.0 / submitted) : 0.0;
 
         int accuracyRounded = (int) Math.round(accuracy);
-        int retryRounded    = (int) Math.round(retryRate);
+        int retryRounded = (int) Math.round(retryRate);
 
         var summary = QuizTimelineResponseForm.Summary.builder()
                 .totalSets(submitted)
@@ -524,8 +579,9 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 .retryRate(retryRounded)
                 .build();
 
+        // 최근 이력
         var recentSessions = timelineRepository.findRecentSessions(accountId, 5);
-        Map<Long, String> recentSetTitleById = loadSetTitleById(recentSessions);
+        Map<Long, String> recentSetTitleById = loadSetTitleByIdIncludingAncestors(recentSessions);
 
         Set<Long> recentCatIds = recentSessions.stream()
                 .map(this::resolveTermCategoryId)
@@ -535,7 +591,11 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         Map<Long, String> recentCatNameById = recentCatIds.isEmpty()
                 ? Map.of()
                 : termCategoryRepository.findAllById(recentCatIds).stream()
-                .collect(Collectors.toMap(c -> c.getId(), c -> c.getName()));
+                .collect(Collectors.toMap(
+                        c -> c.getId(),
+                        c -> c.getName(),
+                        (a, b) -> a
+                ));
 
         var recent = recentSessions.stream()
                 .map(s -> {
@@ -633,8 +693,10 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     protected SessionStatus ensureCurrentStatus(QuizSession s) {
         SessionStatus current = s.getSessionStatus();
         if (current == SessionStatus.SUBMITTED) return current;
+        if (current == SessionStatus.EXPIRED) return current;
 
-        Instant last = Optional.ofNullable(s.getLastActivityAt()).orElse(Instant.EPOCH);
+        Instant last = Optional.ofNullable(s.getLastActivityAt())
+                .orElse(Optional.ofNullable(s.getStartedAt()).orElse(Instant.now()));
         if (last.plus(EXPIRE_AFTER).isBefore(Instant.now())) {
             // 메모리 엔티티 + DB 둘 다 만료로
             s.expire(); // 엔티티 상태 반영
@@ -702,12 +764,19 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         return null; // SET/WORDBOOK 등은 여기서 카테고리로 단정하지 않음
     }
 
-    private Map<Long, String> loadSetTitleById(List<QuizSession> sessions) {
-        Set<Long> setIds = sessions.stream()
-                .filter(s -> s.getSourceType() == SessionSourceType.SET)
-                .map(QuizSession::getSourceId)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
+    private Map<Long, String> loadSetTitleByIdIncludingAncestors(List<QuizSession> sessions) {
+        Set<Long> setIds = new HashSet<>();
+
+        for (QuizSession s : sessions) {
+            QuizSession cur = s;
+            int guard = 0;
+            while (cur != null && guard++ < 50) {
+                if (cur.getSourceType() == SessionSourceType.SET && cur.getSourceId() != null) {
+                    setIds.add(cur.getSourceId());
+                }
+                cur = cur.getParentSession();
+            }
+        }
 
         if (setIds.isEmpty()) return Map.of();
 
@@ -715,19 +784,43 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 .collect(Collectors.toMap(QuizSet::getId, QuizSet::getTitle));
     }
 
-    private String resolveTitle(QuizSession s, Map<Long, String> setTitleById) {
+    private Map<Long, String> loadCatNameByIdIncludingAncestors(List<QuizSession> sessions) {
+        Set<Long> catIds = new HashSet<>();
 
-        // 세션 커스텀 타이틀
+        for (QuizSession s : sessions) {
+            QuizSession cur = s;
+            int guard = 0;
+            while (cur != null && guard++ < 50) {
+                if (cur.getSourceType() == SessionSourceType.TERM_CATEGORY && cur.getSourceId() != null) {
+                    catIds.add(cur.getSourceId());
+                }
+                cur = cur.getParentSession();
+            }
+        }
+
+        if (catIds.isEmpty()) return Map.of();
+
+        return termCategoryRepository.findAllById(catIds).stream()
+                .collect(Collectors.toMap(
+                        c -> c.getId(),
+                        c -> c.getName(),
+                        (a, b) -> a
+                ));
+    }
+
+    private String resolveTitle(QuizSession s,
+                                Map<Long, String> setTitleById,
+                                Map<Long, String> catNameById) {
         if (s.getTitle() != null && !s.getTitle().isBlank()) {
             return s.getTitle().trim();
         }
 
-        // fallback: 소스 기반 기본 제목
         if (s.getSourceType() == SessionSourceType.SET) {
             return setTitleById.getOrDefault(s.getSourceId(), "세트#" + s.getSourceId());
         }
         if (s.getSourceType() == SessionSourceType.TERM_CATEGORY) {
-            return "카테고리 퀴즈";
+            String name = (s.getSourceId() == null) ? null : catNameById.get(s.getSourceId());
+            return (name != null && !name.isBlank()) ? name : "카테고리 퀴즈";
         }
         if (s.getSourceType() == SessionSourceType.WORDBOOK) {
             return "단어장 퀴즈";
@@ -771,5 +864,16 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
         String out = sb.toString().trim();
         return out.isEmpty() ? null : out;
+    }
+
+    private QuizSession resolveRootSession(QuizSession s) {
+        if (s == null) return null;
+        QuizSession cur = s;
+        int guard = 0;
+
+        while (cur.getParentSession() != null && guard++ < 50) {
+            cur = cur.getParentSession();
+        }
+        return cur;
     }
 }

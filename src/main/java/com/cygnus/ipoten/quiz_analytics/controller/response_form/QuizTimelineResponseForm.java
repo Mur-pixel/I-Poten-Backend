@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_analytics.controller.response_form;
 
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionMode;
 import lombok.*;
 
 import java.time.Instant;
@@ -36,6 +37,10 @@ public class QuizTimelineResponseForm {
         private int correct;        // 페이지 대상 세션의 정답 수
         private int total;          // 세션 총 문항 수
         private String category;    // 카테고리 이름
+
+        private Boolean isRetry;            // 부모 세션 있으면 true
+        private SessionMode sessionMode;    // FULL / WRONG_ONLY
+        private Long parentSessionId;       // 부모 세션 id
     }
 
     @Getter

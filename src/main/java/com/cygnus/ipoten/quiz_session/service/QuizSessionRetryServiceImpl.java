@@ -106,6 +106,12 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                 SeedMode.FIXED,
                 sessionSeed
         );
+
+        String inheritedTitle = inheritTitleFromAncestor(parent);
+        if (inheritedTitle != null) {
+            child.changeTitle(inheritedTitle);
+        }
+
         quizSessionRepository.save(child);
 
         // 8) 미리보기용 아이템 구성(보기 로딩, 순서 유지)
@@ -228,6 +234,12 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                 SeedMode.FIXED,
                 sessionSeed
         );
+
+        String inheritedTitle = inheritTitleFromAncestor(parent);
+        if (inheritedTitle != null) {
+            child.changeTitle(inheritedTitle);
+        }
+
         quizSessionRepository.save(child);
 
         // 8) 보기 로드
@@ -404,5 +416,17 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
         }
 
         return ordered;
+    }
+
+    /** 부모 체인에서 title이 있는 첫 title을 상속 */
+    private String inheritTitleFromAncestor(QuizSession parent) {
+        QuizSession cur = parent;
+        int guard = 0;
+        while (cur != null && guard++ < 50) {
+            String t = cur.getTitle();
+            if (t != null && !t.isBlank()) return t.trim();
+            cur = cur.getParentSession();
+        }
+        return null;
     }
 }
