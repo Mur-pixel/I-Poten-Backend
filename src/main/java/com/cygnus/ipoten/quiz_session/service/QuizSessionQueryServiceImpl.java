@@ -716,6 +716,13 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     }
 
     private String resolveTitle(QuizSession s, Map<Long, String> setTitleById) {
+
+        // 세션 커스텀 타이틀
+        if (s.getTitle() != null && !s.getTitle().isBlank()) {
+            return s.getTitle().trim();
+        }
+
+        // fallback: 소스 기반 기본 제목
         if (s.getSourceType() == SessionSourceType.SET) {
             return setTitleById.getOrDefault(s.getSourceId(), "세트#" + s.getSourceId());
         }

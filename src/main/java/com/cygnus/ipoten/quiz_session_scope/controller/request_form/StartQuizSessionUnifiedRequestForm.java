@@ -23,6 +23,10 @@ public class StartQuizSessionUnifiedRequestForm {
     )
     private String source;      // "wordbook" | "term_category" | "set"
 
+    @Size(max = 50, message = "title은 50자 이하여야 합니다.")
+    @JsonAlias({"title", "customTitle"})
+    private String customTitle;
+
     @JsonAlias({"wordbookId","wordbook_id"})
     private Long wordbookId;      // source=wordbook 일 때 필수
 

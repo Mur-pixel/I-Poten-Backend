@@ -45,8 +45,9 @@ public class QuizSessionController {
         if (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         try {
-            log.info("[unified] req source={}, setId={}, count={}",
-                    requestForm.getSource(), requestForm.getQuizSetId(), requestForm.getCount());
+            String customTitle = requestForm.getCustomTitle();
+            log.info("[unified] req source={}, setId={}, count={}, customTitle={}",
+                    requestForm.getSource(), requestForm.getQuizSetId(), requestForm.getCount(), requestForm.getCustomTitle());
 
             ScopeCondition condition = requestForm.toScopeCondition(accountId);
             log.info("[unified] source={}, setId={}, count={}, type={}, level={}, seedMode={}, fixedSeed={}",
@@ -54,7 +55,7 @@ public class QuizSessionController {
                     requestForm.getType(), requestForm.getLevel(),
                     requestForm.getSeedMode(), requestForm.getFixedSeed());
 
-            StartQuizSessionResponse started = quizScopeService.startScopedSession(accountId, condition);
+            StartQuizSessionResponse started = quizScopeService.startScopedSession(accountId, condition, customTitle);
             return ResponseEntity.status(HttpStatus.CREATED).body(CreateQuizSessionResponseForm.from(started));
 
         } catch (IllegalArgumentException e) {

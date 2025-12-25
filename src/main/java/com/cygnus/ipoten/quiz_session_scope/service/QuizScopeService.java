@@ -10,8 +10,8 @@ import java.util.List;
 public interface QuizScopeService {
 
     /** WORDBOOK / TERM_CATEGORY / JOB 범위 조건에 따라 세트 생성 + 세션 시작까지 한 번에 처리 */
-    StartQuizSessionResponse startScopedSession(Long accountId, ScopeCondition condition);
+    StartQuizSessionResponse startScopedSession(Long accountId, ScopeCondition condition, String customTitle);
 
     /** 이미 존재하는 세트(setId)에서 바로 세션 시작 */
-    StartQuizSessionResponse startFromSet(Long accountId, Long quizSetId, Integer count, String typeRaw, DifficultyLevel level, SeedPolicy seedPolicy);
+    StartQuizSessionResponse startFromSet(Long accountId, Long quizSetId, Integer count, String typeRaw, DifficultyLevel level, SeedPolicy seedPolicy, String customTitle);
 }

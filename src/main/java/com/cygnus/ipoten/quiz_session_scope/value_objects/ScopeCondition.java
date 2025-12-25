@@ -55,27 +55,50 @@ public class ScopeCondition {
     // 공통 시드 정책
     SeedPolicy seedPolicy;
 
+    String customTitle;
+
     public static ScopeCondition forWordbook(WordbookScope wordbookScope, SeedPolicy seedPolicy) {
+        return forWordbook(wordbookScope, seedPolicy, null);
+    }
+
+    public static ScopeCondition forWordbook(WordbookScope wordbookScope, SeedPolicy seedPolicy, String customTitle) {
         return new ScopeCondition(
                 SourceType.WORDBOOK,
                 wordbookScope,
                 null,
                 null,
-                seedPolicy
+                seedPolicy,
+                customTitle
         );
     }
 
     public static ScopeCondition forCategory(TermCategoryScope termCategoryScope, SeedPolicy seedPolicy) {
+        return forCategory(termCategoryScope, seedPolicy, null);
+    }
+
+    public static ScopeCondition forCategory(TermCategoryScope termCategoryScope, SeedPolicy seedPolicy, String customTitle) {
         return new ScopeCondition(
                 SourceType.TERM_CATEGORY,
                 null,
                 termCategoryScope,
                 null,
-                seedPolicy
+                seedPolicy,
+                customTitle
         );
     }
 
     public static ScopeCondition forSet(SetScope setScope, SeedPolicy seedPolicy) {
-        return new ScopeCondition(SourceType.SET, null, null, setScope, seedPolicy);
+        return forSet(setScope, seedPolicy, null);
+    }
+
+    public static ScopeCondition forSet(SetScope setScope, SeedPolicy seedPolicy, String customTitle) {
+        return new ScopeCondition(
+                SourceType.SET,
+                null,
+                null,
+                setScope,
+                seedPolicy,
+                customTitle
+        );
     }
 }

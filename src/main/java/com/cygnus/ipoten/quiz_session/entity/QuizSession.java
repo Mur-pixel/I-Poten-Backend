@@ -47,6 +47,9 @@ public class QuizSession {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;    // 응시 사용자
 
+    @Column(name = "title", length = 50)
+    private String title;
+
     /** WRONG_ONLY일 때 원본(전체) 세션을 가리킴 */
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "parent_session_id")
@@ -108,6 +111,18 @@ public class QuizSession {
 
     // 마지막 활동 시각(조회/답안 저장/제출 시 갱신)
     private Instant lastActivityAt;
+
+    public void changeTitle(String title) {
+        this.title = title;
+    }
+
+    private String normalizeTitle(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim().replaceAll("\\s+", " ").trim();
+        if (s.isBlank()) return null;
+        if (s.length() > 50) s = s.substring(0, 50);
+        return s;
+    }
 
     public void submit(int finalScore) {
         this.sessionStatus = SessionStatus.SUBMITTED;

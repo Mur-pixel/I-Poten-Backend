@@ -35,7 +35,9 @@ public class QuizScopeServiceImpl implements QuizScopeService {
 
     @Override
     @Transactional
-    public StartQuizSessionResponse startScopedSession(Long accountId, ScopeCondition condition) {
+    public StartQuizSessionResponse startScopedSession(Long accountId, ScopeCondition condition, String customTitle) {
+
+        String title = normalizeTitle(customTitle);
 
         if (condition == null) {
             throw new IllegalArgumentException("ScopeCondition은 필수입니다.");
@@ -73,7 +75,8 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         built.getQuizSetId(),
                         ids,
                         mode,
-                        seedValue
+                        seedValue,
+                        title
                 );
             }
 
@@ -92,7 +95,7 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                 boolean isMixByRaw = (rawType == null || "mix".equalsIgnoreCase(rawType));
 
                 if (isMixByScope || isMixByRaw) {
-                    return startFromCategoryMix(accountId, s, condition.getSeedPolicy());
+                    return startFromCategoryMix(accountId, s, condition.getSeedPolicy(), title);
                 }
 
                 int take = Math.max(1, Math.min(100, s.getCount()));
@@ -104,7 +107,7 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         : toQuestionTypeOrNull(s.getTypeRaw());
 
                 if (qt == null) {
-                    return startFromCategoryMix(accountId, s, condition.getSeedPolicy());
+                    return startFromCategoryMix(accountId, s, condition.getSeedPolicy(), title);
                 }
 
                 List<String> normalizedLabelKeys = normalizeLabelKeys(s.getLabelKeys());
@@ -149,7 +152,8 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         source,
                         picked,
                         mode,
-                        seedValue
+                        seedValue,
+                        title
                 );
             }
 
@@ -163,7 +167,8 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         ss.getCount(),
                         ss.getTypeRaw(),
                         ss.getLevel(),
-                        condition.getSeedPolicy()
+                        condition.getSeedPolicy(),
+                        title
                 );
             }
 
@@ -179,7 +184,8 @@ public class QuizScopeServiceImpl implements QuizScopeService {
             Integer count,
             String typeRaw,
             DifficultyLevel level,
-            SeedPolicy seedPolicy
+            SeedPolicy seedPolicy,
+            String customTitle
     ) {
         if (quizSetId == null) throw new IllegalArgumentException("quizSetId는 필수입니다.");
 
@@ -220,7 +226,8 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                 quizSetId,
                 picked,
                 mode,
-                seedValue
+                seedValue,
+                customTitle
         );
     }
 
@@ -277,13 +284,19 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         return x ^ (x >>> 31);
     }
 
-    /**
-     * TERM_CATEGORY MIX 생성
-     */
     private StartQuizSessionResponse startFromCategoryMix(
             Long accountId,
             TermCategoryScope s,
             SeedPolicy seedPolicy
+    ) {
+        return startFromCategoryMix(accountId, s, seedPolicy, null);
+    }
+
+    private StartQuizSessionResponse startFromCategoryMix(
+            Long accountId,
+            TermCategoryScope s,
+            SeedPolicy seedPolicy,
+            String customTitle
     ) {
         List<String> labelKeys = normalizeLabelKeys(s.getLabelKeys());
 
@@ -343,17 +356,6 @@ public class QuizScopeServiceImpl implements QuizScopeService {
 
         Collections.shuffle(picked, new Random(seedValue));
 
-        log.info("[MIX] pool sizes: choice={}, ox={}, initials={}",
-                choicePool.size(), oxPool.size(), initialsPool.size());
-
-        log.info("[MIX] picked type counts = {}",
-                quizQuestionRepository.countTypesByIds(picked)
-                        .stream()
-                        .map(r -> r[0] + ":" + r[1])
-                        .toList()
-        );
-
-        // MIX도 동일하게 SessionSource로 감싸서 startFromScope로 호출
         SessionSource source = SessionSource.of(
                 SessionSourceType.TERM_CATEGORY,
                 categoryId,
@@ -365,7 +367,8 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                 source,
                 picked,
                 mode,
-                seedValue
+                seedValue,
+                customTitle
         );
     }
 
@@ -408,5 +411,12 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         if (upper.contains("MIX")) return "mix";
 
         return r;
+    }
+
+    private static String normalizeTitle(String title) {
+        if (title == null) return null;
+        String s = title.trim();
+        if (s.isBlank()) return null;
+        return (s.length() > 40) ? s.substring(0, 40) : s;
     }
 }
