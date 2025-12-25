@@ -13,6 +13,12 @@ import java.util.List;
 @NoArgsConstructor
 public class QuizTimelineResponseForm {
 
+    public enum RetryKind {
+        RETRY_ALL,      // 세트 전체 재도전
+        WRONG_ONLY      // 틀린 문제만 다시 풀기
+    }
+
+
     @Getter
     @Setter
     @Builder
@@ -41,6 +47,9 @@ public class QuizTimelineResponseForm {
         private Boolean isRetry;            // 부모 세션 있으면 true
         private SessionMode sessionMode;    // FULL / WRONG_ONLY
         private Long parentSessionId;       // 부모 세션 id
+
+        private String originTitle;     // 원본(부모) 세트 제목 (없으면 title)
+        private RetryKind retryKind;    // RETRY_ALL / WRONG_ONLY (없으면 null)
     }
 
     @Getter

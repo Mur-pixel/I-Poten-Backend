@@ -14,6 +14,7 @@ import com.cygnus.ipoten.quiz_session.controller.response_form.SessionReviewResp
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionSummaryResponseForm;
 import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionMode;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import com.cygnus.ipoten.quiz_session.repository.QuizSessionRepository;
@@ -546,7 +547,21 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             Long parentSessionId = isRetry ? s.getParentSession().getId() : null;
 
             QuizSession root = resolveRootSession(s);
-            String title = timelineTitleOf.apply(root);
+
+            // title: "현재 세션" 기준 (재도전 커스텀 타이틀이 여기 들어감)
+            String title = timelineTitleOf.apply(s);
+
+            // originTitle: "원본(root)" 기준 (없으면 title로 폴백)
+            String originTitle = Optional.ofNullable(timelineTitleOf.apply(root)).orElse(title);
+
+            // retryKind: 부모 있을 때만 결정
+            QuizTimelineResponseForm.RetryKind retryKind = null;
+            if (isRetry) {
+                SessionMode mode = Optional.ofNullable(s.getSessionMode()).orElse(SessionMode.FULL);
+                retryKind = (mode == SessionMode.WRONG_ONLY)
+                        ? QuizTimelineResponseForm.RetryKind.WRONG_ONLY
+                        : QuizTimelineResponseForm.RetryKind.RETRY_ALL;
+            }
 
             return QuizTimelineResponseForm.Item.builder()
                     .id(s.getId())
@@ -559,6 +574,8 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .isRetry(isRetry)
                     .parentSessionId(parentSessionId)
                     .sessionMode(s.getSessionMode())
+                    .originTitle(originTitle)
+                    .retryKind(retryKind)
                     .build();
         }).toList();
 
