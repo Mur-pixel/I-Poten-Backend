@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
@@ -111,6 +112,15 @@ public class QuizSession {
 
     // 마지막 활동 시각(조회/답안 저장/제출 시 갱신)
     private Instant lastActivityAt;
+
+    @Column(name = "daily_ymd")
+    private LocalDate dailyYmd; // KST 기준 날짜
+
+    @Column(name = "daily_issue_type", length = 20)
+    private String dailyIssueType; // 예: GENERAL, FE, BE ...
+
+    @Column(name = "daily_question_type", length = 20)
+    private String dailyQuestionType; // 예: CHOICE, OX, INITIALS
 
     public void changeTitle(String title) {
         this.title = normalizeTitle(title);
@@ -267,5 +277,15 @@ public class QuizSession {
 
     public void touchActivity() {
         this.lastActivityAt = Instant.now();
+    }
+
+    public void markDaily(LocalDate ymd, String issueType, String questionType) {
+        if (ymd == null) throw new IllegalArgumentException("daily ymd required");
+        if (issueType == null || issueType.isBlank()) throw new IllegalArgumentException("daily issueType required");
+        if (questionType == null || questionType.isBlank()) throw new IllegalArgumentException("daily questionType required");
+
+        this.dailyYmd = ymd;
+        this.dailyIssueType = issueType.trim();
+        this.dailyQuestionType = questionType.trim();
     }
 }

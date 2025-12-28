@@ -11,7 +11,6 @@ import java.util.List;
 @RequiredArgsConstructor
 public class CreateQuizSessionResponseForm {
     private final Long sessionId;
-    private final Long quizSetId;
     private final List<Long> questionIds;
     private final List<Item> items;
 
@@ -59,7 +58,6 @@ public class CreateQuizSessionResponseForm {
 
         return new CreateQuizSessionResponseForm(
                 s.getSessionId(),
-                s.getQuizSetId(),
                 s.getQuestionIds(),
                 mapped
         );

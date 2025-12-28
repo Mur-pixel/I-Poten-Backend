@@ -14,4 +14,6 @@ public interface QuizScopeService {
 
     /** 이미 존재하는 세트(setId)에서 바로 세션 시작 */
     StartQuizSessionResponse startFromSet(Long accountId, Long quizSetId, Integer count, String typeRaw, DifficultyLevel level, SeedPolicy seedPolicy, String customTitle);
+
+    StartQuizSessionResponse loadSessionForPlay(Long accountId, Long sessionId);
 }

@@ -9,8 +9,8 @@ import com.cygnus.ipoten.quiz_session_scope.value_objects.SessionSource;
 import java.util.List;
 
 public interface QuizSessionAnswerService {
-    StartQuizSessionResponse startFromQuizSet(Long accountId, Long quizSetId, List<Long> questionIds, SeedMode seedMode, Long fixedSeed);
     StartQuizSessionResponse startFromQuizSet(Long accountId, Long quizSetId, List<Long> questionIds, SeedMode seedMode, Long fixedSeed, String customTitle);
     SubmitQuizSessionResponseForm submitSession(Long sessionId, Long accountId, SubmitQuizSessionRequestForm form);
     StartQuizSessionResponse startFromScope(Long accountId, SessionSource source, List<Long> pickedQuestionIds, SeedMode mode,long seedValue, String customTitle);
+    StartQuizSessionResponse loadForPlay(Long accountId, Long sessionId);
 }

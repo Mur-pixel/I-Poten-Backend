@@ -22,11 +22,25 @@ public class StartQuizSessionResponse {
         private final String explanation;       // null 허용
         private final Long correctChoiceId;     // null 허용
         private final List<Option> options;
+        private final String answerText;        // 초성 문제(INITIALS)의 경우 필수, 나머지는 null 허용
     }
 
     @Getter @RequiredArgsConstructor
     public static class Option {
         private final Long choiceId;
         private final String text;
+    }
+
+    public static StartQuizSessionResponse fromExisting(Long sessionId) {
+        return new StartQuizSessionResponse(sessionId, null, List.of(), List.of());
+    }
+
+    public static StartQuizSessionResponse fromExistingWithItems(
+            Long sessionId,
+            Long quizSetId,
+            List<Long> questionIds,
+            List<Item> items
+    ) {
+        return new StartQuizSessionResponse(sessionId, quizSetId, questionIds, items);
     }
 }

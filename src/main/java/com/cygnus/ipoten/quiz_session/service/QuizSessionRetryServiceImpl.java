@@ -7,6 +7,7 @@ import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
+import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
 import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionMode;
@@ -36,6 +37,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
     private final QuizQuestionRepository quizQuestionRepository;
     private final AccountRepository accountRepository;
     private final QuizChoiceRepository quizChoiceRepository;
+    private final QuizTextAnswerRepository quizTextAnswerRepository;
 
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -119,12 +121,45 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
         Map<Long, List<QuizChoice>> byQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
+        List<Long> initialsQids = wrongQuestionIds.stream()
+                .filter(id -> qMap.get(id) != null && qMap.get(id).getQuestionType() == QuestionType.INITIALS)
+                .toList();
+
+        Map<Long, String> answerTextByQid =
+                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                a -> a.getAnswerText(),
+                                (a,b) -> a
+                        ));
+
         long baseSeed = sessionSeed;
         Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
 
         List<StartQuizSessionResponse.Item> items = wrongQuestionIds.stream()
                 .map(qid -> {
                     QuizQuestion q = qMap.get(qid);
+
+                    if (q.getQuestionType() == QuestionType.INITIALS) {
+                        String answerText = Optional.ofNullable(answerTextByQid.get(qid))
+                                .map(String::trim)
+                                .orElse(null);
+
+                        if (answerText == null && answerText.isBlank()) {
+                            throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
+                        }
+
+                        return new StartQuizSessionResponse.Item(
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                q.getExplanation(),
+                                null,
+                                List.of(),
+                                answerText
+                        );
+                    }
+
                     List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
                     int optionCount = choices.size();
 
@@ -133,7 +168,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
                                 .toList();
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options
+                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
                         );
                     }
 
@@ -159,7 +194,8 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             q.getQuestionText(),
                             null,
                             null,
-                            options
+                            options,
+                            null
                     );
                 })
                 .toList();
@@ -247,6 +283,18 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
         Map<Long, List<QuizChoice>> byQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
+        List<Long> initialsQids = questionIds.stream()
+                .filter(id -> qMap.get(id) != null && qMap.get(id).getQuestionType() == QuestionType.INITIALS)
+                .toList();
+
+        Map<Long, String> answerTextByQid =
+                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                a -> a.getAnswerText(),
+                                (a, b) -> a
+                        ));
+
         // 9) 보기 배치(정답 위치 균등 분배 + seed 기반 섞기)
         long baseSeed = sessionSeed;
         Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
@@ -254,6 +302,28 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
         List<StartQuizSessionResponse.Item> items = questionIds.stream()
                 .map(qid -> {
                     QuizQuestion q = qMap.get(qid);
+
+                    if (q.getQuestionType() == QuestionType.INITIALS) {
+
+                        String answerText = Optional.ofNullable(answerTextByQid.get(qid))
+                                .map(String::trim)
+                                .orElse(null);
+
+                        if (answerText == null || answerText.isBlank()) {
+                            throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
+                        }
+
+                        return new StartQuizSessionResponse.Item(
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                q.getExplanation(),
+                                null,
+                                List.of(),
+                                answerText
+                        );
+                    }
+
                     List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
                     int optionCount = choices.size();
 
@@ -262,7 +332,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
                                 .toList();
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options
+                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
                         );
                     }
 
@@ -283,7 +353,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             .toList();
 
                     return new StartQuizSessionResponse.Item(
-                            q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options
+                            q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
                     );
                 })
                 .toList();

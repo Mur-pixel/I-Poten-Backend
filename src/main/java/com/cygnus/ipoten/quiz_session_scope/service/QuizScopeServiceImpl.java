@@ -231,6 +231,12 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         );
     }
 
+    @Override
+    @Transactional(readOnly = true)
+    public StartQuizSessionResponse loadSessionForPlay(Long accountId, Long sessionId) {
+        return quizSessionAnswerService.loadForPlay(accountId, sessionId);
+    }
+
     private static List<QuestionType> resolveTypes(String raw) {
         if (raw == null || raw.isBlank() || "mix".equalsIgnoreCase(raw)) return List.of();
         return switch (raw.trim().toLowerCase()) {
