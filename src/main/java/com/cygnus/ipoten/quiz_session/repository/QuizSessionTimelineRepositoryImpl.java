@@ -28,11 +28,20 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
                 " WHERE s.account.id = :accountId " +
                         " AND s.sessionStatus = :submitted " +
                         (part != null ? " AND s.partType = :part " : "") +
-                        (hasQ ? " AND lower(coalesce(s.title,'')) like :q " : "");
+                        (hasQ ?
+                                " AND ( " +
+                                        "   lower(coalesce(s.title,'')) like :q " +
+                                        "   OR lower(coalesce(p.title,'')) like :q " +
+                                        "   OR lower(coalesce(tc.name,'')) like :q " +
+                                        " ) "
+                                : "");
 
         String jpql =
                 "SELECT s FROM QuizSession s " +
                         "LEFT JOIN FETCH s.parentSession p " +
+                        "LEFT JOIN TermCategory tc " +
+                        "  ON s.sourceType = com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType.TERM_CATEGORY " +
+                        " AND s.sourceId = tc.id " +
                         where +
                         " ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
 
@@ -40,7 +49,13 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
                 .setParameter("accountId", accountId)
                 .setParameter("submitted", SessionStatus.SUBMITTED);
 
-        String countJpql = "SELECT COUNT(s) FROM QuizSession s " + where;
+        String countJpql =
+                "SELECT COUNT(s) FROM QuizSession s " +
+                        "LEFT JOIN s.parentSession p " +
+                        "LEFT JOIN TermCategory tc " +
+                        "  ON s.sourceType = com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType.TERM_CATEGORY " +
+                        " AND s.sourceId = tc.id " +
+                        where;
         TypedQuery<Long> cntQ = em.createQuery(countJpql, Long.class)
                 .setParameter("accountId", accountId)
                 .setParameter("submitted", SessionStatus.SUBMITTED);
