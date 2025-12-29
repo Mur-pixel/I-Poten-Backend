@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz_question.service.response;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
-import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import lombok.Getter;
 import lombok.RequiredArgsConstructor;

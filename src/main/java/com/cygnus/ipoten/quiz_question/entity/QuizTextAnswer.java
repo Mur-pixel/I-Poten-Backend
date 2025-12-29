@@ -29,9 +29,19 @@ public class QuizTextAnswer {
     }
 
     public static QuizTextAnswer create(QuizQuestion question, String answerText) {
+        if (question == null) {
+            throw new IllegalArgumentException("question은 필수입니다.");
+        }
         if (answerText == null || answerText.isBlank()) {
             throw new IllegalArgumentException("텍스트 정답은 필수입니다.");
         }
         return new QuizTextAnswer(question, answerText);
+    }
+
+    public void changeAnswerText(String answerText) {
+        if (answerText == null || answerText.isBlank()) {
+            throw new IllegalArgumentException("텍스트 정답은 필수입니다.");
+        }
+        this.answerText = answerText;
     }
 }

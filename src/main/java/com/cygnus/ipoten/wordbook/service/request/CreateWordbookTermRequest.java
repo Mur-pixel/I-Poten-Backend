@@ -8,6 +8,6 @@ import lombok.*;
 @NoArgsConstructor(access = AccessLevel.PRIVATE)
 public class CreateWordbookTermRequest {
     private Long accountId;
-    private Long folderId;
+    private Long wordbookId;
     private Long termId;
 }

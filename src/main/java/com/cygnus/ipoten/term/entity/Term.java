@@ -4,6 +4,9 @@ import com.cygnus.ipoten.term_category.entity.TermCategory;
 import jakarta.persistence.*;
 import lombok.*;
 
+import java.util.HashSet;
+import java.util.Set;
+
 @Entity
 @Getter
 @NoArgsConstructor

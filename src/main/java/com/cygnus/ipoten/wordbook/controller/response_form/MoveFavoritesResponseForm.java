@@ -11,7 +11,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class MoveFavoritesResponseForm {
-    private Long targetFolderId;
+    private Long targetWordbookId;
     private int movedCount;
     private int skippedCount;
     private List<Item> skipped; // 중복/권한 등 스킵 사유
@@ -26,6 +26,6 @@ public class MoveFavoritesResponseForm {
         var list = response.getSkipped().stream()
                 .map(s -> new Item(s.getTermId(), s.getReason().name()))
                 .toList();
-        return new MoveFavoritesResponseForm(response.getTargetFolderId(), response.getMovedCount(), list.size(), list);
+        return new MoveFavoritesResponseForm(response.getTargetWordbookId(), response.getMovedCount(), list.size(), list);
     }
 }

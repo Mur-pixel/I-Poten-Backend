@@ -1,9 +1,9 @@
 package com.cygnus.ipoten.quiz_analytics.controller;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuizSetType;
+import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_analytics.controller.response_form.QuizTrendResponseForm;
-import com.cygnus.ipoten.quiz_analytics.controller.response_form.TotalSetsResponseForm;
-import com.cygnus.ipoten.quiz_analytics.service.QuizMetricsTrendService;
+import com.cygnus.ipoten.quiz_analytics.controller.response_form.QuizTotalSetsResponseForm;
+import com.cygnus.ipoten.quiz_analytics.service.QuizAnalyticsQueryService;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionQueryService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -18,11 +18,11 @@ import org.springframework.web.bind.annotation.*;
 @RestController
 @RequiredArgsConstructor
 @RequestMapping("/api")
-@Tag(name = "Quiz", description = "퀴즈 결과 분석 관리 API")
+@Tag(name = "QuizAnalytics", description = "퀴즈 결과 분석 관리 API")
 public class QuizAnalyticsController {
 
     private final RedisCacheService redisCacheService;
-    private final QuizMetricsTrendService quizMetricsTrendService;
+    private final QuizAnalyticsQueryService quizAnalyticsQueryService;
     private final QuizSessionQueryService quizSessionQueryService;
 
     @Operation(
@@ -39,7 +39,7 @@ public class QuizAnalyticsController {
         if (accountId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        return ResponseEntity.ok(quizMetricsTrendService.getTrend(accountId, metric, span));
+        return ResponseEntity.ok(quizAnalyticsQueryService.getTrend(accountId, metric, span));
     }
 
     @Operation(
@@ -51,16 +51,21 @@ public class QuizAnalyticsController {
             @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "type", required = false, defaultValue = "ALL") String type,
             @RequestParam(name = "page", defaultValue = "0") int page,
-            @RequestParam(name = "size", defaultValue = "10") int size,
+            @RequestParam(name = "size", defaultValue = "5") int size,
             @CookieValue(name = "userToken", required = false) String userToken
     ) {
         Long accountId = resolveAccountId(userToken);
         if (accountId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        QuizSetType part = ("ALL".equalsIgnoreCase(type) || type == null || type.isBlank())
-                ? null
-                : QuizSetType.valueOf(type.toUpperCase());
+        QuizSetType part = null;
+        if (type != null && !type.isBlank() && !"ALL".equalsIgnoreCase(type)) {
+            try {
+                part = QuizSetType.valueOf(type.trim().toUpperCase());
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().build();
+            }
+        }
         var result = quizSessionQueryService.getTimeline(accountId, q, part, page, size);
         return ResponseEntity.ok(result);
     }
@@ -70,15 +75,15 @@ public class QuizAnalyticsController {
             description = "사용자가 지금까지 완료(제출)한 퀴즈 세트의 총 개수를 조회합니다."
     )
     @GetMapping("/me/quiz/metrics/total-sets")
-    public ResponseEntity<TotalSetsResponseForm> getTotalSets(
+    public ResponseEntity<QuizTotalSetsResponseForm> getTotalSets(
             @CookieValue(name = "userToken", required = false) String userToken
     ) {
         Long accountId = resolveAccountId(userToken);
         if (accountId == null) {
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        long total = quizMetricsTrendService.getTotalSets(accountId);
-        return ResponseEntity.ok(new TotalSetsResponseForm(total));
+        long total = quizAnalyticsQueryService.getTotalSets(accountId);
+        return ResponseEntity.ok(new QuizTotalSetsResponseForm(total));
     }
 
     /**

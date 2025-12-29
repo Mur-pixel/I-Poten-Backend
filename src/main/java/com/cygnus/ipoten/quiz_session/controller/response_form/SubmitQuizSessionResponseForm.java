@@ -22,14 +22,17 @@ public class SubmitQuizSessionResponseForm {
     @JsonInclude(JsonInclude.Include.NON_NULL)
     public static class Item {
         private final Long quizQuestionId;
-        
-        private final Long selectedChoiceId;        // 단일선택 시
-        private final List<Long> selectedChoiceIds; // 다답형 대비
 
-        // 정답 보기 (단일/다답 모두 대응)
-        private final Long correctChoiceId;         // 정답이 1개인 경우
-        private final List<Long> correctChoiceIds;  // 정답이 여러 개인 경우
+        private final Long selectedChoiceId;
+        private final List<Long> selectedChoiceIds;
 
-        private final boolean correct;              // 이 문항에서 사용자가 맞췄는지 여부
+        private final Long correctChoiceId;
+        private final List<Long> correctChoiceIds;
+
+        // INITIALS 전용(선택형은 null로 내려감)
+        private final String submittedText;
+        private final String correctText;
+
+        private final boolean correct;
     }
 }

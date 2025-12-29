@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.quiz_question.service;
 
-import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
@@ -11,8 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.util.List;
-
-import static java.util.stream.Collectors.toList;
 
 @Slf4j
 @Service
