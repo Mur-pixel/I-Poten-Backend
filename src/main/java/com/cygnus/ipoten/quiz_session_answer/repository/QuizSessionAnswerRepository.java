@@ -6,12 +6,7 @@ import org.springframework.data.repository.CrudRepository;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
-import java.time.LocalDate;
-import java.time.LocalDateTime;
-import java.util.Arrays;
-import java.util.LinkedHashMap;
 import java.util.List;
-import java.util.Map;
 
 public interface QuizSessionAnswerRepository extends CrudRepository<QuizSessionAnswer, Long> {
 
@@ -26,6 +21,21 @@ public interface QuizSessionAnswerRepository extends CrudRepository<QuizSessionA
           and sa.isCorrect = false
     """)
     List<Long> findWrongQuestionIds(@Param("sessionId") Long sessionId);
+
+    // 여러 세션 오답 row 조회
+    interface WrongRow {
+        Long getSessionId();
+        Long getQuestionId();
+    }
+
+    @Query("""
+        select a.quizSession.id as sessionId, a.quizQuestion.id as questionId
+        from QuizSessionAnswer a
+        where a.quizSession.id in :sessionIds
+          and a.isCorrect = false
+        order by a.quizSession.submittedAt desc, a.id asc
+    """)
+    List<WrongRow> findWrongRowsOrdered(@Param("sessionIds") List<Long> sessionIds);
 
     @Query("""
         select distinct q.term.id

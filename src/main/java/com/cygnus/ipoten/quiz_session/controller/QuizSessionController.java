@@ -188,6 +188,34 @@ public class QuizSessionController {
         return ResponseEntity.ok(body);
     }
 
+    @PostMapping("/me/quiz/sessions/quick-retry")
+    public ResponseEntity<?> quickRetry(
+            @RequestParam(name = "days", required = false) Integer days,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        try {
+            StartQuizSessionResponse started =
+                    (days == null)
+                            ? quizSessionRetryService.startQuickRetry(accountId) // 기존 AUTO(7->30 폴백) 유지
+                            : quizSessionRetryService.startQuickRetry(accountId, days); // 사용자가 7일 혹은 30일을 선택한 경우
+            return ResponseEntity.status(HttpStatus.CREATED).body(Map.of("sessionId", started.getSessionId()));
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (IllegalStateException e) {
+            return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of(
+                    "code", "QUICK_RETRY_NOT_AVAILABLE",
+                    "message", e.getMessage()
+            ));
+        } catch (Exception e) {
+            log.error("quickRetry failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+
     /**
      * 공통: 쿠키에서 userToken을 읽어 Redis에서 accountId를 조회한다.
      * - 토큰이 없거나 공백이면 null
