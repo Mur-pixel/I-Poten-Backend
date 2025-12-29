@@ -12,6 +12,7 @@ import org.springframework.data.repository.query.Param;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 public interface WordbookTermRepository extends JpaRepository<WordbookTerm, Long> {
 
@@ -199,4 +200,7 @@ public interface WordbookTermRepository extends JpaRepository<WordbookTerm, Long
     """)
     List<Term> findTermsByAccountAndFolderStrict(@Param("accountId") Long accountId,
                                                  @Param("wordbookId") Long wordbookId);
+
+    @Query("select wt.term.id from WordbookTerm wt where wt.wordbook.id = :wordbookId")
+    Set<Long> findTermIdsByWordbookId(@Param("wordbookId") Long wordbookId);
 }

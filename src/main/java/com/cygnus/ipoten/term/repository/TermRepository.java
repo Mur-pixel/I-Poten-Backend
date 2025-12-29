@@ -10,6 +10,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 
 public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificationExecutor<Term> {
@@ -263,4 +264,14 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
                                              Pageable pageable);
 
     Optional<Term> findFirstByTitleAndTermCategory_Id(String title, Long categoryId);
+    List<Term> findAllByTermCategoryIdAndTitle(Long termCategoryId, String title);
+    @Query("""
+        select t
+        from Term t
+        where t.termCategory.id = :categoryId
+          and lower(trim(t.title)) = lower(trim(:title))
+        order by t.id asc
+    """)
+    List<Term> findAllByCategoryIdAndTitleNormalized(@Param("categoryId") Long categoryId,
+                                                     @Param("title") String title);
 }

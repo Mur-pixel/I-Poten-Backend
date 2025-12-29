@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.recommendation.controller;
 
-import com.cygnus.ipoten.recommendation.service.CategoryRecommendationService;
-import com.cygnus.ipoten.recommendation.controller.request_form.AttachCategoryRecommendationRequestForm;
+import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
+import com.cygnus.ipoten.recommendation.controller.request_form.attachJobRecommendationsToWordbook;
 import com.cygnus.ipoten.wordbook.controller.response_form.AttachTermsBulkResponseForm;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -21,30 +21,33 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 @RequiredArgsConstructor
 @RequestMapping("/api")
 @Tag(name = "Recommendation", description = "추천 단어를 사용자 단어장에 추가하는 API")
-public class CategoryRecommendationController {
+public class JobRecommendedTermController {
 
     private final RedisCacheService redisCacheService;
-    private final CategoryRecommendationService categoryRecommendationService;
+    private final JobRecommendedTermService jobRecommendedTermService;
 
     @Operation(
             summary = "직무별 추천 단어를 단어장에 일괄 저장",
-            description = "jobRole(예: FRONTEND, BACKEND)에 해당하는 추천 단어들을 지정한 폴더에 한 번에 담습니다."
+            description = "JobKey(예: FRONTEND, BACKEND)에 해당하는 추천 단어들을 지정한 폴더에 한 번에 담습니다."
     )
-    @PostMapping("/me/folders/{wordbookId}/recommended-terms/by-category")
+    @PostMapping("/me/folders/{wordbookId}/recommended-terms/by-job")
     public ResponseEntity<AttachTermsBulkResponseForm> attachJobRoleRecommendationsToFolder(
             @CookieValue(name = "userToken", required = false) String userToken,
             @PathVariable Long wordbookId,
-            @RequestBody @Valid AttachCategoryRecommendationRequestForm requestForm
+            @RequestBody @Valid attachJobRecommendationsToWordbook requestForm
     ) {
         Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
-        }
-        var response = categoryRecommendationService.attachCategoryRecommendationsToWordbook(
+        if (accountId == null) throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
+
+        log.info("[attachJobRecommendations] accountId={}, wordbookId={}, jobKey={}",
+                accountId, wordbookId, requestForm.getJobKey());
+
+        var response = jobRecommendedTermService.attachJobRecommendationsToWordbook(
                 accountId,
                 wordbookId,
-                requestForm.getTermCategoryId()
+                requestForm.getJobKey()
         );
+
         return ResponseEntity.status(HttpStatus.CREATED).body(AttachTermsBulkResponseForm.from(response));
     }
 
