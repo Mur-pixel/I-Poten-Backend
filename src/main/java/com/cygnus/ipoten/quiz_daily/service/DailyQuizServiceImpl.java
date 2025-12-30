@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_daily.service;
 
+import com.cygnus.ipoten.quiz_daily.entity.enums.DailyStartMode;
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Clock;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.List;
@@ -48,14 +50,30 @@ public class DailyQuizServiceImpl implements DailyQuizService {
 
     @Override
     @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public DailyStarted startGeneralDaily(Long accountId) {
-        LocalDate ymd = LocalDate.now(KST);
+    public DailyStarted startGeneralDaily(Long accountId, DailyStartMode mode) {
 
-        StartQuizSessionResponse choice    = startOne(accountId, ymd, QuestionType.CHOICE,   3, "DAILY_GENERAL:CHOICE");
-        StartQuizSessionResponse ox        = startOne(accountId, ymd, QuestionType.OX,       3, "DAILY_GENERAL:OX");
-        StartQuizSessionResponse initials  = startOne(accountId, ymd, QuestionType.INITIALS, 3, "DAILY_GENERAL:INITIALS");
+        var statuses = List.of(SessionStatus.IN_PROGRESS);
 
-        return new DailyStarted(ymd, choice, ox, initials);
+        LocalDate today = LocalDate.now(KST);
+        LocalDate baseYmd = today;
+
+        if (mode == null) mode = DailyStartMode.RESUME;
+
+        if (mode == DailyStartMode.RESUME) {
+            baseYmd = quizSessionRepository.findTopByAccount_IdAndDailyIssueTypeAndSessionStatusInOrderByStartedAtDesc(
+                    accountId, "GENERAL", statuses
+            )
+                    .map(s -> s.getDailyYmd() != null
+                            ? s.getDailyYmd()
+                            : LocalDate.ofInstant(s.getStartedAt(), KST))
+                    .orElse(today);
+        }
+
+        StartQuizSessionResponse choice    = startOne(accountId, baseYmd, QuestionType.CHOICE,   3, "DAILY_GENERAL:CHOICE");
+        StartQuizSessionResponse ox        = startOne(accountId, baseYmd, QuestionType.OX,       3, "DAILY_GENERAL:OX");
+        StartQuizSessionResponse initials  = startOne(accountId, baseYmd, QuestionType.INITIALS, 3, "DAILY_GENERAL:INITIALS");
+
+        return new DailyStarted(today, baseYmd, choice, ox, initials);
     }
 
     private StartQuizSessionResponse startOne(

@@ -12,7 +12,9 @@ import java.util.List;
 @AllArgsConstructor
 public class DailyQuizStartResponseForm {
 
-    private LocalDate ymd;                // KST 기준
+    private LocalDate todayYmd;         // 서버 기준 오늘(KST)
+    private LocalDate activeYmd;        // 실제로 내려준 데일리(어제일 수도 있음)
+    private boolean carryOver;          // todayYml != activeYmd
     private String issueType;           // "GENERAL"
     private String seedMode;            // "DAILY" OR "FIXED"
     private List<Item> sessions;        // 3개 세션(CHOICE/OX/INITIALS)

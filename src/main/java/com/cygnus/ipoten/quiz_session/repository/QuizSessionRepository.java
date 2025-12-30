@@ -113,6 +113,12 @@ public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> 
             Collection<SessionStatus> statuses
     );
 
+    Optional<QuizSession> findTopByAccount_IdAndDailyIssueTypeAndSessionStatusInOrderByStartedAtDesc(
+            Long accountId,
+            String dailyIssueType,
+            List<SessionStatus> statuses
+    );
+
     Page<QuizSession> findByAccount_IdAndSessionStatusAndSubmittedAtAfterOrderBySubmittedAtDesc(
             Long accountId,
             SessionStatus sessionStatus,

@@ -1,6 +1,7 @@
 package com.cygnus.ipoten.quiz_daily.controller;
 
 import com.cygnus.ipoten.quiz_daily.controller.response_form.DailyQuizStartResponseForm;
+import com.cygnus.ipoten.quiz_daily.entity.enums.DailyStartMode;
 import com.cygnus.ipoten.quiz_daily.service.DailyQuizService;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
@@ -29,16 +30,21 @@ public class DailyQuizController {
     )
     @PostMapping("/general/start")
     public ResponseEntity<?> startGeneralDaily(
+            @RequestParam(name = "mode", required = false) DailyStartMode mode,
             @CookieValue(name = "userToken", required = false) String userToken
     ) {
         Long accountId = resolveAccountId(userToken);
         if (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
 
         try {
-            var started = dailyQuizService.startGeneralDaily(accountId);
+            var started = dailyQuizService.startGeneralDaily(accountId, mode);
+
+            boolean carryOver = !started.todayYmd().equals(started.activeYmd());
 
             DailyQuizStartResponseForm body = new DailyQuizStartResponseForm(
-                    started.ymd(),
+                    started.todayYmd(),
+                    started.activeYmd(),
+                    carryOver,
                     "GENERAL",
                     "DAILY -> FIXED",
                     List.of(
