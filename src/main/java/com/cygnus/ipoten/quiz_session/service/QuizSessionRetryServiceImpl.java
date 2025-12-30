@@ -21,9 +21,12 @@ import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -116,7 +119,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
 
         quizSessionRepository.save(child);
 
-        // 8) 미리보기용 아이템 구성(보기 로딩, 순서 유지)
+        // 8) 보기/초성 정답 로드 + response items 구성
         var allChoices = quizChoiceRepository.findByQuizQuestionIdIn(wrongQuestionIds);
         Map<Long, List<QuizChoice>> byQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
@@ -130,7 +133,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                         .collect(Collectors.toMap(
                                 a -> a.getQuizQuestion().getId(),
                                 a -> a.getAnswerText(),
-                                (a,b) -> a
+                                (a, b) -> a
                         ));
 
         long baseSeed = sessionSeed;
@@ -145,7 +148,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 .map(String::trim)
                                 .orElse(null);
 
-                        if (answerText == null && answerText.isBlank()) {
+                        if (answerText == null || answerText.isBlank()) {
                             throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
                         }
 
@@ -167,8 +170,15 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                         var options = choices.stream()
                                 .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
                                 .toList();
+
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                null,
+                                null,
+                                options,
+                                null
                         );
                     }
 
@@ -200,9 +210,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                 })
                 .toList();
 
-        // response의 setId는 "SET 세션일 때만" 의미가 있으니, 아닐 경우 null
         Long setIdForResponse = (sourceType == SessionSourceType.SET) ? sourceId : null;
-
         return new StartQuizSessionResponse(child.getId(), setIdForResponse, wrongQuestionIds, items);
     }
 
@@ -363,6 +371,208 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
         return new StartQuizSessionResponse(child.getId(), setIdForResponse, questionIds, items);
     }
 
+    @Override
+    @Transactional
+    public StartQuizSessionResponse startQuickRetry(Long accountId) {
+
+        final int MAX_SESSIONS_TO_SCAN = 20;
+        final int MAX_QUESTIONS = 40;
+
+        // 1) 7일 우선
+        List<QuizSession> sessions7 = findSubmittedSessions(accountId, 7, MAX_SESSIONS_TO_SCAN);
+        List<Long> wrongIds7 = collectWrongQuestionIdsDedupLatestFirst(sessions7, MAX_QUESTIONS);
+
+        List<QuizSession> baseSessions;
+        List<Long> questionIds;
+        int appliedDays;
+
+        // 2) 7일 내 오답이 있는 경우
+        if (!wrongIds7.isEmpty()) {
+            baseSessions = sessions7;
+            questionIds = wrongIds7;
+            appliedDays = 7;
+        } else {
+            // 3) 7일 내 오답이 없으면 30일 폴백
+            List<QuizSession> sessions30 = findSubmittedSessions(accountId, 30, MAX_SESSIONS_TO_SCAN);
+            List<Long> wrongIds30 = collectWrongQuestionIdsDedupLatestFirst(sessions30, MAX_QUESTIONS);
+
+            if (sessions30.isEmpty()) {
+                throw new IllegalStateException("최근 30일 이내 제출한 퀴즈 이력이 없습니다.");
+            }
+
+            if (wrongIds30.isEmpty()) {
+                throw new IllegalStateException("최근 30일 이내 오답 문제가 없습니다.");
+            }
+
+            baseSessions = sessions30;
+            questionIds = wrongIds30;
+            appliedDays = 30;
+        }
+
+        // 메타데이터/부모 세션은 "가장 최신 SUBMITTED 세션"을 anchor로 사용
+        QuizSession anchor = baseSessions.get(0);
+        
+        // 4) 새 세션용 SEED
+        long sessionSeed = mixSeed(System.nanoTime(), mixSeed(anchor.getId(), accountId));
+        
+        // 문항 순서 셔플
+        Collections.shuffle(questionIds, new Random(sessionSeed));
+        
+        // 5) 질문 로드
+        List<QuizQuestion> questions = quizQuestionRepository.findAllById(questionIds);
+        Map<Long, QuizQuestion> qMap = questions.stream()
+                .collect(Collectors.toMap(QuizQuestion::getId, q -> q, (a, b) -> a, LinkedHashMap::new));
+
+        if (qMap.size() != questionIds.size()) {
+            Set<Long> missing = new LinkedHashSet<>(questionIds);
+            missing.removeAll(qMap.keySet());
+            throw new IllegalStateException("일부 질문을 찾지 못했습니다(삭제/비활성 가능): " + missing);
+        }
+
+        // 6) partType 결정(부모 우선)
+        QuizSetType resolvedPartType = resolvePartTypeFromParentOrQuestions(anchor, questions);
+        
+        // 7) source 메타는 anchor에서 계승
+        SessionSourceType sourceType = requireParentSourceType(anchor);
+        Long sourceId = requireParentSourceId(anchor);
+        String sourceKey = requireParentSourceKey(anchor);
+
+        int attemptNo = quizSessionRepository.findMaxAttemptNoBySourceKey(accountId, sourceKey) + 1;
+        
+        // 8) 새 세션 생성 (부모 = anchor)
+        Account account = accountRepository.getReferenceById(accountId);
+
+        QuizSession child = new QuizSession();
+        child.beginFromSourceWithParent(
+                account,
+                anchor,
+                sourceType,
+                sourceId,
+                sourceKey,
+                resolvedPartType,
+                SessionMode.WRONG_ONLY,
+                attemptNo,
+                questionIds.size(),
+                toJson(questionIds),
+                SeedMode.FIXED,
+                sessionSeed
+        );
+
+        // 타이틀 결정
+        String inheritedTitle = inheritTitleFromAncestor(anchor);
+        if (inheritedTitle == null) inheritedTitle = "퀴즈";
+        child.changeTitle("[빠른 재도전] 최근 " + appliedDays + "일 오답만 - " + inheritedTitle);
+
+        quizSessionRepository.save(child);
+
+        // 9) 보기/초성 정답 로드 + response items 구성
+        var allChoices = quizChoiceRepository.findByQuizQuestionIdIn(questionIds);
+        Map<Long, List<QuizChoice>> byQ = allChoices.stream()
+                .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
+
+        List<Long> initialsQids = questionIds.stream()
+                .filter(id -> qMap.get(id) != null && qMap.get(id).getQuestionType() == QuestionType.INITIALS)
+                .toList();
+
+        Map<Long, String> answerTextByQid =
+                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                a -> a.getAnswerText(),
+                                (a, b) -> a
+                        ));
+
+        long baseSeed = sessionSeed;
+        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
+
+        List<StartQuizSessionResponse.Item> items = questionIds.stream()
+                .map(qid -> {
+                    QuizQuestion q = qMap.get(qid);
+
+                    if (q.getQuestionType() == QuestionType.INITIALS) {
+                        String answerText = Optional.ofNullable(answerTextByQid.get(qid))
+                                .map(String::trim)
+                                .orElse(null);
+
+                        if (answerText == null || answerText.isBlank()) {
+                            throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
+                        }
+
+                        return new StartQuizSessionResponse.Item(
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                q.getExplanation(),
+                                null,
+                                List.of(),
+                                answerText
+                        );
+                    }
+
+                    List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
+                    int optionCount = choices.size();
+
+                    if (optionCount < 2) {
+                        var options = choices.stream()
+                                .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
+                                .toList();
+                        return new StartQuizSessionResponse.Item(
+                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                        );
+                    }
+
+                    AnswerIndexPlanner planner = planners.computeIfAbsent(
+                            optionCount,
+                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
+                    );
+
+                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
+                            q.getQuestionType(),
+                            choices,
+                            planner,
+                            mixSeed(baseSeed, qid)
+                    );
+
+                    var options = ordered.stream()
+                            .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
+                            .toList();
+
+                    return new StartQuizSessionResponse.Item(
+                            q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                    );
+                })
+                .toList();
+
+        Long setIdForResponse = (sourceType == SessionSourceType.SET) ? sourceId : null;
+        return new StartQuizSessionResponse(child.getId(), setIdForResponse, questionIds, items);
+    }
+
+    @Override
+    @Transactional
+    public StartQuizSessionResponse startQuickRetry(Long accountId, int days) {
+
+        final int MAX_SESSIONS_TO_SCAN = 20;
+        final int MAX_QUESTIONS = 40;
+
+        int appliedDays = normalizeDays(days);
+
+        Instant after = Instant.now().minus(appliedDays, ChronoUnit.DAYS);
+        log.info("[quickRetry] reqDays={}, appliedDays={}, after={}", days, appliedDays, after);
+
+        List<QuizSession> sessions = findSubmittedSessions(accountId, appliedDays, MAX_SESSIONS_TO_SCAN);
+
+        if (sessions.isEmpty()) {
+            throw new IllegalStateException("최근 " + appliedDays + "일 이내 제출한 퀴즈 이력이 없습니다.");
+        }
+
+        List<Long> questionIds = collectWrongQuestionIdsDedupLatestFirst(sessions, MAX_QUESTIONS);
+        if (questionIds.isEmpty()) {
+            throw new IllegalStateException("최근 " + appliedDays + "일 이내 오답 문제가 없습니다.");
+        }
+
+        return buildQuickRetrySession(accountId, sessions, questionIds, appliedDays);
+    }
+
     /** 부모 세션(QuizSession)에 저장된 partType을 우선 보거나, 없으면 질문 타입으로 유추 */
     private QuizSetType resolvePartTypeFromParentOrQuestions(QuizSession parent, List<QuizQuestion> questions) {
         if (parent.getPartType() != null) {
@@ -498,5 +708,175 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
             cur = cur.getParentSession();
         }
         return null;
+    }
+
+    /** 기간 내 SUBMITTED 세션 최근 N개 조회 */
+    private List<QuizSession> findSubmittedSessions(Long accountId, int days, int limit) {
+        Instant after = Instant.now().minus(days, ChronoUnit.DAYS);
+        return quizSessionRepository
+                .findByAccount_IdAndSessionStatusAndSubmittedAtAfterOrderBySubmittedAtDesc(
+                        accountId,
+                        SessionStatus.SUBMITTED,
+                        after,
+                        PageRequest.of(0, limit)
+                )
+                .getContent();
+    }
+
+    /** 여러 세션에서 오답 questionId를 최신 세션 우선으로 모으고 중복 제거 */
+    private List<Long> collectWrongQuestionIdsDedupLatestFirst(List<QuizSession> sessions, int maxQuestions) {
+        if (sessions == null || sessions.isEmpty()) return List.of();
+
+        List<Long> sessionIds = sessions.stream().map(QuizSession::getId).toList();
+
+        // 최신 세션 우선 정렬된 rows
+        var rows = quizSessionAnswerRepository.findWrongRowsOrdered(sessionIds);
+
+        LinkedHashSet<Long> set = new LinkedHashSet<>();
+        for (var r : rows) {
+            set.add(r.getQuestionId());
+            if (maxQuestions > 0 && set.size() >= maxQuestions) break;
+        }
+        return new ArrayList<>(set);
+    }
+
+    private StartQuizSessionResponse buildQuickRetrySession(
+            Long accountId,
+            List<QuizSession> baseSessions,
+            List<Long> questionIds,
+            int appliedDays
+    ) {
+        QuizSession anchor = baseSessions.get(0);
+
+        long sessionSeed = mixSeed(System.nanoTime(), mixSeed(anchor.getId(), accountId));
+
+        // 원본 리스트 사이드이펙트를 방지하기 위해 복사
+        List<Long> shuffledIds = new ArrayList<>(questionIds);
+        Collections.shuffle(shuffledIds, new Random(sessionSeed));
+
+        List<QuizQuestion> questions = quizQuestionRepository.findAllById(shuffledIds);
+        Map<Long, QuizQuestion> qMap = questions.stream()
+                .collect(Collectors.toMap(QuizQuestion::getId, q -> q, (a, b) -> a, LinkedHashMap::new));
+
+        if (qMap.size() != shuffledIds.size()) {
+            Set<Long> missing = new LinkedHashSet<>(shuffledIds);
+            missing.removeAll(qMap.keySet());
+            throw new IllegalStateException("일부 질문을 찾지 못했습니다(삭제/비활성 가능): " + missing);
+        }
+
+        QuizSetType resolvedPartType = resolvePartTypeFromParentOrQuestions(anchor, questions);
+
+        SessionSourceType sourceType = requireParentSourceType(anchor);
+        Long sourceId = requireParentSourceId(anchor);
+        String sourceKey = requireParentSourceKey(anchor);
+
+        int attemptNo = quizSessionRepository.findMaxAttemptNoBySourceKey(accountId, sourceKey) + 1;
+
+        Account account = accountRepository.getReferenceById(accountId);
+
+        QuizSession child = new QuizSession();
+        child.beginFromSourceWithParent(
+                account,
+                anchor,
+                sourceType,
+                sourceId,
+                sourceKey,
+                resolvedPartType,
+                SessionMode.WRONG_ONLY,
+                attemptNo,
+                shuffledIds.size(),
+                toJson(shuffledIds),
+                SeedMode.FIXED,
+                sessionSeed
+        );
+
+        String inheritedTitle = inheritTitleFromAncestor(anchor);
+        if (inheritedTitle == null) inheritedTitle = "퀴즈";
+        child.changeTitle("[빠른 재도전] 최근 " + appliedDays + "일 오답만 - " + inheritedTitle);
+
+        quizSessionRepository.save(child);
+
+        var allChoices = quizChoiceRepository.findByQuizQuestionIdIn(shuffledIds);
+        Map<Long, List<QuizChoice>> byQ = allChoices.stream()
+                .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
+
+        List<Long> initialsQids = shuffledIds.stream()
+                .filter(id -> qMap.get(id) != null && qMap.get(id).getQuestionType() == QuestionType.INITIALS)
+                .toList();
+
+        Map<Long, String> answerTextByQid =
+                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                a -> a.getAnswerText(),
+                                (a, b) -> a
+                        ));
+
+        long baseSeed = sessionSeed;
+        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
+
+        List<StartQuizSessionResponse.Item> items = shuffledIds.stream()
+                .map(qid -> {
+                    QuizQuestion q = qMap.get(qid);
+
+                    if (q.getQuestionType() == QuestionType.INITIALS) {
+                        String answerText = Optional.ofNullable(answerTextByQid.get(qid))
+                                .map(String::trim)
+                                .orElse(null);
+
+                        if (answerText == null || answerText.isBlank()) {
+                            throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
+                        }
+
+                        return new StartQuizSessionResponse.Item(
+                                q.getId(), q.getQuestionType(), q.getQuestionText(),
+                                q.getExplanation(), null, List.of(), answerText
+                        );
+                    }
+
+                    List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
+                    int optionCount = choices.size();
+
+                    if (optionCount < 2) {
+                        var options = choices.stream()
+                                .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
+                                .toList();
+                        return new StartQuizSessionResponse.Item(
+                                q.getId(), q.getQuestionType(), q.getQuestionText(),
+                                null, null, options, null
+                        );
+                    }
+
+                    AnswerIndexPlanner planner = planners.computeIfAbsent(
+                            optionCount,
+                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
+                    );
+
+                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
+                            q.getQuestionType(),
+                            choices,
+                            planner,
+                            mixSeed(baseSeed, qid)
+                    );
+
+                    var options = ordered.stream()
+                            .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
+                            .toList();
+
+                    return new StartQuizSessionResponse.Item(
+                            q.getId(), q.getQuestionType(), q.getQuestionText(),
+                            null, null, options, null
+                    );
+                })
+                .toList();
+
+        Long setIdForResponse = (sourceType == SessionSourceType.SET) ? sourceId : null;
+        return new StartQuizSessionResponse(child.getId(), setIdForResponse, shuffledIds, items);
+    }
+
+    /** days 파라미터 보정 */
+    private int normalizeDays(int days) {
+        if (days == 7 || days == 30) return days;
+        throw new IllegalArgumentException("days는 7 또는 30만 허용: " + days);
     }
 }
