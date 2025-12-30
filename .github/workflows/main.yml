@@ -60,12 +60,12 @@ jobs:
       - name: Deploy to Production (local shell)
         run: |
           cd /home/ec2-user/i-poten/backend
-          docker-compose stop server  # 기존 DB/Redis는 유지
+          docker compose stop server  # 기존 DB/Redis는 유지
       
           echo ${{ secrets.GHCR_TOKEN }} | docker login ghcr.io -u i-cygnus --password-stdin
           docker pull ghcr.io/i-cygnus/spring-backend:latest
           docker image prune -f
           docker logout
       
-          docker-compose up -d
+          docker compose up -d
 
