@@ -13,6 +13,7 @@ public interface DailyQuizService {
             LocalDate activeYmd,                // 실제로 내려준 데일리(어제일 수도 있음)
             StartQuizSessionResponse choice,
             StartQuizSessionResponse ox,
-            StartQuizSessionResponse initials
+            StartQuizSessionResponse initials,
+            boolean hasUnfinishedSession
     ) {}
 }

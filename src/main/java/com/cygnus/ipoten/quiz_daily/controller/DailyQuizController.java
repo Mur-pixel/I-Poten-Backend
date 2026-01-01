@@ -39,7 +39,7 @@ public class DailyQuizController {
         try {
             var started = dailyQuizService.startGeneralDaily(accountId, mode);
 
-            boolean carryOver = !started.todayYmd().equals(started.activeYmd());
+            boolean carryOver = !started.todayYmd().equals(started.activeYmd()) && started.hasUnfinishedSession();
 
             DailyQuizStartResponseForm body = new DailyQuizStartResponseForm(
                     started.todayYmd(),

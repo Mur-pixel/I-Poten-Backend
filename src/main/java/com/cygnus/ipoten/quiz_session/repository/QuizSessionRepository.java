@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_session.repository;
 
+import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import org.springframework.data.domain.Page;
@@ -16,7 +17,6 @@ import java.util.List;
 import java.util.Optional;
 
 public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> {
-    long countByAccount_Id(Long accountId);
 
     @Query("SELECT COUNT(u) FROM QuizSession u " +
             "WHERE u.account.id = :accountId " +
@@ -125,4 +125,30 @@ public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> 
             Instant submittedAtAfter,
             Pageable pageable
     );
+
+    boolean existsByAccount_IdAndDailyYmdAndDailyIssueTypeAndSessionStatus(
+            Long accountId,
+            LocalDate dailyYmd,
+            String dailyIssueType,
+            SessionStatus sessionStatus
+    );
+
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+        update QuizSession s
+           set s.sessionStatus = com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus.EXPIRED
+         where s.account.id = :accountId
+           and s.dailyYmd = :dailyYmd
+           and s.dailyIssueType = :issueType
+           and s.dailyQuestionType = :questionType
+           and s.sessionStatus = com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus.IN_PROGRESS
+    """)
+    int expireDailyInProgress(
+            @Param("accountId") Long accountId,
+            @Param("dailyYmd") LocalDate dailyYmd,
+            @Param("issueType") String issueType,
+            @Param("questionType") String questionType
+    );
+
+    Long account(Account account);
 }

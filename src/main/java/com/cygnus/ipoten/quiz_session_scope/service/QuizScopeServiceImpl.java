@@ -34,7 +34,7 @@ public class QuizScopeServiceImpl implements QuizScopeService {
     private final WordbookScopeService wordbookScopeService;
 
     @Override
-    @Transactional
+    @Transactional(noRollbackFor = IllegalArgumentException.class)
     public StartQuizSessionResponse startScopedSession(Long accountId, ScopeCondition condition, String customTitle) {
 
         String title = normalizeTitle(customTitle);
