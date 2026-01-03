@@ -3,14 +3,19 @@ package com.cygnus.ipoten.quiz_wrongnote.controller;
 import com.cygnus.ipoten.quiz_session.controller.response_form.CreateQuizSessionResponseForm;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionRetryService;
 import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
+import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteService;
+import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteServiceImpl;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+
+import java.time.LocalDate;
 
 @Slf4j
 @RestController
@@ -20,6 +25,8 @@ public class QuizWrongNoteController {
 
     private final RedisCacheService redisCacheService;
     private final QuizSessionRetryService quizSessionRetryService;
+    private final QuizWrongNoteServiceImpl quizWrongNoteServiceImpl;
+    private final QuizWrongNoteService quizWrongNoteService;
 
     @Operation(
             summary = "오답만 다시 풀기",
@@ -47,6 +54,32 @@ public class QuizWrongNoteController {
             return ResponseEntity.badRequest().build();
         } catch (Exception e) {
             log.error("오답세션 생성 실패", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @GetMapping("/me/quiz/reviews/wrong")
+    public ResponseEntity<?> listWrongNotes(
+            @RequestParam(defaultValue = "0") int page,
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Long sessionId,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
+            @RequestParam(defaultValue = "true") boolean includeAnswers,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            log.warn("인증 실패: 계정 식별 불가");
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            var body = quizWrongNoteService.listWrongNotes(accountId, page, size, type, sessionId, from, to, includeAnswers);
+            return ResponseEntity.ok(body);
+        } catch (Exception e) {
+            log.error("listWrongNotes failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
