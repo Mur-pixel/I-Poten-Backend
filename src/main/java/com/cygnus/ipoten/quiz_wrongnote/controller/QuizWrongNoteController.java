@@ -30,36 +30,6 @@ public class QuizWrongNoteController {
     private final QuizWrongNoteServiceImpl quizWrongNoteServiceImpl;
     private final QuizWrongNoteService quizWrongNoteService;
 
-    @Operation(
-            summary = "오답만 다시 풀기",
-            description = "기존 세션의 오답만 모아서 새로운 오답 전용 세션을 생성합니다."
-    )
-    @PostMapping("/me/quiz/sessions/{sessionId}/retry-wrong")
-    public ResponseEntity<CreateQuizSessionResponseForm> retryWrongOnly(
-            @Parameter(description = "기준이 될 기존 세션 ID", example = "1")
-            @PathVariable Long sessionId,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            log.warn("인증 실패: 계정 식별 불가");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-        try {
-            StartQuizSessionResponse started = quizSessionRetryService.startRetryWrongOnly(sessionId, accountId);
-            return ResponseEntity.status(HttpStatus.CREATED).body(CreateQuizSessionResponseForm.from(started));
-        } catch(SecurityException e) {
-            log.warn("세션 접근 거부", e);
-            return ResponseEntity.status(HttpStatus.FORBIDDEN).build();
-        } catch (IllegalArgumentException | IllegalStateException e) {
-            log.warn("오답세션 생성 유효성 오류", e);
-            return ResponseEntity.badRequest().build();
-        } catch (Exception e) {
-            log.error("오답세션 생성 실패", e);
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
-    }
-
     @GetMapping("/me/quiz/reviews/wrong")
     public ResponseEntity<?> listWrongNotes(
             @RequestParam(defaultValue = "0") int page,
