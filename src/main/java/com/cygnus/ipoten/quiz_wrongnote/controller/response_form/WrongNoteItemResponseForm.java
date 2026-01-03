@@ -36,6 +36,9 @@ public class WrongNoteItemResponseForm {
     private List<ChoiceItem> choices;
     private Instant wrongAt;
 
+    private boolean resolved;
+    private String status;
+
     public static WrongNoteItemResponseForm from(
             QuizWrongNote wn,
             List<QuizChoice> choices,
@@ -68,6 +71,9 @@ public class WrongNoteItemResponseForm {
                         .build())
                 .toList());
 
+        var s = wn.getStatus();
+        boolean resolved = (s != null && s.name().equals("RESOLVED"));
+
         return WrongNoteItemResponseForm.builder()
                 .wrongNoteId(wn.getId())
                 .quizSessionId(wn.getQuizSessionId())
@@ -83,6 +89,8 @@ public class WrongNoteItemResponseForm {
                 .termId(termId)
                 .termTitle(termTitle)
                 .categoryLabel(categoryLabel)
+                .status(s == null ? "UNRESOLVED" : s.name())
+                .resolved(resolved)
                 .build();
     }
 

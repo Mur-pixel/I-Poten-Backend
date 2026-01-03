@@ -2,6 +2,7 @@ package com.cygnus.ipoten.quiz_wrongnote.entity;
 
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_wrongnote.entity.enums.WrongNoteStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
@@ -65,9 +66,14 @@ public class QuizWrongNote {
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "status", nullable = false, length = 20)
+    private WrongNoteStatus status;
+
     @PrePersist
     void prePersist() {
         if (this.submittedAt == null) this.submittedAt = Instant.now();
+        if (this.status == null) this.status = WrongNoteStatus.UNRESOLVED;
     }
 
     public static QuizWrongNote forChoice(
@@ -118,6 +124,12 @@ public class QuizWrongNote {
         r.submittedChoiceText = null;
         r.submittedText = submittedText.trim();
         r.submittedAt = (submittedAt != null ? submittedAt : Instant.now());
+        r.status = WrongNoteStatus.UNRESOLVED;
         return r;
+    }
+
+    public void changeStatus(WrongNoteStatus status) {
+        if (status == null) throw new IllegalArgumentException("status는 null일 수 없습니다.");
+        this.status = status;
     }
 }

@@ -3,6 +3,7 @@ package com.cygnus.ipoten.quiz_wrongnote.controller;
 import com.cygnus.ipoten.quiz_session.controller.response_form.CreateQuizSessionResponseForm;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionRetryService;
 import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
+import com.cygnus.ipoten.quiz_wrongnote.controller.request_form.WrongNoteResolvedUpdateRequestForm;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteService;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteServiceImpl;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
@@ -16,6 +17,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.NoSuchElementException;
 
 @Slf4j
 @RestController
@@ -82,6 +84,33 @@ public class QuizWrongNoteController {
             log.error("listWrongNotes failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    @PatchMapping("/me/quiz/reviews/{wrongNoteId}")
+    public ResponseEntity<?> updateWrongNoteResolved(
+            @PathVariable Long wrongNoteId,
+            @RequestBody WrongNoteResolvedUpdateRequestForm requestForm,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        if (requestForm == null || requestForm.getResolved() == null) {
+            return ResponseEntity.badRequest().body("resolved 값이 필요합니다.");
+        }
+
+        try {
+            quizWrongNoteService.updateResolved(accountId, wrongNoteId, requestForm.getResolved());
+            return ResponseEntity.ok().build();
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("updateWrongNoteResolved failed", e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+
     }
 
     /**

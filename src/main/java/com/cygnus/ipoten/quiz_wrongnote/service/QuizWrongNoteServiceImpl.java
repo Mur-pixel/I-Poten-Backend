@@ -10,6 +10,7 @@ import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
 import com.cygnus.ipoten.quiz_wrongnote.controller.response_form.WrongNoteItemResponseForm;
 import com.cygnus.ipoten.quiz_wrongnote.controller.response_form.WrongNoteListResponseForm;
 import com.cygnus.ipoten.quiz_wrongnote.entity.QuizWrongNote;
+import com.cygnus.ipoten.quiz_wrongnote.entity.enums.WrongNoteStatus;
 import com.cygnus.ipoten.quiz_wrongnote.repository.QuizWrongNoteRepository;
 import com.cygnus.ipoten.quiz_session_answer.entity.QuizSessionAnswer;
 import lombok.RequiredArgsConstructor;
@@ -192,6 +193,15 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
                 result.getTotalElements(),
                 items
         );
+    }
+
+    @Override
+    @Transactional
+    public void updateResolved(Long accountId, Long wrongNoteId, boolean resolved) {
+        QuizWrongNote wn = quizWrongNoteRepository.findByIdAndAccount_Id(wrongNoteId, accountId)
+                .orElseThrow(() -> new NoSuchElementException("Wrong note id " + wrongNoteId));
+
+        wn.changeStatus(resolved ? WrongNoteStatus.RESOLVED : WrongNoteStatus.UNRESOLVED);
     }
 
     private String resolveMyAnswer(QuizWrongNote wn, Map<Long, String> choiceTextByChoiceId) {

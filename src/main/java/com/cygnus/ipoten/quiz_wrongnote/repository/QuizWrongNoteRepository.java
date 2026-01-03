@@ -49,4 +49,6 @@ public interface QuizWrongNoteRepository extends JpaRepository<QuizWrongNote, Lo
             @Param("toAt") Instant toAt,
             Pageable pageable
     );
+
+    Optional<QuizWrongNote> findByIdAndAccount_Id(Long id, Long accountId);
 }
