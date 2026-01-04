@@ -130,8 +130,8 @@ public class WordbookServiceImpl implements WordbookService {
     @Transactional
     public CreateWordbookTermResponse attachTerm(CreateWordbookTermRequest request) {
         Long accountId = request.getAccountId();
-        Long wordbookId  = request.getWordbookId();
-        Long termId    = request.getTermId();
+        Long wordbookId = request.getWordbookId();
+        Long termId = request.getTermId();
 
         if (accountId == null || wordbookId == null || termId == null || accountId <= 0 || wordbookId <= 0 || termId <= 0) {
             throw new ResponseStatusException(BAD_REQUEST, "잘못된 파라미터입니다.");
@@ -140,8 +140,9 @@ public class WordbookServiceImpl implements WordbookService {
         boolean owns = wordbookRepository.existsByIdAndAccount_Id(wordbookId, accountId);
         if (!owns) throw new ResponseStatusException(HttpStatus.FORBIDDEN, "폴더에 대한 권한이 없습니다.");
 
-        Optional<WordbookTerm> existing = wordbookTermRepository
-                .findByAccount_IdAndWordbook_IdAndTerm_Id(accountId, wordbookId, termId);
+        Optional<WordbookTerm> existing =
+                wordbookTermRepository.findByAccount_IdAndWordbook_IdAndTerm_Id(accountId, wordbookId, termId);
+
         if (existing.isPresent()) {
             return CreateWordbookTermResponse.alreadyAttached(existing.get().getId(), wordbookId, termId);
         }
@@ -151,11 +152,12 @@ public class WordbookServiceImpl implements WordbookService {
         }
 
         Wordbook wordbookRef = wordbookRepository.getReferenceById(wordbookId);
-        Account accountRef           = accountRepository.getReferenceById(accountId);
-        Term termRef                 = termRepository.getReferenceById(termId);
+        Account accountRef = accountRepository.getReferenceById(accountId);
+        Term termRef = termRepository.getReferenceById(termId);
 
         WordbookTerm uwt = new WordbookTerm(accountRef, wordbookRef, termRef);
         WordbookTerm saved = wordbookTermRepository.save(uwt);
+
         return CreateWordbookTermResponse.created(saved.getId(), wordbookId, termId);
     }
 
@@ -207,7 +209,7 @@ public class WordbookServiceImpl implements WordbookService {
     @Transactional
     public void deleteOne(Long accountId, DeleteMode mode, Long wordbookId, Long targetWordbookId) {
         var wordbook = wordbookRepository.findByIdAndAccount_Id(wordbookId, accountId)
-                .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "폴더를 찾을 수 없습니다."));
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
         long count = wordbookTermRepository.countByWordbookIdAndAccountId(wordbookId, accountId);
 
@@ -380,15 +382,15 @@ public class WordbookServiceImpl implements WordbookService {
     }
 
     @Override
+    @Transactional
     public AttachTermsBulkResponse attachTermsBulk(AttachTermsBulkRequest request) {
-        final int MAX_BULK = 2000;  // 한 번에 처리 가능한 최대 개수
-        final int BATCH_SIZE = 500; // saveAll 배치 크기
+        final int MAX_BULK = 2000;
+        final int BATCH_SIZE = 500;
 
         Long accountId = request.accountId();
         Long wordbookId = request.wordbookId();
-        List<Long> input = request.termIds() == null ? List.of() : request.termIds();
+        List<Long> input = (request.termIds() == null) ? List.of() : request.termIds();
 
-        // 기본 검증
         if (input.isEmpty()) {
             throw new ResponseStatusException(BAD_REQUEST, "용어 ID 목록이 비어있습니다.");
         }
@@ -397,19 +399,19 @@ public class WordbookServiceImpl implements WordbookService {
         }
 
         // 폴더 소유권 검증
-        var wordbook = wordbookRepository.findById(wordbookId)
+        Wordbook wordbook = wordbookRepository.findById(wordbookId)
                 .orElseThrow(() -> new ResponseStatusException(NOT_FOUND, "폴더를 찾을 수 없습니다."));
         if (!Objects.equals(wordbook.getAccount().getId(), accountId)) {
             throw new ResponseStatusException(HttpStatus.FORBIDDEN, "접근 권한이 없습니다.");
         }
 
-        // 입력 정규화(null 제거 + 중복 제거)
+        // 입력 정규화 (null 제거 + 중복 제거)
         List<Long> requestedDistinct = input.stream()
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
 
-        // 폴더 내 기존 termId 집합 -> 중복 판정 (스킵 정책)
+        // 기존 termId 조회(중복 스킵)
         Set<Long> already = new HashSet<>(
                 wordbookTermRepository.findDistinctTermIdsByWordbookAndAccountOrderByTermIdAsc(wordbookId, accountId)
         );
@@ -417,35 +419,36 @@ public class WordbookServiceImpl implements WordbookService {
                 .filter(already::contains)
                 .toList();
 
-        // 스킵 정책 고정(요청에 dedupeMode가 오더라도 중복은 항상 스킵)
+        // 삽입 후보
         List<Long> candidates = requestedDistinct.stream()
                 .filter(id -> !already.contains(id))
                 .toList();
 
-        // 용어 존재성 검증 -> invalidIds 분리
+        // 존재하는 term만 추리기
         var existingTerms = termRepository.findAllById(candidates);
-        Set<Long>  existingIds = existingTerms.stream().map(Term::getId).collect(Collectors.toSet());
+        Set<Long> existingIds = existingTerms.stream().map(Term::getId).collect(Collectors.toSet());
 
         List<Long> invalidIds = candidates.stream()
                 .filter(id -> !existingIds.contains(id))
                 .toList();
 
-        // 실제 삽입 대상
         List<Long> toInsertIds = candidates.stream()
                 .filter(existingIds::contains)
                 .toList();
 
-        // sortOrder 계산(기존 최대 뒤로 이어붙이기)
+        // sortOrder 계산
         Integer base = wordbookTermRepository.findMaxSortOrderByAccountAndFolder(accountId, wordbookId);
         int cursor = (base == null ? 0 : base);
 
-        // 엔티티 생성 및 배치 저장
         int attached = 0;
         List<WordbookTerm> buffer = new ArrayList<>(Math.min(toInsertIds.size(), BATCH_SIZE));
 
         for (Long termId : toInsertIds) {
             Term termRef = termRepository.getReferenceById(termId);
-            WordbookTerm uwt = WordbookTerm.of(wordbook, termRef, ++cursor); // account는 wordbook에서 세팅
+
+            // ✅ account는 wordbook에서 자동으로 가져오게 (이미 WordbookTerm.of가 있음)
+            WordbookTerm uwt = WordbookTerm.of(wordbook, termRef, ++cursor);
+
             buffer.add(uwt);
 
             if (buffer.size() >= BATCH_SIZE) {
@@ -454,16 +457,16 @@ public class WordbookServiceImpl implements WordbookService {
                 buffer.clear();
             }
         }
+
         if (!buffer.isEmpty()) {
-            var batch = List.copyOf(buffer);
-            wordbookTermRepository.saveAll(batch);
-            attached += batch.size();
+            wordbookTermRepository.saveAll(buffer);
+            attached += buffer.size();
             buffer.clear();
         }
 
         int requested = input.size();
-        int skipped = duplicates.size();    // 이미 폴더에 있던 항목 수
-        int failed = 0;                     // 개별 실패 처리 없음(예외 발생 시 전체 롤백)
+        int skipped = duplicates.size();
+        int failed = 0;
 
         log.info("[attachTermsBulk] accountId={} wordbookId={} requested={} attached={} skipped={} invalid={}",
                 accountId, wordbookId, requested, attached, skipped, invalidIds.size());

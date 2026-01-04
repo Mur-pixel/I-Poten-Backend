@@ -8,8 +8,6 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import org.hibernate.annotations.OnDelete;
 import org.hibernate.annotations.OnDeleteAction;
-import org.springframework.data.annotation.CreatedDate;
-import org.springframework.data.annotation.LastModifiedDate;
 
 import java.time.Instant;
 
@@ -46,11 +44,9 @@ public class WordbookTerm {
     @Column(name = "sort_order", nullable = false)
     private Integer sortOrder = 0; // 정렬 순서
 
-    @CreatedDate
     @Column(name = "created_at", nullable = false)
     private Instant createdAt = Instant.now();
 
-    @LastModifiedDate
     @Column(
             name = "updated_at",
             nullable = false,
