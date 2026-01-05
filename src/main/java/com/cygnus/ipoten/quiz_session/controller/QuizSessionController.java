@@ -218,6 +218,10 @@ public class QuizSessionController {
         return ResponseEntity.ok(body);
     }
 
+    @Operation(
+            summary = "최근 N일 이내 오답만 다시 풀기",
+            description = "퀴즈 타임라인 페이지에서 최근 7일 혹은 30일 이내 오답만 빠르게 다시 푸는 경우 선택합니다. "
+    )
     @PostMapping("/me/quiz/sessions/quick-retry")
     public ResponseEntity<?> quickRetry(
             @RequestParam(name = "days", required = false) Integer days,

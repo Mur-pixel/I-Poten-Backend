@@ -26,10 +26,13 @@ import java.util.NoSuchElementException;
 public class QuizWrongNoteController {
 
     private final RedisCacheService redisCacheService;
-    private final QuizSessionRetryService quizSessionRetryService;
-    private final QuizWrongNoteServiceImpl quizWrongNoteServiceImpl;
     private final QuizWrongNoteService quizWrongNoteService;
 
+    @Operation(
+            summary = "내 오답노트 목록 조회",
+            description = "오답노트(리뷰) 중 오답 항목을 페이지네이션으로 조회합니다. " +
+                    "type/sessionId/from~to 필터를 통해 범위를 좁힐 수 있고, includeAnswers=true면 정답/해설 등 민감 정보를 함께 내려줄 수 있습니다."
+    )
     @GetMapping("/me/quiz/reviews/wrong")
     public ResponseEntity<?> listWrongNotes(
             @RequestParam(defaultValue = "0") int page,
@@ -56,6 +59,10 @@ public class QuizWrongNoteController {
         }
     }
 
+    @Operation(
+            summary = "오답노트 해결 여부 변경",
+            description = "오답노트 항목을 '해결 완료(resolved=true)' 또는 '미해결(resolved=false)'로 변경합니다. "
+    )
     @PatchMapping("/me/quiz/reviews/{wrongNoteId}")
     public ResponseEntity<?> updateWrongNoteResolved(
             @PathVariable Long wrongNoteId,
