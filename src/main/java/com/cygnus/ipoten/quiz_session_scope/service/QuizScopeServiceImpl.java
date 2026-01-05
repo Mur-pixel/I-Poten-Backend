@@ -18,11 +18,10 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Random;
+import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
+
+import static com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType.WRONG_NOTE;
 
 @Slf4j
 @Service
@@ -168,6 +167,44 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         ss.getTypeRaw(),
                         ss.getLevel(),
                         condition.getSeedPolicy(),
+                        title
+                );
+            }
+
+            case WRONG_NOTE -> {
+                var s = condition.getWrongNoteScope();
+                if (s == null || s.questionIds() == null || s.questionIds().isEmpty()) {
+                    throw new IllegalArgumentException("WRONG_NOTE questionIds가 비었습니다.");
+                }
+
+                List<Long> picked = s.questionIds().stream()
+                        .filter(Objects::nonNull)
+                        .distinct()
+                        .limit(100)
+                        .toList();
+
+                if (picked.isEmpty()) {
+                    throw new IllegalArgumentException("WRONG_NOTE questionIds가 유효하지 않습니다.");
+                }
+
+                List<Long> exist = quizQuestionRepository.findExistingIds(picked);
+                if (exist.size() != picked.size()) {
+                    throw new IllegalArgumentException("존재하지 않는 questionIds가 포함되어 있습니다.");
+                }
+
+                SessionSource source = SessionSource.wrongNote(accountId);
+
+                // seed는 기록용으로만 사용 (질문 순서는 picked 그대로 전달)
+                SeedPolicy seedPolicy = (condition.getSeedPolicy() != null) ? condition.getSeedPolicy() : SeedPolicy.fromRaw(null, null);
+                SeedMode seedMode = (seedPolicy.getSeedMode() != null) ? seedPolicy.getSeedMode() : SeedMode.AUTO;
+                long seedValue = resolveSeedValue(seedMode, seedPolicy.getFixedSeed(), accountId);
+
+                return quizSessionAnswerService.startFromScope(
+                        accountId,
+                        source,
+                        picked,
+                        seedMode,
+                        seedValue,
                         title
                 );
             }

@@ -173,4 +173,7 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
         group by q.questionType
     """)
     List<Object[]> countTypesByIds(@Param("ids") List<Long> ids);
+
+    @Query("select q.id from QuizQuestion q where q.id in :ids")
+    List<Long> findExistingIds(@Param("ids") List<Long> ids);
 }

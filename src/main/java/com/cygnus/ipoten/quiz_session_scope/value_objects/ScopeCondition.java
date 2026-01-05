@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_session_scope.value_objects;
 
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType;
 import lombok.Value;
 
 /**
@@ -40,7 +41,7 @@ import lombok.Value;
 public class ScopeCondition {
 
     public enum SourceType {
-        WORDBOOK, TERM_CATEGORY, SET
+        WORDBOOK, TERM_CATEGORY, SET, WRONG_NOTE
     }
 
     SourceType sourceType;
@@ -51,6 +52,9 @@ public class ScopeCondition {
 
     // SET 전용
     SetScope setScope;
+
+    // WRONG_NOTE 전용
+    WrongNoteScope wrongNoteScope;
 
     // 공통 시드 정책
     SeedPolicy seedPolicy;
@@ -65,6 +69,7 @@ public class ScopeCondition {
         return new ScopeCondition(
                 SourceType.WORDBOOK,
                 wordbookScope,
+                null,
                 null,
                 null,
                 seedPolicy,
@@ -82,6 +87,7 @@ public class ScopeCondition {
                 null,
                 termCategoryScope,
                 null,
+                null,
                 seedPolicy,
                 customTitle
         );
@@ -97,6 +103,23 @@ public class ScopeCondition {
                 null,
                 null,
                 setScope,
+                null,
+                seedPolicy,
+                customTitle
+        );
+    }
+
+    public static ScopeCondition forWrongNote(WrongNoteScope wrongNoteScope, SeedPolicy seedPolicy) {
+        return forWrongNote(wrongNoteScope, seedPolicy, null);
+    }
+
+    public static ScopeCondition forWrongNote(WrongNoteScope wrongNoteScope, SeedPolicy seedPolicy, String customTitle) {
+        return new ScopeCondition(
+                SourceType.WRONG_NOTE,
+                null,
+                null,
+                null,
+                wrongNoteScope,
                 seedPolicy,
                 customTitle
         );

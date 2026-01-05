@@ -17,11 +17,12 @@ public class StartQuizSessionUnifiedRequestForm {
 
     @NotBlank(message = "source는 필수입니다")
     @Pattern(
-            // wordbook / term_category / set 만 허용 (구버전 category/job/folder는 setSource에서 정규화)
-            regexp = "(?i)wordbook|term_category|set",
-            message = "source는 wordbook|term_category|set 중 하나여야 합니다"
+            regexp = "(?i)wordbook|term_category|set|wrong_note",
+            message = "source는 wordbook|term_category|set|wrong_note 중 하나여야 합니다"
     )
-    private String source;      // "wordbook" | "term_category" | "set"
+    private String source;
+
+    private List<Long> questionIds;
 
     @Size(max = 50, message = "title은 50자 이하여야 합니다.")
     @JsonAlias({"title", "customTitle"})
@@ -73,14 +74,16 @@ public class StartQuizSessionUnifiedRequestForm {
             s = "wordbook";
         } else if ("category".equalsIgnoreCase(s) || "job".equalsIgnoreCase(s)) {
             s = "term_category";
+        } else if ("wrongnote".equalsIgnoreCase(s) || "wrong-note".equalsIgnoreCase(s) || "wrong".equalsIgnoreCase(s)) {
+            s = "wrong_note";
         }
 
         if ("wordbook".equalsIgnoreCase(s)
                 || "term_category".equalsIgnoreCase(s)
-                || "set".equalsIgnoreCase(s)) {
+                || "set".equalsIgnoreCase(s)
+                || "wrong_note".equalsIgnoreCase(s)) {
             this.source = s.toLowerCase();
         } else {
-            // 패턴에서 에러 내도록 그대로 둠
             this.source = s;
         }
     }
@@ -124,6 +127,12 @@ public class StartQuizSessionUnifiedRequestForm {
     public boolean isLevelValid() {
         if (!isSourceOneOf("wordbook", "term_category")) return true;
         return level != null;
+    }
+
+    @AssertTrue(message = "source=wrong_note 일 때 questionIds가 필요합니다")
+    public boolean isWrongNoteIdsValid() {
+        if (!isSourceOneOf("wrong_note")) return true;
+        return questionIds != null && !questionIds.isEmpty();
     }
 
     /* ---------- 기존 폼으로 위임 변환 ---------- */
@@ -182,6 +191,12 @@ public class StartQuizSessionUnifiedRequestForm {
             case "set" -> ScopeCondition.forSet(
                     SetScope.ofId(quizSetId, count, type, level),
                     seedPolicy
+            );
+
+            case "wrong_note" -> ScopeCondition.forWrongNote(
+                    new WrongNoteScope(accountId, questionIds),
+                    seedPolicy,
+                    customTitle
             );
 
             default -> throw new IllegalArgumentException("지원하지 않는 source: " + source);
