@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_daily.service;
 
+import com.cygnus.ipoten.quiz_daily.entity.enums.DailyStartMode;
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
@@ -12,7 +13,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -47,15 +47,45 @@ public class DailyQuizServiceImpl implements DailyQuizService {
     private record DailyPool(Long termCategoryId) {}
 
     @Override
-    @Transactional(propagation = Propagation.NOT_SUPPORTED)
-    public DailyStarted startGeneralDaily(Long accountId) {
-        LocalDate ymd = LocalDate.now(KST);
+    @Transactional
+    public DailyStarted startGeneralDaily(Long accountId, DailyStartMode mode) {
 
-        StartQuizSessionResponse choice    = startOne(accountId, ymd, QuestionType.CHOICE,   3, "DAILY_GENERAL:CHOICE");
-        StartQuizSessionResponse ox        = startOne(accountId, ymd, QuestionType.OX,       3, "DAILY_GENERAL:OX");
-        StartQuizSessionResponse initials  = startOne(accountId, ymd, QuestionType.INITIALS, 3, "DAILY_GENERAL:INITIALS");
+        LocalDate today = LocalDate.now(KST);
+        LocalDate baseYmd = today;
 
-        return new DailyStarted(ymd, choice, ox, initials);
+        if (mode == null) mode = DailyStartMode.RESUME;
+
+        if (mode == DailyStartMode.RESUME) {
+            baseYmd = quizSessionRepository
+                    .findTopByAccount_IdAndDailyIssueTypeAndSessionStatusInOrderByStartedAtDesc(
+                            accountId, "GENERAL", List.of(SessionStatus.IN_PROGRESS)
+                    )
+                    .map(s -> s.getDailyYmd() != null
+                            ? s.getDailyYmd()
+                            : LocalDate.ofInstant(s.getStartedAt(), KST))
+                    .orElse(today);
+
+        } else if (mode == DailyStartMode.TODAY) {
+            baseYmd = today;
+
+            // (1) 기존 IN_PROGRESS 3종 만료
+            quizSessionRepository.expireDailyInProgress(accountId, baseYmd, "GENERAL", QuestionType.CHOICE.name());
+            quizSessionRepository.expireDailyInProgress(accountId, baseYmd, "GENERAL", QuestionType.OX.name());
+            quizSessionRepository.expireDailyInProgress(accountId, baseYmd, "GENERAL", QuestionType.INITIALS.name());
+        }
+
+        // (2) 새로 생성 (startOne은 IN_PROGRESS가 없으니 생성 루트로 감)
+        StartQuizSessionResponse choice   = startOne(accountId, baseYmd, QuestionType.CHOICE,   3, "DAILY_GENERAL:CHOICE");
+        StartQuizSessionResponse ox       = startOne(accountId, baseYmd, QuestionType.OX,       3, "DAILY_GENERAL:OX");
+        StartQuizSessionResponse initials = startOne(accountId, baseYmd, QuestionType.INITIALS, 3, "DAILY_GENERAL:INITIALS");
+
+        boolean hasUnfinishedSession =
+                !today.equals(baseYmd)
+                        && quizSessionRepository.existsByAccount_IdAndDailyYmdAndDailyIssueTypeAndSessionStatus(
+                        accountId, baseYmd, "GENERAL", SessionStatus.IN_PROGRESS
+                );
+
+        return new DailyStarted(today, baseYmd, choice, ox, initials, hasUnfinishedSession);
     }
 
     private StartQuizSessionResponse startOne(
@@ -65,15 +95,15 @@ public class DailyQuizServiceImpl implements DailyQuizService {
             int count,
             String salt
     ) {
-        var statuses = List.of(SessionStatus.IN_PROGRESS);
 
-        var existing = quizSessionRepository
+        // 1) IN_PROGRESS 우선
+        var inProgress = quizSessionRepository
                 .findTopByAccount_IdAndDailyYmdAndDailyIssueTypeAndDailyQuestionTypeAndSessionStatusInOrderByStartedAtDesc(
-                        accountId, ymd, "GENERAL", type.name(), statuses
+                        accountId, ymd, "GENERAL", type.name(), List.of(SessionStatus.IN_PROGRESS)
                 );
 
-        if (existing.isPresent()) {
-            return quizScopeService.loadSessionForPlay(accountId, existing.get().getId());
+        if (inProgress.isPresent()) {
+            return quizScopeService.loadSessionForPlay(accountId, inProgress.get().getId());
         }
 
         try {
@@ -119,10 +149,10 @@ public class DailyQuizServiceImpl implements DailyQuizService {
             throw (last != null) ? last : new IllegalArgumentException("데일리 풀에서 문항을 만들 수 없습니다.");
 
         } catch (DataIntegrityViolationException dup) {
-            // UNIQUE 충돌(동시 요청) -> 다시 조회 후 반환
             var again = quizSessionRepository
                     .findTopByAccount_IdAndDailyYmdAndDailyIssueTypeAndDailyQuestionTypeAndSessionStatusInOrderByStartedAtDesc(
-                            accountId, ymd, "GENERAL", type.name(), statuses
+                            accountId, ymd, "GENERAL", type.name(),
+                            List.of(SessionStatus.IN_PROGRESS, SessionStatus.SUBMITTED, SessionStatus.EXPIRED)
                     );
             if (again.isPresent()) {
                 return quizScopeService.loadSessionForPlay(accountId, again.get().getId());

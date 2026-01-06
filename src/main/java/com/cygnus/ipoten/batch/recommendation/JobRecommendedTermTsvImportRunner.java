@@ -28,6 +28,7 @@ public class JobRecommendedTermTsvImportRunner implements ApplicationRunner {
 
     private final TermRepository termRepository;
     private final JobRecommendedTermRepository jobRecommendedTermRepository;
+    private final TermCategoryRepository termCategoryRepository;
 
     @Override
     @Transactional
@@ -117,10 +118,11 @@ public class JobRecommendedTermTsvImportRunner implements ApplicationRunner {
                 }
 
                 Term term = candidates.get(0);
+                TermCategory categoryRef = termCategoryRepository.getReferenceById(categoryId);
 
-                // 저장은 jobKey+term+rankNo
-                JobRecommendedTerm entity = JobRecommendedTerm.create(jobKey, term, r.getRankNo());
+                JobRecommendedTerm entity = JobRecommendedTerm.create(jobKey, term, categoryRef, r.getRankNo());
                 jobRecommendedTermRepository.save(entity);
+
                 insertedThisJob++;
             }
 

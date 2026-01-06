@@ -16,7 +16,12 @@ public class SessionSource {
             case SET -> "set:" + id;
             case TERM_CATEGORY -> "termCategory:" + id;
             case WORDBOOK -> "wordbook:" + id;
+            case WRONG_NOTE -> "wrongNote:" + id;
         };
         return new SessionSource(type, id, key, partType);
+    }
+
+    public static SessionSource wrongNote(Long accountId) {
+        return of(SessionSourceType.WRONG_NOTE, accountId, null);
     }
 }

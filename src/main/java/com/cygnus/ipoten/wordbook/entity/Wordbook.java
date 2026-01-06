@@ -26,7 +26,11 @@ public class Wordbook {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "account_id", nullable = false, foreignKey = @ForeignKey(name = "FK_swf_account_cascade"))
+    @JoinColumn(
+            name = "account_id",
+            nullable = false,
+            foreignKey = @ForeignKey(name = "FK_wordbook_account_cascade")
+    )
     @OnDelete(action = OnDeleteAction.CASCADE)
     private Account account;
 

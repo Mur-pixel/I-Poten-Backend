@@ -64,7 +64,7 @@ public class JobRecommendedTermServiceImpl implements JobRecommendedTermService 
         // 3) attach 대상 = recommended - existing
         var toAttach = recommendedIds.stream()
                 .filter(id -> !existingIds.contains(id))
-                .toList();
+                .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));
 
         int skippedByExisting = requested - toAttach.size();
 
