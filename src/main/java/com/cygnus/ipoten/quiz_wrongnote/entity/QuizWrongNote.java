@@ -2,6 +2,7 @@ package com.cygnus.ipoten.quiz_wrongnote.entity;
 
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
+import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_wrongnote.entity.enums.WrongNoteStatus;
 import jakarta.persistence.*;
 import lombok.AllArgsConstructor;
@@ -41,6 +42,10 @@ public class QuizWrongNote {
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "quiz_question_id", nullable = false)
     private QuizQuestion quizQuestion; // 틀린 문제
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "quiz_session_id", insertable = false, updatable = false)
+    private QuizSession quizSession;
 
     /** 어떤 퀴즈 세션에서 틀렸는지 */
     @Column(name = "quiz_session_id", nullable = false)

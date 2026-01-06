@@ -17,6 +17,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -100,18 +101,26 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
     }
 
     @Transactional(readOnly = true)
-    public WrongNoteListResponseForm listWrongNotes(Long accountId, int page, int size, String type, Long sessionId, LocalDate from, LocalDate to, boolean includeAnswers) {
+    public WrongNoteListResponseForm listWrongNotes(Long accountId, int page, int size, WrongNoteSearchCondition condition, boolean includeAnswers) {
         page = Math.max(0, page);
         size = Math.max(1, Math.min(100, size));
-        Pageable pageable = PageRequest.of(page, size);
 
-        Instant fromInstant = parseDateStart(from, KST);
-        Instant toExclusive = parseDateEndExclusive(to, KST);
+        var sort = (condition.sortKey() == WrongNoteSearchCondition.SortKey.OLDEST)
+                ? Sort.by(Sort.Direction.ASC, "submittedAt", "id")
+                : Sort.by(Sort.Direction.DESC, "submittedAt", "id");
 
-        QuestionType qType = parseQuestionTypeOrNull(type);
+        Pageable pageable = PageRequest.of(page, size, sort);
+
+        Instant fromInstant = parseDateStart(condition.from(), KST);
+        Instant toExclusive = parseDateEndExclusive(condition.to(), KST);
+
+        QuestionType qType = parseQuestionTypeOrNull(condition.typeUpper());
+        var diff = condition.difficultyLevel();
+        var unresolvedOnly = condition.unresolvedOnly();
+        var q = condition.q();
 
         Page<QuizWrongNote> result =
-                quizWrongNoteRepository.findWrongNotes(accountId, qType, sessionId, fromInstant, toExclusive, pageable);
+                quizWrongNoteRepository.searchWrongNotes(accountId, qType, diff, unresolvedOnly, WrongNoteStatus.UNRESOLVED, q, condition.sessionId(), fromInstant, toExclusive, pageable);
 
         List<QuizWrongNote> content = result.getContent();
         if (content.isEmpty()) {
