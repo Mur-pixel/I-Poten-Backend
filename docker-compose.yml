@@ -16,7 +16,7 @@ services:
     env_file:
       - .env
     networks:
-      - jobspoon-net
+      - ipoten-net
 
   redis:
     image: redis:7.0.4
@@ -35,7 +35,7 @@ services:
     depends_on:
       - db
     networks:
-      - jobspoon-net
+      - ipoten-net
 
   server:
     image: ghcr.io/imcoder0000/spring-backend:latest
@@ -55,10 +55,10 @@ services:
     env_file:
       - .env
     networks:
-      - jobspoon-net
+      - ipoten-net
 
 networks:
-  jobspoon-net:
+  ipoten-net:
     external: true
 
 volumes:
