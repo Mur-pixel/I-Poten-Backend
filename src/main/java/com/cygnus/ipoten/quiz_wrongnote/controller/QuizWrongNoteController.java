@@ -6,6 +6,7 @@ import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
 import com.cygnus.ipoten.quiz_wrongnote.controller.request_form.WrongNoteResolvedUpdateRequestForm;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteService;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteServiceImpl;
+import com.cygnus.ipoten.quiz_wrongnote.service.WrongNoteSearchCondition;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
@@ -17,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.time.LocalDate;
+import java.util.Map;
 import java.util.NoSuchElementException;
 
 @Slf4j
@@ -31,13 +33,29 @@ public class QuizWrongNoteController {
     @Operation(
             summary = "내 오답노트 목록 조회",
             description = "오답노트(리뷰) 중 오답 항목을 페이지네이션으로 조회합니다. " +
-                    "type/sessionId/from~to 필터를 통해 범위를 좁힐 수 있고, includeAnswers=true면 정답/해설 등 민감 정보를 함께 내려줄 수 있습니다."
+                    "type/sessionId/from~to + q/difficulty/unresolvedOnly/sort 필터를 지원합니다. " +
+                    "includeAnswers=true면 정답/해설 등 정보를 함께 내려줄 수 있습니다."
     )
     @GetMapping("/me/quiz/reviews/wrong")
     public ResponseEntity<?> listWrongNotes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
+
+            @Parameter(description = "문제 유형(CHOICE/OX/INITIALS 등)", example = "CHOICE")
             @RequestParam(required = false) String type,
+
+            @Parameter(description = "난이도(EASY/MEDIUM/HARD)", example = "HARD")
+            @RequestParam(required = false) String difficulty,
+
+            @Parameter(description = "미해결만 조회(resolved=false)", example = "true")
+            @RequestParam(defaultValue = "false") boolean unresolvedOnly,
+
+            @Parameter(description = "검색어(문제/해설/용어/카테고리/세션제목)", example = "Redis")
+            @RequestParam(required = false) String q,
+
+            @Parameter(description = "정렬(RECENT/OLDEST)", example = "RECENT")
+            @RequestParam(defaultValue = "RECENT") String sort,
+
             @RequestParam(required = false) Long sessionId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
@@ -51,8 +69,14 @@ public class QuizWrongNoteController {
         }
 
         try {
-            var body = quizWrongNoteService.listWrongNotes(accountId, page, size, type, sessionId, from, to, includeAnswers);
+            WrongNoteSearchCondition condition = WrongNoteSearchCondition.of(
+                    q, type, difficulty, unresolvedOnly, sort, sessionId, from, to
+            );
+
+            var body = quizWrongNoteService.listWrongNotes(accountId, page, size, condition, includeAnswers);
             return ResponseEntity.ok(body);
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
             log.error("listWrongNotes failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
