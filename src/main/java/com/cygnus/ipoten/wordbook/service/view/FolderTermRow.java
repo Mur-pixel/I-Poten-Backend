@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.wordbook.service.view;
 
-import com.cygnus.ipoten.custom_term_learning.entity.enums.LearningStatus;
+import com.cygnus.ipoten.wordbook_learning.entity.enums.LearningStatus;
 
 import java.time.LocalDateTime;
 

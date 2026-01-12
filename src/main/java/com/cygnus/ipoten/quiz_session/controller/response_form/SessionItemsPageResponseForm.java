@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_session.controller.response_form;
 
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import lombok.Builder;
 import lombok.Getter;
 
@@ -24,10 +25,16 @@ public class SessionItemsPageResponseForm {
     @Builder
     public static class Item {
         private final Long questionId;
+        private final QuestionType questionType;
         private final String questionText;
-        private Long correctChoiceId;
+
+        private final String initialsHint; // 초성 힌트(정답 노출X)
+
+        private Long correctChoiceId;    // 선택형일 때만
+        private String expectedText;     // 초성(INITIALS) 정답(제출/리뷰에서만)
         private String explanation;
-        private final List<Choice> choices;
+
+        private final List<Choice> choices; // 초성(INITIALS)은 빈 리스트
     }
 
     @Getter

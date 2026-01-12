@@ -1,7 +1,8 @@
 package com.cygnus.ipoten.quiz_question.service.request;
 
-import com.cygnus.ipoten.quiz.entity.QuizSet;
-import com.cygnus.ipoten.quiz.entity.enums.QuestionType;
+import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
+import com.cygnus.ipoten.quiz_set.entity.QuizSet;
+import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.entity.QuizQuestion;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term.entity.Term;
@@ -20,7 +21,13 @@ public class CreateQuizQuestionRequest {
     private final String answerText;
 
     public QuizQuestion toQuizQuestion(Term term, TermCategory termCategory) {
-        QuizQuestion q = new QuizQuestion(term, termCategory, questionType, questionText, (QuizSet) null);
-        return q;
+        return new QuizQuestion(
+                term,
+                termCategory,
+                questionType,
+                DifficultyLevel.MEDIUM,
+                questionText,
+                null // explanation
+        );
     }
 }

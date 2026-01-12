@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.wordbook.repository.query;
 
-import com.cygnus.ipoten.wordbook.entity.enums.FolderTermSort;
-import com.cygnus.ipoten.custom_term_learning.entity.enums.LearningStatus;
+import com.cygnus.ipoten.wordbook.entity.enums.WordbookTermSort;
+import com.cygnus.ipoten.wordbook_learning.entity.enums.LearningStatus;
 import com.cygnus.ipoten.wordbook.service.view.FolderTermRow;
 import jakarta.persistence.EntityManager;
 import jakarta.persistence.Query;
@@ -20,50 +20,53 @@ public class WordbookTermQueryRepository {
     public static record PageResult<T>(List<T> items, long total) {}
 
     public PageResult<FolderTermRow> findFolderTerms(
-            Long accountId, Long folderId, int page, int perPage, FolderTermSort sort
+            Long accountId, Long wordbookId, int page, int perPage, WordbookTermSort sort
     ) {
         String orderClause = switch (sort) {
-            case TITLE_ASC  -> "t.title COLLATE utf8mb4_0900_ai_ci ASC, uwt.created_at DESC";
-            case TITLE_DESC -> "t.title COLLATE utf8mb4_0900_ai_ci DESC, uwt.created_at DESC";
+            case TITLE_ASC  -> "t.title COLLATE utf8mb4_0900_ai_ci ASC, wbt.created_at DESC";
+            case TITLE_DESC -> "t.title COLLATE utf8mb4_0900_ai_ci DESC, wbt.created_at DESC";
             case STATUS_ASC -> // LEARNING(기본/NULL) 먼저 -> DONE
                     "CASE WHEN COALESCE(lp.status, 'LEARNING')='DONE' THEN 1 ELSE 0 END ASC, " +
-                            "t.title COLLATE utf8mb4_0900_ai_ci ASC, uwt.created_at DESC";
+                            "t.title COLLATE utf8mb4_0900_ai_ci ASC, wbt.created_at DESC";
             case STATUS_DESC -> // DONE 먼저
                     "CASE WHEN COALESCE(lp.status, 'LEARNING')='DONE' THEN 0 ELSE 1 END ASC, " +
-                            "t.title COLLATE utf8mb4_0900_ai_ci ASC, uwt.created_at DESC";
-            case CREATED_AT_DESC -> "uwt.created_at DESC";
+                            "t.title COLLATE utf8mb4_0900_ai_ci ASC, wbt.created_at DESC";
+            case CREATED_AT_DESC -> "wbt.created_at DESC";
         };
 
         String baseSelect = """
             SELECT
-              uwt.id                                   AS uwt_id,
-              t.id                                     AS term_id,
-              t.title                                  AS title,
-              t.description                            AS description,
-              uwt.created_at                           AS created_at,
-              COALESCE(lp.status, 'LEARNING')         AS status
-            FROM wordbook_term uwt
-            JOIN wordbook_folder f    ON f.id = uwt.folder_id
-            JOIN term t                    ON t.id = uwt.term_id
+              wbt.id                                 AS wordbook_term_id,
+              t.id                                   AS term_id,
+              t.title                                AS title,
+              t.description                          AS description,
+              wbt.created_at                         AS created_at,
+              COALESCE(lp.status, 'LEARNING')       AS status
+            FROM wordbook_term wbt
+            JOIN wordbook_folder wb
+              ON wb.id = wbt.wordbook_id
+            JOIN term t
+              ON t.id = wbt.term_id
             LEFT JOIN learning_progress lp
-                 ON lp.account_id = :accountId
-                AND lp.term_id    = t.id
-            WHERE f.account_id = :accountId
-              AND f.id         = :folderId
+              ON lp.account_id = :accountId
+             AND lp.term_id    = t.id
+            WHERE wb.account_id = :accountId
+              AND wb.id         = :wordbookId
             """;
 
         String dataSql  = baseSelect + " ORDER BY " + orderClause + " LIMIT :limit OFFSET :offset";
         String countSql = """
             SELECT COUNT(*)
-            FROM wordbook_term uwt
-            JOIN wordbook_folder f ON f.id = uwt.folder_id
-            WHERE f.account_id = :accountId
-              AND f.id         = :folderId
+            FROM wordbook_term wbt
+            JOIN wordbook_folder wb
+              ON wb.id = wbt.wordbook_id
+            WHERE wb.account_id = :accountId
+              AND wb.id         = :wordbookId
             """;
 
         Query dq = em.createNativeQuery(dataSql);
         dq.setParameter("accountId", accountId);
-        dq.setParameter("folderId",  folderId);
+        dq.setParameter("wordbookId",  wordbookId);
         dq.setParameter("limit",     perPage);
         dq.setParameter("offset",    Math.max(0, page) * perPage);
 
@@ -71,15 +74,15 @@ public class WordbookTermQueryRepository {
         List<Object[]> rows = dq.getResultList();
         List<FolderTermRow> items = new ArrayList<>(rows.size());
         for (Object[] r : rows) {
-            Long uwtId   = ((Number) r[0]).longValue();
-            Long termId  = ((Number) r[1]).longValue();
-            String title = (String) r[2];
-            String desc  = (String) r[3];
+            Long wordbookTermId = ((Number) r[0]).longValue();
+            Long termId         = ((Number) r[1]).longValue();
+            String title        = (String) r[2];
+            String desc         = (String) r[3];
             java.sql.Timestamp ts = (java.sql.Timestamp) r[4];
-            String statusStr = (String) r[5];
+            String statusStr    = (String) r[5];
 
             items.add(new FolderTermRow(
-                    uwtId,
+                    wordbookTermId,
                     termId,
                     title,
                     desc,
@@ -90,7 +93,7 @@ public class WordbookTermQueryRepository {
 
         Query cq = em.createNativeQuery(countSql);
         cq.setParameter("accountId", accountId);
-        cq.setParameter("folderId",  folderId);
+        cq.setParameter("wordbookId",  wordbookId);
         long total = ((Number) cq.getSingleResult()).longValue();
 
         return new PageResult<>(items, total);

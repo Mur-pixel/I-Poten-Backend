@@ -11,11 +11,11 @@ import java.util.List;
 @Setter
 public class MoveFavoritesRequestForm {
     @NotNull
-    private Long targetFolderId;
+    private Long targetWordbookId;
     private List<Long> termIds;
     private List<Long> favoriteIds;
 
     public MoveFavoritesRequest toRequest(Long accountId) {
-        return new MoveFavoritesRequest(accountId, targetFolderId, termIds, favoriteIds);
+        return new MoveFavoritesRequest(accountId, targetWordbookId, termIds, favoriteIds);
     }
 }

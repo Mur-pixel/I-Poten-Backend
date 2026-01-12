@@ -1,12 +1,13 @@
 package com.cygnus.ipoten.quiz_session.entity;
 
-import com.cygnus.ipoten.quiz.entity.QuizSet;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType;
+import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.cygnus.ipoten.account.entity.Account;
-import com.cygnus.ipoten.quiz.entity.enums.SeedMode;
-import com.cygnus.ipoten.quiz.entity.enums.SessionMode;
-import com.cygnus.ipoten.quiz.entity.enums.SessionStatus;
+import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionMode;
+import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import jakarta.persistence.*;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -14,28 +15,28 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 
 import java.time.Instant;
+import java.time.LocalDate;
 import java.util.List;
 
 /**
- * UserQuizSession
+ * QuizSession
  *
  * 사용자가 특정 퀴즈 세트를 푸는 한 번의 세션을 나타내는 엔티티.
- * - 사용자 × 퀴즈 세트 응시 이력 저장
- * - 세트 단위로 진행 상태(IN_PROGRESS, SUBMITTED, EXPIRED)와 점수를 기록한다.
- * - FULL 모드 또는 WRONG_ONLY 모드로 세션을 시작할 수 있다.
- * - parentSession을 통해 WRONG_ONLY 세션은 원본 세션과 연결된다.
- * - questionsSnapshotJson에 실제 출제된 문제 ID 스냅샷을 저장한다.
+ * 1) 진행/제출 상태와 점수(세션 라이프사이클)
+ * 2) 실제로 출제된 문제 ID 스냅샷(재현/리뷰/페이징)
+ * 3) 세션을 생성한 출처/필터 메타(타임라인/검색/분석용)
  */
 @Entity
 @Getter
 @NoArgsConstructor
 @Table(
-    name = "user_quiz_session",
-    indexes = {
-            @Index(name = "idx_uqs_user_set", columnList = "account_id, quiz_set_id, started_at"),
-            @Index(name = "idx_uqs_started", columnList = "started_at"),
-            @Index(name = "idx_uqs_user_status_started", columnList = "account_id, session_status, started_at")
-    }
+        name = "quiz_session",
+        indexes = {
+                @Index(name = "idx_qs_started", columnList = "started_at"),
+                @Index(name = "idx_qs_user_status_started", columnList = "account_id, session_status, started_at"),
+                @Index(name = "idx_qs_user_sourcekey_started", columnList = "account_id, source_key, started_at"),
+                @Index(name = "idx_qs_user_source_started", columnList = "account_id, source_type, source_id, started_at")
+        }
 )
 public class QuizSession {
     @Id
@@ -47,10 +48,8 @@ public class QuizSession {
     @JoinColumn(name = "account_id", nullable = false)
     private Account account;    // 응시 사용자
 
-    @Setter(AccessLevel.PACKAGE)
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "quiz_set_id", nullable = false)
-    private QuizSet quizSet;    // 푼 퀴즈 세트
+    @Column(name = "title", length = 50)
+    private String title;
 
     /** WRONG_ONLY일 때 원본(전체) 세션을 가리킴 */
     @ManyToOne(fetch = FetchType.LAZY)
@@ -92,13 +91,48 @@ public class QuizSession {
     private SeedMode seedMode;  // AUTO | DAILY | FIXED
 
     @Column(name ="seed_value")
-    private Long seed; // 최종 해석된 시드 값
+    private Long seedValue; // 최종 해석된 시드 값
 
     @Version
     private Long version;
 
+    @Enumerated(EnumType.STRING)
+    @Column(name = "source_type", nullable = false, length = 20)
+    private SessionSourceType sourceType;
+
+    @Column(name = "source_id", nullable = false)
+    private Long sourceId;
+
+    @Column(name = "source_key", nullable = false, length = 200)
+    private String sourceKey;
+
+    @Enumerated(EnumType.STRING)
+    @Column(name = "part_type", length = 20)
+    private QuizSetType partType;
+
     // 마지막 활동 시각(조회/답안 저장/제출 시 갱신)
     private Instant lastActivityAt;
+
+    @Column(name = "daily_ymd")
+    private LocalDate dailyYmd; // KST 기준 날짜
+
+    @Column(name = "daily_issue_type", length = 20)
+    private String dailyIssueType; // 예: GENERAL, FE, BE ...
+
+    @Column(name = "daily_question_type", length = 20)
+    private String dailyQuestionType; // 예: CHOICE, OX, INITIALS
+
+    public void changeTitle(String title) {
+        this.title = normalizeTitle(title);
+    }
+
+    private String normalizeTitle(String raw) {
+        if (raw == null) return null;
+        String s = raw.trim().replaceAll("\\s+", " ").trim();
+        if (s.isBlank()) return null;
+        if (s.length() > 50) s = s.substring(0, 50);
+        return s;
+    }
 
     public void submit(int finalScore) {
         this.sessionStatus = SessionStatus.SUBMITTED;
@@ -123,11 +157,10 @@ public class QuizSession {
         this.sessionStatus = SessionStatus.EXPIRED;
     }
 
-    public void begin(Account account, QuizSet quizSet,
+    public void begin(Account account,
                       SessionMode sessionMode, int attemptNo,
                       int total, String questionsSnapshotJson) {
         this.account = account;
-        this.quizSet = quizSet;
         this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
@@ -137,12 +170,11 @@ public class QuizSession {
         this.lastActivityAt = Instant.now();
     }
 
-    public void begin(Account account, QuizSet quizSet,
+    public void begin(Account account,
                       SessionMode sessionMode, int attemptNo,
                       int total, String questionsSnapshotJson,
-                      SeedMode seedMode, Long seed) {
+                      SeedMode seedMode, Long seedValue) {
         this.account = account;
-        this.quizSet = quizSet;
         this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
@@ -150,21 +182,87 @@ public class QuizSession {
         this.total = total;
         this.questionsSnapshotJson = questionsSnapshotJson;
         this.seedMode = seedMode;
-        this.seed = seed;
+        this.seedValue = seedValue;
         this.lastActivityAt = Instant.now();
     }
 
-    public void beginWithParent(Account account, QuizSet quizSet, QuizSession parent,
-                                SessionMode mode, Integer attemptNo, Integer total, String snapshotJson) {
+    public void beginFromSourceWithParent(
+            Account account,
+            QuizSession parent,
+            SessionSourceType sourceType,
+            Long sourceId,
+            String sourceKey,
+            QuizSetType partType,
+            SessionMode sessionMode,
+            int attemptNo,
+            int total,
+            String snapshotJson,
+            SeedMode seedMode,
+            Long seedValue
+    ) {
+        if (account == null) throw new IllegalArgumentException("account required");
+        if (parent == null) throw new IllegalArgumentException("parentSession required");
+        if (sourceType == null) throw new IllegalArgumentException("sourceType required");
+        if (sourceId == null) throw new IllegalArgumentException("sourceId required");
+        if (sourceKey == null || sourceKey.isBlank()) throw new IllegalArgumentException("sourceKey required");
+        if (sessionMode == null) throw new IllegalArgumentException("sessionMode required");
+        if (attemptNo <= 0) throw new IllegalArgumentException("attemptNo must be >= 1");
+        if (total <= 0) throw new IllegalArgumentException("total must be >= 1");
+        if (snapshotJson == null || snapshotJson.isBlank()) throw new IllegalArgumentException("snapshotJson required");
+        if (seedMode == null) throw new IllegalArgumentException("seedMode required");
+        if (seedValue == null) throw new IllegalArgumentException("seedValue required");
+
         this.account = account;
-        this.quizSet = quizSet;
         this.parentSession = parent;
-        this.sessionMode = mode;
+
+        this.sourceType = sourceType;
+        this.sourceId = sourceId;
+        this.sourceKey = sourceKey;
+        this.partType = partType;
+
+        this.sessionMode = sessionMode;
+        this.sessionStatus = SessionStatus.IN_PROGRESS;
+        this.attemptNo = attemptNo;
+        this.startedAt = Instant.now();
+
+        this.total = total;
+        this.questionsSnapshotJson = snapshotJson;
+
+        this.seedMode = seedMode;
+        this.seedValue = seedValue;
+
+        this.lastActivityAt = Instant.now();
+    }
+
+    public void beginFromSource(
+            Account account,
+            SessionSourceType sourceType,
+            Long sourceId,
+            String sourceKey,
+            QuizSetType partType,
+            SessionMode sessionMode,
+            int attemptNo,
+            int total,
+            String snapshotJson,
+            SeedMode seedMode,
+            Long seedValue
+    ) {
+        this.account = account;
+        this.sourceType = sourceType;
+        this.sourceId = sourceId;
+        this.sourceKey = sourceKey;
+        this.partType = partType;
+
+        this.sessionMode = sessionMode;
         this.sessionStatus = SessionStatus.IN_PROGRESS;
         this.attemptNo = attemptNo;
         this.startedAt = Instant.now();
         this.total = total;
         this.questionsSnapshotJson = snapshotJson;
+
+        this.seedMode = seedMode;
+        this.seedValue = seedValue;
+
         this.lastActivityAt = Instant.now();
     }
 
@@ -179,5 +277,15 @@ public class QuizSession {
 
     public void touchActivity() {
         this.lastActivityAt = Instant.now();
+    }
+
+    public void markDaily(LocalDate ymd, String issueType, String questionType) {
+        if (ymd == null) throw new IllegalArgumentException("daily ymd required");
+        if (issueType == null || issueType.isBlank()) throw new IllegalArgumentException("daily issueType required");
+        if (questionType == null || questionType.isBlank()) throw new IllegalArgumentException("daily questionType required");
+
+        this.dailyYmd = ymd;
+        this.dailyIssueType = issueType.trim();
+        this.dailyQuestionType = questionType.trim();
     }
 }

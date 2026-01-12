@@ -5,7 +5,7 @@ import com.cygnus.ipoten.wordbook.service.response.AttachTermsBulkResponse;
 import java.util.List;
 
 public record AttachTermsBulkResponseForm(
-        Long folderId,
+        Long wordbookId,
         int requested,
         int attached,
         int skipped,
@@ -15,7 +15,7 @@ public record AttachTermsBulkResponseForm(
 ) {
     public static AttachTermsBulkResponseForm from(AttachTermsBulkResponse response) {
         return new AttachTermsBulkResponseForm(
-                response.folderId(),
+                response.wordbookId(),
                 response.requested(),
                 response.attached(),
                 response.skipped(),

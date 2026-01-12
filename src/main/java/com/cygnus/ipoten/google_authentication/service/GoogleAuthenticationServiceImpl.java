@@ -38,7 +38,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
     public GoogleAuthenticationServiceImpl(
             @Value("${google.client-id}") String clientId,
             @Value("${google.client-secret}") String clientSecret,
-            @Value(" ${google.redirect-uri}") String redirectUri,
+            @Value("${google.redirect-uri}") String redirectUri,
             @Value("${google.token-request-uri}") String tokenRequestUri,
             RestTemplate restTemplate,
             AuthenticationService authenticationService,
