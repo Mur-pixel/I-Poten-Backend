@@ -1,8 +1,9 @@
 package com.cygnus.ipoten.wordbook_admin;
 
-import com.cygnus.ipoten.wordbook_admin.service.CustomTermEraseService;
+import com.cygnus.ipoten.wordbook_admin.service.WordbookAdminEraseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.ResponseEntity;
@@ -16,35 +17,49 @@ import java.util.Map;
 @Slf4j
 @RestController
 @RequiredArgsConstructor
-@RequestMapping("/api/internal/admin/wordbook")
+@RequestMapping("/api")
+@Tag(name = "WordbookAdmin", description = "단어장(Wordbook) 도메인 데이터 정리(회원탈퇴/운영 배치용)")
 public class WordbookAdminController {
 
-    private final CustomTermEraseService customTermEraseService;
+    private final WordbookAdminEraseService wordbookAdminEraseService;
 
     /**
-     * 내부(Admin) 호출용: custom_term 도메인 데이터만 계정 기준으로 삭제
-     * - wordbook_folder / wordbook_term / learning_progress
-     *   등 계정과 직접적으로 연결된 단어장/진행도/최근 용어 데이터를 일괄 정리한다.
-     * - quiz 도메인과는 별도 엔드포인트에서 관리.
+     * [내부(Admin/배치) 호출용]
+     * 특정 accountId에 연결된 Wordbook 도메인 데이터를 정리합니다.
+     *
+     * 정리 대상(전부 account 기준 '개인 데이터'):
+     * - learning_progress (학습 진행)
+     * - wordbook_pdf      (PDF 생성 결과/스냅샷)
+     * - wordbook_term     (단어장에 담은 용어 매핑)
+     * - wordbook          (단어장)
+     *
+     * 주의:
+     * - term(용어 마스터), quiz_set 같은 "공유 콘텐츠"는 절대 삭제하지 않습니다.
+     * - 이 API는 "회원탈퇴 오케스트레이터"에서 호출해도 안전하도록
+     *   오직 account 스코프 데이터만 정리합니다.
      */
     @Operation(
-            summary = "[내부] 특정 계정의 user_term 데이터 일괄 삭제",
-            description = "운영/배치용. 단어장/진행도/최근 용어 등 user_term 영역 전체를 accountId 기준으로 정리합니다."
+            summary = "[내부] 특정 계정의 Wordbook 도메인 데이터 일괄 삭제",
+            description = "운영/배치/회원탈퇴 오케스트레이션용. accountId 기준으로 학습진행/단어장/PDF를 정리합니다."
     )
     @DeleteMapping("/internal/admin/accounts/{accountId}/wordbook:erase")
-    public ResponseEntity<?> eraseUserTermByAccount(
+    public ResponseEntity<?> eraseWordbookByAccount(
             @Parameter(description = "정리 대상 계정 ID", example = "1")
-            @PathVariable Long accountId) {
-        var result = customTermEraseService.eraseByAccountId(accountId);
+            @PathVariable Long accountId
+    ) {
+        if (accountId == null || accountId <= 0) {
+            return ResponseEntity.badRequest().body(Map.of("message", "accountId must be positive"));
+        }
 
-        // 운영/모니터링 편의를 위한 요약 응답 본문 구성
+        var result = wordbookAdminEraseService.eraseByAccountId(accountId);
+
         Map<String, Object> body = Map.of(
                 "accountId", accountId,
                 "deleted", Map.of(
-                        // 이번 호출에서 "실제로 지워진" 행 수 (선삭제 + FK 제약 충돌 방지 포함)
-                        "wordbook", result.getWordbooks(),
-                        "wordbook_term",   result.getWordbookTerms(),
-                        "learning_progress",   result.getProgresses()
+                        "learning_progress", result.getLearningProgresses(),
+                        "wordbook_pdf", result.getWordbookPdfs(),
+                        "wordbook_term", result.getWordbookTerms(),
+                        "wordbook", result.getWordbooks()
                 )
         );
 
