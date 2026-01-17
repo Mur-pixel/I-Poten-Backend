@@ -28,6 +28,8 @@ public class SearchTermRequest {
     private List<Long> catPathIds;      // 프론트에서 전달한 경로 id들(대/중/소)
     private Long selectedCategoryId;    // 사용자가 최종 선택한 카테고리 id(경로의 마지막 요소)
 
+    private String actorKey;
+
     /** 편의 : prefix 모드 여부 */
     public boolean isPrefixMode() {
         int c = 0;
