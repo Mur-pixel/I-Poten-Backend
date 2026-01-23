@@ -100,16 +100,25 @@ public class QuizAdminController {
     }
 
     /**
-     * 내부(Admin) 호출용: 특정 계정과 연관된 quiz 도메인 데이터 정리.
-     * - quiz_session, session_answer, user_wrong_note 삭제
-     * - 더 이상 어떤 세션에서도 참조되지 않는 quiz_set / quiz_question / quiz_choice 도 함께 정리
+     * 내부(Admin/배치) 호출용: 특정 계정과 연관된 quiz 도메인 "사용자 데이터" 정리.
      *
-     * 주의: quiz_set에는 accountId 컬럼이 없으므로, 실제로 다른 계정이 공유해서 쓰고 있을 수 있다.
-     *      따라서 "모든 세션에서 고아(orphan)가 된 세트"만 삭제 대상이다.
+     * 삭제 대상(계정 스코프):
+     * - quiz_wrong_note (account_id 기준)
+     * - session_answer  (해당 account의 quiz_session을 조인해서 삭제)
+     * - quiz_session    (해당 account의 세션; parent_session 포함)
+     *
+     * 삭제하지 않음(콘텐츠/품질 로그/운영 데이터로 유지):
+     * - quiz_set / quiz_question / quiz_choice 등 "문항 콘텐츠"는 공유/재사용 및 품질 분석 대상이므로
+     *   이 API에서는 삭제하지 않습니다.
+     *
      */
     @Operation(
-            summary = "[내부] 특정 계정의 퀴즈 데이터 일괄 삭제",
-            description = "Admin/배치용. 해당 accountId와 연관된 퀴즈 세션/오답노트 및 고아 세트/문항/보기를 정리합니다."
+            summary = "[내부] 특정 계정의 퀴즈 사용자 데이터 일괄 삭제",
+            description = """
+                Admin/배치용.
+                accountId에 연결된 퀴즈 세션/답안/오답노트(사용자 데이터)만 삭제합니다.
+                quiz_set/quiz_question/quiz_choice(문항 콘텐츠)는 이 API에서 삭제하지 않습니다.
+                """
     )
     @DeleteMapping("/internal/admin/accounts/{accountId}/quiz:erase")
     public ResponseEntity<?> eraseQuizByAccount(

@@ -8,10 +8,23 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.math.BigInteger;
-import java.util.ArrayList;
-import java.util.List;
-
+/**
+ * QuizAdminService
+ *
+ * [목적]
+ * - 회원 탈퇴/관리자 정리 시, "Quiz 도메인에서 계정이 생성한/남긴 데이터"를 안전하게 삭제한다.
+ *
+ * [전략]
+ * - 세션/답안/오답노트는 개인정보/사용자 데이터이므로 Hard Delete로 즉시 정리한다.
+ * - 문제/보기/세트(quiz_set/quiz_question/quiz_choice)는 "콘텐츠/품질/운영 자산" 성격이므로 여기서 건드리지 않는다.
+ *   (콘텐츠 정리는 별도 배치/관리 툴에서 Soft Delete or Archive 정책으로 분리 권장)
+ *
+ * [주의]
+ * - QuizSession은 parent_session_id(셀프 FK)를 갖는다.
+ *   → 부모를 삭제하기 전에, 부모를 참조하는 자식 세션을 먼저 삭제해야 FK 에러를 피할 수 있다.
+ * - QuizSessionAnswer / QuizWrongNote는 QuizSession과 연결되므로,
+ *   → 답안/오답노트를 먼저 지우고 세션을 지우는 순서가 안전하다.
+ */
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -21,161 +34,107 @@ public class QuizAdminService {
     private EntityManager em;
 
     /**
-     * 삭제 결과 요약
-     * - 각 단계에서 "실제로 삭제된 행 수"를 담아 운영/로깅에 사용.
+     * 삭제 결과 요약 (운영 로그/모니터링/리포트용)
+     *
+     * - wrongNotes: quiz_wrong_note에서 삭제된 행 수
+     * - sessionAnswers: session_answer에서 삭제된 행 수 (계정의 세션을 통해 삭제)
+     * - sessions: quiz_session에서 삭제된 행 수 (자식+부모 포함 합산)
+     *
+     * orphan*는 "콘텐츠 정리" 기능을 분리했기 때문에 항상 0으로 유지한다.
+     * (추후 배치/관리 API로 이동시키고, 그때 Result를 확장해도 됨)
      */
     @Value
     public static class Result {
-        long wrongNotes;        // wrong_note (해당 계정)
-        long sessionAnswers;    // session_answer (해당 계정의 세션을 통해 삭제)
-        long sessions;          // quiz_session (해당 계정)
-        long orphanChoices;     // quiz_choice (고아 세트 정리 과정에서 삭제된 개수)
-        long orphanQuestions;   // quiz_question (고아 세트 정리 과정에서 삭제된 개수)
-        long orphanSets;        // quiz_set (더 이상 어떤 세션에서도 참조되지 않는 세트)
+        long wrongNotes;
+        long sessionAnswers;
+        long sessions;
+
+        long orphanChoices;
+        long orphanQuestions;
+        long orphanSets;
     }
 
     /**
-     * [핵심 규칙]
-     * - "계정 데이터"만 지운다: quiz_session, session_answer(해당 세션들), wrong_note(해당 계정).
-     * - quiz_set / quiz_question / quiz_choice는 '공유(재사용) 가능'한 구조일 수 있으므로
-     *   → 먼저 "이 계정이 사용하던 세트 id"를 수집하고,
-     *   → 이 계정의 세션들을 모두 지운 뒤,
-     *   → 남은 세션이 아무도 참조하지 않는 '고아 세트'만 안전하게 정리(세트/문항/보기)한다.
+     * [회원탈퇴/관리자] 계정 기준 퀴즈 데이터 일괄 삭제 (Hard Delete)
      *
-     * 삭제 순서:
-     *   1) wrong_note (계정 기준으로 바로 삭제)
-     *   2) session_answer (해당 계정의 quiz_session을 JOIN해서 삭제)
-     *   3) quiz_session (계정 기준 삭제)
-     *   4) '고아 세트' 정리:
-     *      - 이 계정의 세션들이 참조하던 quiz_set 들 중
-     *        더 이상 어떤 세션도 참조하지 않는 id만 골라
-     *        quiz_choice → quiz_question → quiz_set 순서로 삭제
+     * [삭제 범위]
+     * - quiz_wrong_note: account_id 기준 삭제
+     * - session_answer: quiz_session(account_id) JOIN 후 삭제
+     * - quiz_session: account_id 기준 삭제 (단, parent_session_id 셀프 FK 때문에 "자식 → 부모" 순서 보장)
+     *
+     * [삭제 순서(중요)]
+     *  1) quiz_wrong_note (계정 기준)
+     *  2) session_answer (계정의 세션 기준)
+     *  3) quiz_session(자식) : "부모가 accountId인 세션"을 참조하는 자식 세션 먼저 삭제
+     *  4) quiz_session(부모) : account_id 기준 삭제
+     *
+     * [콘텐츠(품질/운영) 데이터 처리]
+     * - quiz_set / quiz_question / quiz_choice는 여기서 삭제하지 않는다.
+     *   → 문제 품질 관리/감사 로그/재학습/운영 분석을 위해 "별도 배치/관리"로 분리한다.
      */
     @Transactional
     public Result eraseByAccountId(Long accountId) {
-        // (A) 이 계정의 세션들이 '참조하던' 세트 id 목록을 먼저 확보해 둔다.
-        //     → 나중에 고아 세트 판단에 사용
-        List<Long> candidateSetIds = listLongs("""
-            SELECT DISTINCT quiz_set_id
-              FROM quiz_session
-             WHERE account_id = :id
-        """, accountId);
-
-        // (B) wrong_note : 계정 기준 바로 삭제
-        int delWrong = execute("DELETE FROM wrong_note WHERE account_id = :id", accountId);
-
-        // (C) session_answer : 이 계정의 세션을 통해 매핑되는 답안을 먼저 지움
-        int delSa = execute("""
-            DELETE a
-              FROM session_answer a
-              JOIN quiz_session s ON s.id = a.session_id
-             WHERE s.account_id = :id
-        """, accountId);
-
-        // (D) quiz_session : 계정 기준 세션 삭제
-        int delSessions = execute("DELETE FROM quiz_session WHERE account_id = :id", accountId);
-
-        // (E) 고아 세트 정리
-        //     - candidateSetIds 중에서 "아무 세션도 참조하지 않는" 세트만 추린다.
-        List<Long> orphanSetIds = (candidateSetIds.isEmpty())
-                ? List.of()
-                : listLongs(buildIn("""
-                    SELECT qs.id
-                      FROM quiz_set qs
-                     WHERE qs.id IN (%s)
-                       AND NOT EXISTS (
-                             SELECT 1
-                               FROM quiz_session s
-                              WHERE s.quiz_set_id = qs.id
-                           )
-                """, candidateSetIds.size()), candidateSetIds);
-
-        long delChoices = 0;
-        long delQuestions = 0;
-        long delSets = 0;
-
-        if (!orphanSetIds.isEmpty()) {
-            // 순서 중요: choice → question → set
-            delChoices = executeIn("""
-                DELETE c
-                  FROM quiz_choice c
-                  JOIN quiz_question q ON q.id = c.quiz_question_id
-                 WHERE q.quiz_set_id IN (%s)
-            """, orphanSetIds);
-
-            delQuestions = executeIn("""
-                DELETE FROM quiz_question
-                 WHERE quiz_set_id IN (%s)
-            """, orphanSetIds);
-
-            delSets = executeIn("""
-                DELETE FROM quiz_set
-                 WHERE id IN (%s)
-            """, orphanSetIds);
+        if (accountId == null) {
+            throw new IllegalArgumentException("accountId는 필수입니다.");
         }
 
-        log.info("[quiz:erase] accountId={} delWrong={}, delSA={}, delSessions={}, orphan: sets={}, questions={}, choices={}",
-                accountId, delWrong, delSa, delSessions, delSets, delQuestions, delChoices);
+        // (1) 오답노트: account_id 기준으로 바로 삭제 (개인 데이터)
+        int delWrong = execute(
+                "DELETE FROM quiz_wrong_note WHERE account_id = :id",
+                accountId
+        );
 
-        return new Result(delWrong, delSa, delSessions, delChoices, delQuestions, delSets);
+        // (2) 세션 답안: account의 quiz_session을 JOIN해서 삭제
+        // - quiz_session을 먼저 지우면 session_answer FK 때문에 실패할 수 있으므로 답안을 먼저 삭제한다.
+        int delSa = execute("""
+                DELETE a
+                  FROM session_answer a
+                  JOIN quiz_session s ON s.id = a.session_id
+                 WHERE s.account_id = :id
+                """, accountId);
+
+        // (3) 자식 세션 먼저 삭제 (셀프 FK 안전장치)
+        // - parent_session_id가 "부모 세션"을 참조하므로,
+        //   부모(=accountId 소유 세션)를 삭제하기 전에, 그 부모를 참조하는 자식 세션을 선제 삭제한다.
+        // - 자식 세션의 account_id가 항상 동일하다는 보장이 있어도, 데이터 오염/레거시 상황을 대비해 JOIN 방식이 더 안전하다.
+        int delChild = execute("""
+                DELETE c
+                  FROM quiz_session c
+                  JOIN quiz_session p ON p.id = c.parent_session_id
+                 WHERE p.account_id = :id
+                """, accountId);
+
+        // (4) 부모 세션 삭제 (account_id 기준)
+        int delSessions = execute("""
+                DELETE FROM quiz_session
+                 WHERE account_id = :id
+                """, accountId);
+
+        // (5) 콘텐츠 정리(quiz_set/quiz_question/quiz_choice)는 여기서 하지 않는다.
+        // - orphan 정리는 "품질 로그/운영 정책"이랑 맞물리므로 별도 배치/관리 API로 분리하는 게 안전
+        long orphanChoices = 0;
+        long orphanQuestions = 0;
+        long orphanSets = 0;
+
+        long totalSessions = (long) delChild + (long) delSessions;
+
+        log.info("[quiz:erase] accountId={} wrongNotes={} sessionAnswers={} sessions={} (child={}, parent={})",
+                accountId, delWrong, delSa, totalSessions, delChild, delSessions);
+
+        return new Result(delWrong, delSa, totalSessions, orphanChoices, orphanQuestions, orphanSets);
     }
 
-    /* ===================== 내부 유틸 메서드 (Native Query 헬퍼) ===================== */
+    /* ===================== 내부 유틸 (Native Query 헬퍼) ===================== */
 
-    // 단일 파라미터(:id)로 실행하는 DELETE/UPDATE
+    /**
+     * 단일 파라미터(:id) 기반 Native DELETE/UPDATE 실행 헬퍼
+     *
+     * - accountId를 :id로 바인딩한다.
+     * - 반환값은 "영향받은 행 수" (MySQL 기준)
+     */
     private int execute(String sql, Long accountId) {
         return em.createNativeQuery(sql)
                 .setParameter("id", accountId)
                 .executeUpdate();
-    }
-
-    // IN 절이 있는 DELETE/UPDATE (ids를 바인딩)
-    private int executeIn(String sqlWithPlaceholders, List<Long> ids) {
-        String sql = buildIn(sqlWithPlaceholders, ids.size());
-        var q = em.createNativeQuery(sql);
-        for (int i = 0; i < ids.size(); i++) {
-            q.setParameter(i + 1, ids.get(i)); // ?1, ?2, ...
-        }
-        return q.executeUpdate();
-    }
-
-    // SELECT ... WHERE id IN (?,?,...) 형태로 결과를 Long 리스트로 받기
-    private List<Long> listLongs(String sqlWithNamed, Long accountId) {
-        @SuppressWarnings("unchecked")
-        List<Object> rows = em.createNativeQuery(sqlWithNamed)
-                .setParameter("id", accountId)
-                .getResultList();
-        return mapToLongs(rows);
-    }
-
-    // SELECT ... WHERE id IN (?,?,...) 형태 - 파라미터 배열 기반
-    private List<Long> listLongs(String sqlWithPlaceholders, List<Long> ids) {
-        String sql = buildIn(sqlWithPlaceholders, ids.size());
-        var q = em.createNativeQuery(sql);
-        for (int i = 0; i < ids.size(); i++) q.setParameter(i + 1, ids.get(i));
-        @SuppressWarnings("unchecked")
-        List<Object> rows = q.getResultList();
-        return mapToLongs(rows);
-    }
-
-    // (?, ?, ?, ...) 자리를 size 기준으로 만들어주는 헬퍼
-    private String buildIn(String template, int size) {
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < size; i++) {
-            if (i > 0) sb.append(',');
-            sb.append('?').append(i + 1);
-        }
-        return template.formatted(sb);
-    }
-
-    private List<Long> mapToLongs(List<Object> rows) {
-        List<Long> out = new ArrayList<>(rows.size());
-        for (Object r : rows) {
-            if (r == null) continue;
-            if (r instanceof Number n) out.add(n.longValue());
-            else if (r instanceof BigInteger bi) out.add(bi.longValue());
-            else out.add(Long.valueOf(r.toString()));
-        }
-        return out;
     }
 }
