@@ -157,7 +157,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
         String nickname = (String) userInfo.get("name");
 
         log.info("이메일 :  {}", email);
-        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.KAKAO);
+        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.GOOGLE);
 
 
 
