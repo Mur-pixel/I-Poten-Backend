@@ -20,7 +20,7 @@ public class AccountProfile {
     @JoinColumn(name = "account_id", referencedColumnName = "id", nullable = false)
     private Account account;
 
-    @Column(name = "nickname", nullable = false, unique = true, length = 30)
+    @Column(name = "nickname", nullable = false, length = 30)
     private String nickname;
 
     @Column(name = "email", nullable = false, unique = true, length = 100)
@@ -33,9 +33,4 @@ public class AccountProfile {
     }
 
 
-
-    // 닉네임 변경 전용 메소드
-    public void setNickname(String nickname) {
-        this.nickname = nickname;
-    }
 }
