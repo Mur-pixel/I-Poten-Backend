@@ -37,7 +37,7 @@ class CreditWalletServiceImplTest {
         Long accountId = 1L;
         Account account = new Account(accountId);
 
-        CreditWallet wallet = new CreditWallet();
+        CreditWallet wallet = new CreditWallet(account,0L);
         ReflectionTestUtils.setField(wallet, "account", account);
         ReflectionTestUtils.setField(wallet, "balance", 0L);
 
