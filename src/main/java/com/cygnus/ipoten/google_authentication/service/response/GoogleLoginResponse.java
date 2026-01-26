@@ -1,5 +1,7 @@
 package com.cygnus.ipoten.google_authentication.service.response;
 
+import com.cygnus.ipoten.google_authentication.service.mobile_response.GoogleLoginMobileResponse;
+import com.cygnus.ipoten.kakao_authentication.service.mobile_response.KakaoLoginMobileResponse;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -13,6 +15,10 @@ public abstract class GoogleLoginResponse {
                 : new ExisitingUserGoogleLoginResponse(isNewUser, token, nickname, email, origin);
 
     }
+    public static GoogleLoginMobileResponse ofMobile(boolean isNewUser, String token, String nickname, String email, String origin) {
+        return new GoogleLoginMobileResponse(isNewUser, token, nickname, email);
+    }
+
 
     public abstract String getHtmlResponse();
 
