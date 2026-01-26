@@ -1,6 +1,8 @@
 package com.cygnus.ipoten.google_authentication.service;
 
+import com.cygnus.ipoten.google_authentication.service.mobile_response.GoogleLoginMobileResponse;
 import com.cygnus.ipoten.google_authentication.service.response.GoogleLoginResponse;
+import com.cygnus.ipoten.kakao_authentication.service.mobile_response.KakaoLoginMobileResponse;
 
 import java.util.Map;
 
@@ -13,5 +15,7 @@ public interface GoogleAuthenticationService {
     String getAccessToken(String code);
 
     Map<String, Object> getUserInfo(String accessToken);
+
+    GoogleLoginMobileResponse handleLoginMobile(String accessToken);
 
 }

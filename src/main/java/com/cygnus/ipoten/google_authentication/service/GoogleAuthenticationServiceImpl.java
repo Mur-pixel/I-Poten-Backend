@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.google_authentication.service;
 
+import com.cygnus.ipoten.account.entity.LoginType;
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
@@ -7,7 +8,9 @@ import com.cygnus.ipoten.config.FrontendConfig;
 import com.cygnus.ipoten.exception.GlobalExceptionHandler;
 import com.cygnus.ipoten.google_authentication.exception.GoogleAccessTokenException;
 import com.cygnus.ipoten.google_authentication.exception.GoogleGetUserInfoException;
+import com.cygnus.ipoten.google_authentication.service.mobile_response.GoogleLoginMobileResponse;
 import com.cygnus.ipoten.google_authentication.service.response.GoogleLoginResponse;
+import com.cygnus.ipoten.kakao_authentication.service.response.KakaoLoginResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -145,6 +148,30 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
         } catch (Exception e) {
             throw new GoogleGetUserInfoException("구글 로그인중 UserInfoException : "+e.getMessage());
         }
+    }
+
+    @Override
+    public GoogleLoginMobileResponse handleLoginMobile(String accessToken) {
+        Map<String, Object> userInfo = getUserInfo(accessToken);
+        String email = (String) userInfo.get("email");
+        String nickname = (String) userInfo.get("name");
+
+        log.info("이메일 :  {}", email);
+        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.KAKAO);
+
+
+
+        boolean isNewUser = accountProfile.isEmpty();
+
+        log.info("회원가입 되어 있는지 여부 : {}", isNewUser);
+
+        String origin = frontendConfig.getOrigins().get(0);
+
+        String token = isNewUser
+                ? authenticationService.createTemporaryUserTokenWithAccessToken(accessToken)
+                : authenticationService.createUserTokenWithAccessToken(accountProfile.get().getAccount().getId(), accessToken);
+
+        return GoogleLoginResponse.ofMobile(isNewUser, token, nickname, email, origin);
     }
 
 
