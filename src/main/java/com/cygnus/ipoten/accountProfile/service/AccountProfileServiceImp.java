@@ -100,7 +100,6 @@ public class AccountProfileServiceImp implements AccountProfileService {
                 .orElseThrow(() -> new IllegalArgumentException("AccountProfile not found"));
 
         // 닉네임 업데이트
-        ap.setNickname(trimmed);
         accountProfileRepository.save(ap);
 
         return Optional.of(new UpdateNicknameResponse(trimmed));
