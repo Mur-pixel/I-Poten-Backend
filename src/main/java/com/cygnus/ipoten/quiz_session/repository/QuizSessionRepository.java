@@ -27,11 +27,6 @@ public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> 
 
     Optional<QuizSession> findByIdAndAccount_Id(Long id, Long accountId);
 
-    @Modifying(clearAutomatically = true, flushAutomatically = true)
-    @Query("update QuizSession s set s.sessionStatus = 'EXPIRED' " +
-            "where s.id = :id and s.sessionStatus <> 'SUBMITTED' ")
-    int expireIfNotSubmitted(@Param("id") Long id);
-
     Page<QuizSession> findByAccount_Id(Long accountId, Pageable pageable);
 
     Page<QuizSession> findByAccount_IdAndSessionStatus(Long accountId, SessionStatus sessionStatus, Pageable pageable);
@@ -149,6 +144,26 @@ public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> 
             @Param("issueType") String issueType,
             @Param("questionType") String questionType
     );
+
+    /** 스케줄러용: IN_PROGRESS 중 3시간 이상 무활동 세션 만료 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+    update QuizSession s
+       set s.sessionStatus = com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus.EXPIRED
+     where s.sessionStatus = com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus.IN_PROGRESS
+       and coalesce(s.lastActivityAt, s.startedAt) < :cutoff
+    """)
+    int expireStaleInProgress(@Param("cutoff") Instant cutoff);
+
+    /** 단건 만료: 해당 id 세션이 IN_PROGRESS일 때만 EXPIRED로 전환 */
+    @Modifying(clearAutomatically = true, flushAutomatically = true)
+    @Query("""
+    update QuizSession s
+       set s.sessionStatus = com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus.EXPIRED
+     where s.id = :id
+       and s.sessionStatus = com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus.IN_PROGRESS
+    """)
+    int expireIfInProgress(@Param("id") Long id);
 
     Long account(Account account);
 }

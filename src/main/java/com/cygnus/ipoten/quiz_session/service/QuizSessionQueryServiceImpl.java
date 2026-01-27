@@ -60,7 +60,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     private final TermCategoryRepository termCategoryRepository;
     private final ObjectMapper objectMapper;
 
-    private static final Duration EXPIRE_AFTER = Duration.ofMinutes(60);
+    private static final Duration EXPIRE_AFTER = Duration.ofHours(3);
     private static final ZoneId KST = ZoneId.of("Asia/Seoul");
     private static final DateTimeFormatter D = DateTimeFormatter.ofPattern("yyyy-MM-dd").withZone(KST);
 
@@ -236,6 +236,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
     /** 최근 세션 목록 */
     @Override
+    @Transactional
     public SessionListResponseForm listMySessions(Long accountId, int limit, String statusFilter) {
         // 정렬/페이징 가드 (limit: 1~100)
         int pageSize = Math.max(1, Math.min(100, limit));
@@ -262,6 +263,9 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         // 매핑
         List<SessionListResponseForm.Item> items = new ArrayList<>(page.getNumberOfElements());
         for (QuizSession s : sessions) {
+
+            SessionStatus effective = ensureCurrentStatus(s);
+
             Integer total = Optional.ofNullable(s.getTotal())
                     .orElse(Optional.ofNullable(s.getSnapshotQuestionIds()).map(List::size).orElse(0));
 
@@ -269,7 +273,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             Double score = null;
             Integer scorePercent = null;
 
-            if (s.getSessionStatus() == SessionStatus.SUBMITTED) {
+            if (effective == SessionStatus.SUBMITTED) {
                 List<QuizSessionAnswer> ans = quizSessionAnswerRepository.findByQuizSession_Id(s.getId());
                 int c = (int) ans.stream().filter(QuizSessionAnswer::isCorrect).count();
                 correct = c;
@@ -281,7 +285,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
             items.add(SessionListResponseForm.Item.builder()
                     .sessionId(s.getId())
-                    .status(s.getSessionStatus())
+                    .status(effective)
                     .mode(s.getSessionMode())
                     .total(total)
                     .correct(correct)
@@ -705,7 +709,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         return null;
     }
 
-    /** 마지막 활동 60분 초과 시 EXPIRE 전환(상태 계산 및 필요 시 DB 전환) */
+    /** 마지막 활동 3시간 초과 시 EXPIRE 전환(상태 계산 및 필요 시 DB 전환) */
     @Transactional
     protected SessionStatus ensureCurrentStatus(QuizSession s) {
         SessionStatus current = s.getSessionStatus();
@@ -714,11 +718,14 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
         Instant last = Optional.ofNullable(s.getLastActivityAt())
                 .orElse(Optional.ofNullable(s.getStartedAt()).orElse(Instant.now()));
+
         if (last.plus(EXPIRE_AFTER).isBefore(Instant.now())) {
-            // 메모리 엔티티 + DB 둘 다 만료로
-            s.expire(); // 엔티티 상태 반영
-            quizSessionRepository.expireIfNotSubmitted(s.getId()); // DB 상태 반영
-            return SessionStatus.EXPIRED;
+            int updated = quizSessionRepository.expireIfInProgress(s.getId());
+            if (updated > 0) {
+                s.expire();
+                return SessionStatus.EXPIRED;
+            }
+            return quizSessionRepository.findById(s.getId()).map(QuizSession::getSessionStatus).orElse(current);
         }
         return current;
     }
