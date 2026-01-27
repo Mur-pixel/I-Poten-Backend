@@ -69,7 +69,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     @Transactional
     public SessionSummaryResponseForm getSummary(Long sessionId, Long accountId) {
         QuizSession quizsession =
-                quizSessionRepository.findByIdAndAccount_Id(sessionId, accountId)
+                quizSessionRepository.findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
                         .orElseThrow(() -> new SecurityException("세션이 없거나 권한이 없습니다."));
 
         SessionStatus effective = ensureCurrentStatus(quizsession);
@@ -94,7 +94,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     ) {
 
         QuizSession quizsession =
-                quizSessionRepository.findByIdAndAccount_Id(sessionId, accountId)
+                quizSessionRepository.findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
                         .orElseThrow(() -> new SecurityException("세션이 없거나 권한이 없습니다."));
 
         SessionStatus effective = ensureCurrentStatus(quizsession);
@@ -252,8 +252,8 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
         // 조회
         var page = (status == null)
-                ? quizSessionRepository.findByAccount_Id(accountId, pr)
-                : quizSessionRepository.findByAccount_IdAndSessionStatus(accountId, status, pr);
+                ? quizSessionRepository.findByAccount_IdAndDeletedAtIsNull(accountId, pr)
+                : quizSessionRepository.findByAccount_IdAndSessionStatusAndDeletedAtIsNull(accountId, status, pr);
 
         var sessions = page.getContent();
 
@@ -307,7 +307,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     @Override
     public SessionReviewResponseForm getReview(Long sessionId, Long accountId) {
         QuizSession s =
-                quizSessionRepository.findByIdAndAccount_Id(sessionId, accountId)
+                quizSessionRepository.findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
                         .orElseThrow(() -> new SecurityException("세션이 없거나 권한이 없습니다."));
 
         if (s.getSessionStatus() != SessionStatus.SUBMITTED) {
@@ -651,7 +651,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
     @Override
     public InitialsQuestionsResponse getDailyInitialsQuestions(Long sessionId, Long accountId) {
-        var session = quizSessionRepository.findByIdAndAccount_Id(sessionId, accountId)
+        var session = quizSessionRepository.findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
                 .orElseThrow(() -> new SecurityException("세션이 없거나 권한이 없습니다."));
 
         if (session.getSeedMode() != SeedMode.DAILY)
@@ -725,7 +725,8 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 s.expire();
                 return SessionStatus.EXPIRED;
             }
-            return quizSessionRepository.findById(s.getId()).map(QuizSession::getSessionStatus).orElse(current);
+            return quizSessionRepository.findByIdAndDeletedAtIsNull(s.getId())
+                    .map(QuizSession::getSessionStatus).orElse(current);
         }
         return current;
     }

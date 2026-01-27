@@ -1,6 +1,7 @@
 package com.cygnus.ipoten.quiz_session.controller;
 
 import com.cygnus.ipoten.quiz_session.controller.response_form.CreateQuizSessionResponseForm;
+import com.cygnus.ipoten.quiz_session.service.QuizSessionDeleteService;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionRetryService;
 import com.cygnus.ipoten.quiz_session.service.response.InitialsQuestionsResponse;
 import com.cygnus.ipoten.quiz_session_scope.controller.request_form.StartQuizSessionUnifiedRequestForm;
@@ -31,6 +32,7 @@ public class QuizSessionController {
     private final QuizSessionQueryService quizSessionQueryService;
     private final QuizScopeService quizScopeService;
     private final QuizSessionRetryService quizSessionRetryService;
+    private final QuizSessionDeleteService quizSessionDeleteService;
 
     @Operation(
             summary = "퀴즈 세션 통합 시작 엔드포인트",
@@ -153,8 +155,12 @@ public class QuizSessionController {
             log.warn("인증 실패: 계정 식별 불가");
             return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
         }
-        var summary = quizSessionQueryService.getSummary(sessionId, accountId);
-        return ResponseEntity.ok(summary);
+        try {
+            var summary = quizSessionQueryService.getSummary(sessionId, accountId);
+            return ResponseEntity.ok(summary);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        }
     }
 
     @Operation(
@@ -249,6 +255,28 @@ public class QuizSessionController {
         }
     }
 
+    @Operation(
+            summary = "내 퀴즈 세션 삭제",
+            description = "사용자가 본인 퀴즈 세션을 삭제(소프트 삭제)하여 타임라인/목록에서 보이지 않게 합니다. 오답노트는 삭제하지 않습니다."
+    )
+    @DeleteMapping("/me/quiz/sessions/{sessionId}")
+    public ResponseEntity<?> deleteMySession(
+            @PathVariable Long sessionId,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        try {
+            quizSessionDeleteService.deleteMySession(accountId, sessionId);
+            return ResponseEntity.noContent().build();
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("deleteMySession failed sessionId={}", sessionId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
 
     /**
      * 공통: 쿠키에서 userToken을 읽어 Redis에서 accountId를 조회한다.

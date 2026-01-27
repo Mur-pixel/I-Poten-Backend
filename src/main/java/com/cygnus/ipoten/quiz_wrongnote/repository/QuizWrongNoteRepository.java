@@ -7,6 +7,7 @@ import com.cygnus.ipoten.quiz_wrongnote.entity.enums.WrongNoteStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
@@ -85,4 +86,12 @@ public interface QuizWrongNoteRepository extends JpaRepository<QuizWrongNote, Lo
     );
 
     Optional<QuizWrongNote> findByIdAndAccount_Id(Long id, Long accountId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+    delete from QuizWrongNote wn
+     where wn.account.id = :accountId
+       and wn.quizSession.id = :sessionId
+    """)
+    int deleteByAccountIdAndSessionId(@Param("accountId") Long accountId, @Param("sessionId") Long sessionId);
 }

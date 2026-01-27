@@ -234,7 +234,8 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
     @Transactional
     public SubmitQuizSessionResponseForm submitSession(Long sessionId, Long accountId, SubmitQuizSessionRequestForm requestForm) {
 
-        QuizSession session = quizSessionRepository.findById(sessionId)
+        QuizSession session = quizSessionRepository
+                .findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
                 .orElseThrow(() -> new IllegalArgumentException("세션을 찾을 수 없습니다."));
         if (!session.getAccount().getId().equals(accountId)) throw new SecurityException("세션 접근 권한이 없습니다.");
         if (session.getSubmittedAt() != null) throw new IllegalStateException("이미 제출된 세션입니다.");
@@ -245,8 +246,9 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
                 .map(SubmitQuizSessionRequestForm.AnswerForm::getQuizQuestionId)
                 .toList();
 
-        if (!snapshotQids.equals(new HashSet<>(submittedQids))) {
-            throw new IllegalArgumentException("제출 문항이 세션 스냅샷과 일치하지 않습니다.");
+        if (submittedQids.size() != snapshotQids.size()
+                || new HashSet<>(submittedQids).size() != submittedQids.size()) {
+            throw new IllegalArgumentException("제출 문항이 중복되었거나 스냅샷과 불일치합니다.");
         }
 
         // 배치 조회
@@ -573,8 +575,9 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
     @Transactional(readOnly = true)
     public StartQuizSessionResponse loadForPlay(Long accountId, Long sessionId) {
 
-        QuizSession session = quizSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("세션이 없습니다. id=" + sessionId));
+        QuizSession session = quizSessionRepository
+                .findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
+                .orElseThrow(() -> new IllegalArgumentException("세션이 없습니다."));
 
         if (!session.getAccount().getId().equals(accountId)) {
             throw new IllegalArgumentException("권한이 없습니다.");

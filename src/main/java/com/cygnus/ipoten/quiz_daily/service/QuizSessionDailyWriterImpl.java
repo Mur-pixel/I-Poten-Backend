@@ -16,13 +16,10 @@ public class QuizSessionDailyWriterImpl implements QuizSessionDailyWriter {
 
     @Transactional
     public void markDaily(Long sessionId, Long accountId, LocalDate ymd, String issueType, String questionType) {
-        QuizSession session = quizSessionRepository.findById(sessionId)
-                .orElseThrow(() -> new IllegalArgumentException("session not found: " + sessionId));
 
-        Long ownerId = (session.getAccount() == null) ? null : session.getAccount().getId();
-        if (ownerId == null || !ownerId.equals(accountId)) {
-            throw new IllegalStateException("account not found: " + accountId);
-        }
+        QuizSession session = quizSessionRepository
+                .findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
+                .orElseThrow(() -> new IllegalArgumentException("session not found: " + sessionId));
 
         session.markDaily(ymd, issueType, questionType);
     }

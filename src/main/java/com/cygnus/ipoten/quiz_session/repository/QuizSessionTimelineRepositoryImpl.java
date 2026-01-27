@@ -26,6 +26,7 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
 
         String where =
                 " WHERE s.account.id = :accountId " +
+                        " AND s.deletedAt IS NULL " +
                         " AND s.sessionStatus = :submitted " +
                         (part != null ? " AND s.partType = :part " : "") +
                         (hasQ ?
@@ -81,8 +82,12 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
 
     @Override
     public long countSubmitted(Long accountId) {
-        String jpql = "SELECT COUNT(s) FROM QuizSession s " +
-                "WHERE s.account.id = :aid AND s.sessionStatus = :st";
+        String jpql =
+                "SELECT COUNT(s) FROM QuizSession s " +
+                        "WHERE s.account.id = :aid " +
+                        "AND s.sessionStatus = :st " +
+                        "AND s.deletedAt IS NULL";
+
         return em.createQuery(jpql, Long.class)
                 .setParameter("aid", accountId)
                 .setParameter("st", SessionStatus.SUBMITTED)
@@ -93,6 +98,7 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
     public long countSubmittedRetry(Long accountId) {
         String jpql = "SELECT COUNT(s) FROM QuizSession s " +
                 "WHERE s.account.id = :aid AND s.sessionStatus = :st " +
+                "AND s.deletedAt IS NULL " +
                 "AND (s.parentSession IS NOT NULL " +
                 "     OR s.sessionMode = com.cygnus.ipoten.quiz_session.entity.enums.SessionMode.WRONG_ONLY)";
         return em.createQuery(jpql, Long.class)
@@ -103,9 +109,13 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
 
     @Override
     public long sumTotalQuestionsOfSubmitted(Long accountId) {
-        String jpql = "SELECT COALESCE(SUM(COALESCE(s.total, 0)), 0) " +
-                "FROM QuizSession s " +
-                "WHERE s.account.id = :aid AND s.sessionStatus = :st";
+        String jpql =
+                "SELECT COALESCE(SUM(COALESCE(s.total, 0)), 0) " +
+                        "FROM QuizSession s " +
+                        "WHERE s.account.id = :aid " +
+                        "AND s.sessionStatus = :st " +
+                        "AND s.deletedAt IS NULL";
+
         return Optional.ofNullable(
                 em.createQuery(jpql, Long.class)
                         .setParameter("aid", accountId)
@@ -116,10 +126,13 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
 
     @Override
     public long sumCorrectAnswersOfSubmitted(Long accountId) {
-        String jpql = "SELECT COALESCE(SUM(CASE WHEN a.isCorrect = TRUE THEN 1 ELSE 0 END), 0) " +
-                "FROM QuizSessionAnswer a " +
-                "WHERE a.quizSession.account.id = :aid " +
-                "AND a.quizSession.sessionStatus = :st";
+        String jpql =
+                "SELECT COALESCE(SUM(CASE WHEN a.isCorrect = TRUE THEN 1 ELSE 0 END), 0) " +
+                        "FROM QuizSessionAnswer a " +
+                        "WHERE a.quizSession.account.id = :aid " +
+                        "AND a.quizSession.sessionStatus = :st " +
+                        "AND a.quizSession.deletedAt IS NULL";
+
         return Optional.ofNullable(
                 em.createQuery(jpql, Long.class)
                         .setParameter("aid", accountId)
@@ -157,8 +170,11 @@ public class QuizSessionTimelineRepositoryImpl implements QuizSessionTimelineRep
     public List<QuizSession> findRecentSessions(Long accountId, int limit) {
         String jpql =
                 "SELECT s FROM QuizSession s " +
-                        "WHERE s.account.id = :aid AND s.sessionStatus = :st " +
+                        "WHERE s.account.id = :aid " +
+                        "AND s.sessionStatus = :st " +
+                        "AND s.deletedAt IS NULL " +
                         "ORDER BY COALESCE(s.submittedAt, s.startedAt) DESC";
+
         return em.createQuery(jpql, QuizSession.class)
                 .setParameter("aid", accountId)
                 .setParameter("st", SessionStatus.SUBMITTED)
