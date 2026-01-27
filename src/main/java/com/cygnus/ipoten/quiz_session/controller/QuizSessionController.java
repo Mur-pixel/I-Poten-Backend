@@ -1,7 +1,9 @@
 package com.cygnus.ipoten.quiz_session.controller;
 
+import com.cygnus.ipoten.quiz_session.controller.request_form.RenameQuizSessionTitleRequestForm;
 import com.cygnus.ipoten.quiz_session.controller.response_form.CreateQuizSessionResponseForm;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionDeleteService;
+import com.cygnus.ipoten.quiz_session.service.QuizSessionRenameService;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionRetryService;
 import com.cygnus.ipoten.quiz_session.service.response.InitialsQuestionsResponse;
 import com.cygnus.ipoten.quiz_session_scope.controller.request_form.StartQuizSessionUnifiedRequestForm;
@@ -33,6 +35,7 @@ public class QuizSessionController {
     private final QuizScopeService quizScopeService;
     private final QuizSessionRetryService quizSessionRetryService;
     private final QuizSessionDeleteService quizSessionDeleteService;
+    private final QuizSessionRenameService quizSessionRenameService;
 
     @Operation(
             summary = "퀴즈 세션 통합 시작 엔드포인트",
@@ -274,6 +277,34 @@ public class QuizSessionController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
             log.error("deleteMySession failed sessionId={}", sessionId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @Operation(
+            summary = "퀴즈 세션 이름(제목) 수정",
+            description = "사용자가 본인 퀴즈 세션의 제목을 수정합니다."
+    )
+    @PatchMapping("/me/quiz/sessions/{sessionId}/title")
+    public ResponseEntity<?> renameSessionTitle(
+            @PathVariable Long sessionId,
+            @Valid @RequestBody RenameQuizSessionTitleRequestForm requestForm,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if  (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+
+        try {
+            var updated = quizSessionRenameService.renameTitle(sessionId, accountId, requestForm.getTitle());
+            return ResponseEntity.ok(RenameQuizSessionTitleResponseForm.from(updated));
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalArgumentException e) {
+            return ResponseEntity.badRequest().body(Map.of("message", e.getMessage()));
+        } catch (Exception e) {
+            log.error("renameSessionTitle failed sessionId={}", sessionId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
