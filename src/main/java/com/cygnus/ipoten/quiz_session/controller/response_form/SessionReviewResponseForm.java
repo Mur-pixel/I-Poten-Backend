@@ -44,7 +44,7 @@ public class SessionReviewResponseForm {
         private String mySubmittedText;
         private String expectedText;
 
-        private Boolean correct;            // 정답 여부
+        private boolean correct;            // 정답 여부
         private Long answerChoiceId;        // 정답 보기 ID
         private String explanation;         // 해설
         private Long termId;                // 연관된 용어 ID
@@ -64,6 +64,6 @@ public class SessionReviewResponseForm {
     public static class Choice {
         private Long id;        // 보기 ID
         private String text;    // 보기 텍스트
-        private Boolean answer; // 정답 여부
+        private boolean answer; // 정답 여부
     }
 }
