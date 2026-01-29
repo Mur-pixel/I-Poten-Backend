@@ -213,6 +213,15 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
         wn.changeStatus(resolved ? WrongNoteStatus.RESOLVED : WrongNoteStatus.UNRESOLVED);
     }
 
+    @Override
+    @Transactional
+    public void deleteWrongNote(Long accountId, Long wrongNoteId) {
+        long deleted = quizWrongNoteRepository.deleteByIdAndAccount_Id(wrongNoteId, accountId);
+        if (deleted == 0) {
+            throw new NoSuchElementException("Wrong note id " + wrongNoteId);
+        }
+    }
+
     private String resolveMyAnswer(QuizWrongNote wn, Map<Long, String> choiceTextByChoiceId) {
         if (wn.getSubmittedText() != null && !wn.getSubmittedText().isBlank()) {
             return wn.getSubmittedText();

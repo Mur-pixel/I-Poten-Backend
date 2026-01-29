@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.quiz_wrongnote.repository;
 
+import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_wrongnote.entity.QuizWrongNote;
@@ -7,16 +8,21 @@ import com.cygnus.ipoten.quiz_wrongnote.entity.enums.WrongNoteStatus;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.Instant;
+import java.util.List;
 import java.util.Optional;
 
 public interface QuizWrongNoteRepository extends JpaRepository<QuizWrongNote, Long> {
 
     boolean existsByAccount_IdAndQuizQuestion_Id(Long accountId, Long quizQuestionId);
     Optional<QuizWrongNote> findByAccount_IdAndQuizQuestion_Id(Long accountId, Long quizQuestionId);
+
+    // 단건 삭제
+    long deleteByIdAndAccount_Id(Long id, Long accountId);
 
     @Query(
             value = """
@@ -85,4 +91,14 @@ public interface QuizWrongNoteRepository extends JpaRepository<QuizWrongNote, Lo
     );
 
     Optional<QuizWrongNote> findByIdAndAccount_Id(Long id, Long accountId);
+
+    @Modifying(flushAutomatically = true, clearAutomatically = true)
+    @Query("""
+    delete from QuizWrongNote wn
+     where wn.account.id = :accountId
+       and wn.quizSession.id = :sessionId
+    """)
+    int deleteByAccountIdAndSessionId(@Param("accountId") Long accountId, @Param("sessionId") Long sessionId);
+
+    List<QuizWrongNote> account(Account account);
 }
