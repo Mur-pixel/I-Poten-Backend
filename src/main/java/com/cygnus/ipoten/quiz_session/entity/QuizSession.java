@@ -122,6 +122,9 @@ public class QuizSession {
     @Column(name = "daily_question_type", length = 20)
     private String dailyQuestionType; // 예: CHOICE, OX, INITIALS
 
+    @Column(name = "deleted_at")
+    private Instant deletedAt;
+
     public void changeTitle(String title) {
         this.title = normalizeTitle(title);
     }
@@ -287,5 +290,9 @@ public class QuizSession {
         this.dailyYmd = ymd;
         this.dailyIssueType = issueType.trim();
         this.dailyQuestionType = questionType.trim();
+    }
+
+    public void markDeleted(Instant when) {
+        this.deletedAt = (when != null) ? when : Instant.now();
     }
 }

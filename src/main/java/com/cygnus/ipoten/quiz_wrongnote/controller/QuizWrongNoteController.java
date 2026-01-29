@@ -114,6 +114,31 @@ public class QuizWrongNoteController {
 
     }
 
+
+    @Operation(
+            summary = "오답노트 항목 삭제",
+            description = "내 오답노트(wrong note) 항목 1개를 삭제합니다."
+    )
+    @DeleteMapping("/me/quiz/reviews/{wrongNoteId}")
+    public ResponseEntity<?> deleteWrongNote(
+            @PathVariable Long wrongNoteId,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+        try {
+            quizWrongNoteService.deleteWrongNote(accountId, wrongNoteId);
+            return ResponseEntity.noContent().build();
+        } catch (NoSuchElementException e) {
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (Exception e) {
+            log.error("deleteWrongNote failed wrongNoteId={}", wrongNoteId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
     /**
      * 공통: 쿠키에서 userToken을 읽어 Redis에서 accountId를 조회한다.
      * - 토큰이 없거나 공백이면 null

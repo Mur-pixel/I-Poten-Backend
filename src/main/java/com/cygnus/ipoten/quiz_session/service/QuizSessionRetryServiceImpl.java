@@ -48,7 +48,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
     @Transactional
     public StartQuizSessionResponse startRetryWrongOnly(Long parentSessionId, Long accountId) {
         // 1) 권한/상태 검증 : 내 세션인지 확인
-        QuizSession parent = quizSessionRepository.findByIdAndAccount_Id(parentSessionId, accountId)
+        QuizSession parent = quizSessionRepository.findByIdAndAccount_IdAndDeletedAtIsNull(parentSessionId, accountId)
                 .orElseThrow(() -> new SecurityException("본인 세션이 아니거나 존재하지 않습니다."));
 
         // 제출 완료된 세션만 허용
@@ -218,7 +218,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
     @Transactional
     public StartQuizSessionResponse startRetryAll(Long sessionId, Long accountId) {
         // 1) 권한/상태 검증
-        QuizSession parent = quizSessionRepository.findByIdAndAccount_Id(sessionId, accountId)
+        QuizSession parent = quizSessionRepository.findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
                 .orElseThrow(() -> new SecurityException("본인 세션이 아니거나 존재하지 않습니다."));
 
         if (parent.getSessionStatus() != SessionStatus.SUBMITTED) {
@@ -714,7 +714,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
     private List<QuizSession> findSubmittedSessions(Long accountId, int days, int limit) {
         Instant after = Instant.now().minus(days, ChronoUnit.DAYS);
         return quizSessionRepository
-                .findByAccount_IdAndSessionStatusAndSubmittedAtAfterOrderBySubmittedAtDesc(
+                .findByAccount_IdAndSessionStatusAndDeletedAtIsNullAndSubmittedAtAfterOrderBySubmittedAtDesc(
                         accountId,
                         SessionStatus.SUBMITTED,
                         after,
