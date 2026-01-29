@@ -38,7 +38,7 @@ services:
       - ipoten-net
 
   server:
-    image: ghcr.io/imcoder0000/spring-backend:latest
+    image: ghcr.io/i-cygnus/spring-backend:latest
     container_name: spring-backend
     restart: unless-stopped
     volumes:
