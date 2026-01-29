@@ -1,0 +1,20 @@
+# Multi-architecture support for ARM64 and AMD64
+FROM --platform=$BUILDPLATFORM eclipse-temurin:17-jdk-jammy AS builder
+
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+ARG JAR_FILE=build/libs/*.jar
+
+COPY ${JAR_FILE} app.jar
+
+# Final stage
+FROM eclipse-temurin:17-jre-jammy
+
+# Install wait-for-it script
+ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /
+RUN chmod +x /wait-for-it.sh
+
+COPY --from=builder /app.jar /app.jar
+
+EXPOSE 8080
+ENTRYPOINT ["java", "-jar", "/app.jar"]
