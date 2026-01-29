@@ -10,9 +10,9 @@ spring:
       time-zone: Asia/Seoul
 
   datasource:
-    url: jdbc:mysql://${SPRING_DATABASE_HOST}:3306/${SPRING_DATABASE_NAME:aim_db}
-    username: ${SPRING_DATABASE_USER:eddi}
-    password: ${SPRING_DATABASE_PASSWORD:eddi@123}
+    url: jdbc:mysql://${SPRING_DATABASE_HOST}:3306/${SPRING_DATABASE_NAME}
+    username: ${SPRING_DATABASE_USER}
+    password: ${SPRING_DATABASE_PASSWORD}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   data:
@@ -84,6 +84,10 @@ admin:
   first-admin-logintype: ${ADMINISTRATOR_FIRST_USER_LOGINTYPE}
   admin-aws-access-key : ${ADMINISTRATOR_AWS_ACCESS_KEY}
   admin-aws-secret-key : ${ADMINISTRATOR_AWS_SECRET_KEY}
+
+gcp:
+  tts:
+    api-key: ${GCP_TTS_API_KEY}
 
 
 logging:

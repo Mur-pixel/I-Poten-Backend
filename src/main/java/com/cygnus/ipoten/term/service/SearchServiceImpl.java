@@ -5,6 +5,8 @@ import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.term.service.request.SearchTermRequest;
 import com.cygnus.ipoten.term.service.response.SearchTermResponse;
 import com.cygnus.ipoten.term.support.HangulInitial;
+import com.cygnus.ipoten.term_trending.service.TermSearchEventService;
+import com.cygnus.ipoten.term_trending.service.TermSearchEventServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -20,7 +22,8 @@ import java.util.stream.Collectors;
 public class SearchServiceImpl implements SearchService {
 
     private final TermRepository termRepository;
-    private final CategoryService categoryService; // 선택된 카테고리 id → 실제 검색 대상 id 집합으로 풀어주는 역할
+    private final CategoryService categoryService;
+    private final TermSearchEventService termSearchEventService;
 
     @Override
     public SearchTermResponse search(SearchTermRequest request) {
@@ -60,6 +63,7 @@ public class SearchServiceImpl implements SearchService {
                         targetCatIds,
                         PageRequest.of(request.getPage(), request.getSize()) // 정렬은 native 내부 처리
                 );
+                termSearchEventService.recordTrendingEventIfMappable(q, page, request);
                 return toResponse(page);
             } else {
                 Page<Term> page = termRepository.searchByRelevance(
@@ -67,6 +71,7 @@ public class SearchServiceImpl implements SearchService {
                         request.isIncludeTags(),
                         PageRequest.of(request.getPage(), request.getSize())
                 );
+                termSearchEventService.recordTrendingEventIfMappable(q, page, request);
                 return toResponse(page);
             }
         }
@@ -74,9 +79,11 @@ public class SearchServiceImpl implements SearchService {
         // TITLE/UPDATED_AT 정렬은 JPQL LIKE + Pageable 정렬 사용
         if (!targetCatIds.isEmpty()) {
             Page<Term> page = termRepository.searchLikeInCategories(q, request.isIncludeTags(), targetCatIds, pageable);
+            termSearchEventService.recordTrendingEventIfMappable(q, page, request);
             return toResponse(page);
         } else {
             Page<Term> page = termRepository.searchLike(q, request.isIncludeTags(), pageable);
+            termSearchEventService.recordTrendingEventIfMappable(q, page, request);
             return toResponse(page);
         }
     }

@@ -3,14 +3,8 @@ package com.cygnus.ipoten.interview.controller;
 import com.cygnus.ipoten.account.service.AccountService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import com.cygnus.ipoten.infrastructure.external.email.EmailService;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewCreateRequestForm;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewEndRequestForm;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewProgressRequestForm;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewResultRequestForm;
-import com.cygnus.ipoten.interview.controller.response_form.InterviewCreateResponseForm;
-import com.cygnus.ipoten.interview.controller.response_form.InterviewProgressResponseForm;
-import com.cygnus.ipoten.interview.controller.response_form.InterviewResultListForm;
-import com.cygnus.ipoten.interview.controller.response_form.InterviewResultResponseForm;
+import com.cygnus.ipoten.interview.controller.request_form.*;
+import com.cygnus.ipoten.interview.controller.response_form.*;
 import com.cygnus.ipoten.interview.service.InterviewService;
 import com.cygnus.ipoten.interview.service.response.InterviewCreateResponse;
 import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
@@ -48,9 +42,23 @@ public class InterviewController {
         Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
 
         InterviewCreateResponse interviewCreateResponse = interviewService.createInterview(interviewCreateRequestForm, accountId, userToken);
-
-
         return ResponseEntity.ok(InterviewCreateResponseForm.of(interviewCreateResponse));
+
+    }
+
+    @PostMapping("/create/normal")
+    public ResponseEntity<NormalInterviewCreateResponseForm> interviewCreateNormal(
+            @CookieValue(name = "userToken", required = false) String userToken,
+            @RequestBody NormalInterviewCreateRequestForm normalInterviewCreateRequestForm) {
+
+        log.info("노말 면접 시도 옴");
+        Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
+        log.info("userTokne : {} ,  ", userToken );
+        log.info("accountId : {} ,  ", accountId );
+        NormalInterviewCreateResponseForm normalInterviewCreateResponseForm = interviewService.execute(
+                normalInterviewCreateRequestForm.getInterviewType(), normalInterviewCreateRequestForm, userToken);
+
+        return ResponseEntity.ok(normalInterviewCreateResponseForm);
 
     }
 
@@ -65,6 +73,8 @@ public class InterviewController {
 
         return ResponseEntity.ok(interviewProgressResponse.toInterviewProgressResponseForm());
     }
+
+
 
     @PostMapping("/end")
     public ResponseEntity<Void> endInterview(

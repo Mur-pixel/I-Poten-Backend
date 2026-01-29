@@ -57,7 +57,7 @@ public class DailyQuizServiceImpl implements DailyQuizService {
 
         if (mode == DailyStartMode.RESUME) {
             baseYmd = quizSessionRepository
-                    .findTopByAccount_IdAndDailyIssueTypeAndSessionStatusInOrderByStartedAtDesc(
+                    .findTopByAccount_IdAndDailyIssueTypeAndSessionStatusInAndDeletedAtIsNullOrderByStartedAtDesc(
                             accountId, "GENERAL", List.of(SessionStatus.IN_PROGRESS)
                     )
                     .map(s -> s.getDailyYmd() != null
@@ -68,20 +68,18 @@ public class DailyQuizServiceImpl implements DailyQuizService {
         } else if (mode == DailyStartMode.TODAY) {
             baseYmd = today;
 
-            // (1) 기존 IN_PROGRESS 3종 만료
             quizSessionRepository.expireDailyInProgress(accountId, baseYmd, "GENERAL", QuestionType.CHOICE.name());
             quizSessionRepository.expireDailyInProgress(accountId, baseYmd, "GENERAL", QuestionType.OX.name());
             quizSessionRepository.expireDailyInProgress(accountId, baseYmd, "GENERAL", QuestionType.INITIALS.name());
         }
 
-        // (2) 새로 생성 (startOne은 IN_PROGRESS가 없으니 생성 루트로 감)
         StartQuizSessionResponse choice   = startOne(accountId, baseYmd, QuestionType.CHOICE,   3, "DAILY_GENERAL:CHOICE");
         StartQuizSessionResponse ox       = startOne(accountId, baseYmd, QuestionType.OX,       3, "DAILY_GENERAL:OX");
         StartQuizSessionResponse initials = startOne(accountId, baseYmd, QuestionType.INITIALS, 3, "DAILY_GENERAL:INITIALS");
 
         boolean hasUnfinishedSession =
                 !today.equals(baseYmd)
-                        && quizSessionRepository.existsByAccount_IdAndDailyYmdAndDailyIssueTypeAndSessionStatus(
+                        && quizSessionRepository.existsByAccount_IdAndDailyYmdAndDailyIssueTypeAndSessionStatusAndDeletedAtIsNull(
                         accountId, baseYmd, "GENERAL", SessionStatus.IN_PROGRESS
                 );
 
@@ -98,7 +96,7 @@ public class DailyQuizServiceImpl implements DailyQuizService {
 
         // 1) IN_PROGRESS 우선
         var inProgress = quizSessionRepository
-                .findTopByAccount_IdAndDailyYmdAndDailyIssueTypeAndDailyQuestionTypeAndSessionStatusInOrderByStartedAtDesc(
+                .findTopByAccount_IdAndDailyYmdAndDailyIssueTypeAndDailyQuestionTypeAndSessionStatusInAndDeletedAtIsNullOrderByStartedAtDesc(
                         accountId, ymd, "GENERAL", type.name(), List.of(SessionStatus.IN_PROGRESS)
                 );
 
@@ -150,7 +148,7 @@ public class DailyQuizServiceImpl implements DailyQuizService {
 
         } catch (DataIntegrityViolationException dup) {
             var again = quizSessionRepository
-                    .findTopByAccount_IdAndDailyYmdAndDailyIssueTypeAndDailyQuestionTypeAndSessionStatusInOrderByStartedAtDesc(
+                    .findTopByAccount_IdAndDailyYmdAndDailyIssueTypeAndDailyQuestionTypeAndSessionStatusInAndDeletedAtIsNullOrderByStartedAtDesc(
                             accountId, ymd, "GENERAL", type.name(),
                             List.of(SessionStatus.IN_PROGRESS, SessionStatus.SUBMITTED, SessionStatus.EXPIRED)
                     );

@@ -239,7 +239,7 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
                AND LOWER(tg.name) LIKE CONCAT('%', LOWER(:q), '%')
            ))
     )
-    AND t.termCategory_id IN (:catIds)
+    AND t.category_id IN (:catIds)
     ORDER BY score DESC, t.id DESC, t.title ASC
     """,
                 countQuery = """
@@ -255,7 +255,7 @@ public interface TermRepository extends JpaRepository<Term, Long>, JpaSpecificat
                AND LOWER(tg.name) LIKE CONCAT('%', LOWER(:q), '%')
            ))
     )
-    AND t.termCategory_id IN (:catIds)
+    AND t.category_id IN (:catIds)
     """,
                 nativeQuery = true)
     Page<Term> searchByRelevanceInCategories(@Param("q") String q,
