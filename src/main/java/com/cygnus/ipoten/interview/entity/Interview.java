@@ -24,6 +24,12 @@ public class Interview {
 
     private boolean isFinished;
 
+    private InterviewPlan plan;
+
+    private CandidateStatus candidateStatus;
+
+    private String selfConcern;
+
     private String sender;
 
     @OneToOne(fetch = FetchType.LAZY)
@@ -54,6 +60,16 @@ public class Interview {
         this.isFinished = false;
         this.interviewType = interviewType;
         this.interviewSequence = 1;
+    }
+
+    public Interview(Account account, IntervieweeProfile intervieweeProfile, InterviewType interviewType, InterviewPlan plan) {
+        this.account = account;
+        this.intervieweeProfile = intervieweeProfile;
+        this.createdAt = LocalDateTime.now();
+        this.isFinished = false;
+        this.interviewType = interviewType;
+        this.interviewSequence = 1;
+        this.plan = plan;
     }
 
 

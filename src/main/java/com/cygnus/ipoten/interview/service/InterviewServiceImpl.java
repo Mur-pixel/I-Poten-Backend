@@ -7,18 +7,15 @@ import com.cygnus.ipoten.account_project.service.AccountProjectService;
 import com.cygnus.ipoten.infrastructure.external.fastapi.client.FastApiEndInterview;
 import com.cygnus.ipoten.interview.controller.request.InterviewAccountProjectRequest;
 import com.cygnus.ipoten.interview.controller.request.InterviewEndRequest;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewCreateRequestForm;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewEndRequestForm;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewProgressRequestForm;
-import com.cygnus.ipoten.interview.controller.request_form.InterviewResultRequestForm;
+import com.cygnus.ipoten.interview.controller.request_form.*;
+import com.cygnus.ipoten.interview.controller.response_form.NormalInterviewCreateResponseForm;
 import com.cygnus.ipoten.interview.entity.Interview;
+import com.cygnus.ipoten.interview.entity.InterviewPlan;
 import com.cygnus.ipoten.interview.entity.InterviewType;
 import com.cygnus.ipoten.interview.repository.InterviewRepository;
-import com.cygnus.ipoten.interview.service.response.InterviewCreateResponse;
-import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
-import com.cygnus.ipoten.interview.service.response.InterviewResultListResponse;
-import com.cygnus.ipoten.interview.service.response.InterviewResultResponse;
+import com.cygnus.ipoten.interview.service.response.*;
 import com.cygnus.ipoten.interview.service.strategy.interview_strategy.InterviewProcessStrategy;
+import com.cygnus.ipoten.interview.service.strategy.normal_interview_strategy.NormalInterviewProgressStrategy;
 import com.cygnus.ipoten.interviewQA.entity.InterviewQA;
 import com.cygnus.ipoten.interviewQA.service.InterviewQAService;
 import com.cygnus.ipoten.interview_result.entity.InterviewResult;
@@ -104,7 +101,7 @@ public class InterviewServiceImpl implements InterviewService {
             log.info("✅ IntervieweeProfile 생성 완료: {}", intervieweeProfile.getId());
 
             log.info("3️⃣ Interview 생성 및 저장 시작");
-            Interview interview = new Interview(account, intervieweeProfile, interviewCreateRequestForm.getInterviewType());
+            Interview interview = new Interview(account, intervieweeProfile, interviewCreateRequestForm.getInterviewType(), InterviewPlan.PREMIUM);
             interview = interviewRepository.save(interview);
             log.info("✅ Interview 생성 완료: {}", interview.getId());
 
@@ -145,6 +142,22 @@ public class InterviewServiceImpl implements InterviewService {
         }
     }
 
+    @Override
+    public NormalInterviewProgressResponse createNormalInterview(List<String> interviewList, NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId) {
+
+        log.info("1️⃣ Account 조회 시작, accountId={}", accountId);
+        Account account = accountService.findById(accountId)
+                .orElseThrow(() -> new IllegalArgumentException("인터뷰 생성에서 account를 찾지 못함"));
+        log.info("✅ Account 조회 완료: {}", account.getId());
+
+        log.info("3️⃣ Interview 생성 및 저장 시작");
+        Interview interview = new Interview(account, null, normalInterviewCreateRequestForm.getInterviewType(), InterviewPlan.NORMAL);
+        interview = interviewRepository.save(interview);
+        log.info("✅ Interview 생성 완료: {}", interview.getId());
+
+
+        return new NormalInterviewProgressResponse(interview.getId(), interviewList);
+    }
 
 
     @Override
@@ -157,6 +170,16 @@ public class InterviewServiceImpl implements InterviewService {
 
         return strategy.process(form, userToken);
     }
+
+    @Override
+    public NormalInterviewCreateResponseForm execute(InterviewType type, NormalInterviewCreateRequestForm form, String userToken) {
+
+        NormalInterviewProgressStrategy strategy = context.getBean(String.valueOf(type), NormalInterviewProgressStrategy.class);
+        NormalInterviewProgressResponse process = strategy.process(form, userToken);
+
+        return process.toNormalInterviewCreateResponseForm();
+    }
+
 
     @Transactional
     @Override
