@@ -52,3 +52,14 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+// Ensure Spring Boot executable JAR is built
+jar {
+    enabled = false
+    archiveClassifier = ''
+}
+
+bootJar {
+    enabled = true
+    archiveClassifier = ''
+}
