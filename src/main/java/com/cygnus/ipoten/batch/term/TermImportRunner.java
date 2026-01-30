@@ -6,6 +6,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.boot.CommandLineRunner;
 import org.springframework.stereotype.Component;
+import org.springframework.util.Assert;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -47,16 +48,29 @@ public class TermImportRunner implements CommandLineRunner {
             int count = 0;
 
             while ((line = br.readLine()) != null) {
-                String[] cols = line.split("\t", -1); // 탭 구분
-                if (cols.length < 5) continue;
 
-                Long categoryId = cols[0].isBlank() ? null : Long.valueOf(cols[0]);
-                String termId = cols[1].isBlank() ? UUID.randomUUID().toString() : cols[1];
+                // 1. 완전 빈 줄 스킵
+                if (line.isBlank()) {
+                    continue;
+                }
+
+                String[] cols = line.split("\t", -1);
+
+                // 2. 컬럼 수 + categoryId 검증
+                if (cols.length < 5 || cols[0].isBlank()) {
+                    log.warn("Skip invalid row: [{}]", line);
+                    continue;
+                }
+
+                Long categoryId = Long.valueOf(cols[0].trim());
+
                 String title = cols[2].trim();
                 String description = cols[3].trim();
                 String tags = cols[4].trim();
 
-                CreateTermRequest request = new CreateTermRequest(categoryId, title, description, tags);
+                CreateTermRequest request =
+                        new CreateTermRequest(categoryId, title, description, tags);
+
                 termService.register(request);
                 count++;
             }
