@@ -23,7 +23,6 @@ import java.util.stream.Collectors;
 @Slf4j
 @Component
 @RequiredArgsConstructor
-@ConditionalOnProperty(prefix = "app.batch.job-recommendation", name = "enabled", havingValue = "true")
 public class JobRecommendedTermTsvImportRunner implements ApplicationRunner {
 
     private final TermRepository termRepository;
@@ -33,6 +32,20 @@ public class JobRecommendedTermTsvImportRunner implements ApplicationRunner {
     @Override
     @Transactional
     public void run(ApplicationArguments args) throws Exception {
+
+        // 배치 실행 여부 플래그
+        // 기본값 false → 명시적으로 enabled=true를 줘야만 실행됨
+        boolean enabled = Boolean.parseBoolean(
+                getArg(args, "app.batch.job-recommendation.enabled", "false")
+        );
+
+        // 실수로 서버 기동 시 배치가 실행되는 것을 방지
+        if (!enabled) {
+            log.info("[JRT-IMPORT] disabled=true -> skip (use --app.batch.job-recommendation.enabled=true)");
+            return;
+        }
+
+        // TSV 파일 경로
         String path = getArg(args, "app.batch.job-recommendation.path", null);
         if (path == null || path.isBlank()) {
             log.warn("[JRT-IMPORT] path가 비어있어서 스킵합니다. ex) --app.batch.job-recommendation.path=/.../jrt.tsv");
@@ -76,7 +89,7 @@ public class JobRecommendedTermTsvImportRunner implements ApplicationRunner {
                 }
             }
 
-            // REPLACE 전략: jobKey 추천 데이터 싹 지우고 다시 넣기
+            // jobKey 단위로 기존 추천 데이터를 모두 삭제 후 재적재 (REPLACE 전략)
             int deleted = jobRecommendedTermRepository.deleteByJobKey(jobKey);
             log.info("[JRT-IMPORT] jobKey={} delete existing rows={}", jobKey, deleted);
 
@@ -99,6 +112,8 @@ public class JobRecommendedTermTsvImportRunner implements ApplicationRunner {
                 // term 조회: categoryId + title 정규화 매칭
                 List<Term> candidates = termRepository.findAllByCategoryIdAndTitleNormalized(categoryId, title);
 
+                // term이 존재하지 않는 경우
+                // fail-on-missing-term=false 이면 해당 row만 스킵하고 계속 진행
                 if (candidates.isEmpty()) {
                     totalMissingTerms++;
                     String msg = String.format(
