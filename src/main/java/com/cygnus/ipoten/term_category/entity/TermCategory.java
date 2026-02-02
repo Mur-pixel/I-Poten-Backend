@@ -13,8 +13,8 @@ import lombok.NoArgsConstructor;
 @Table(
         name = "term_category",
         uniqueConstraints = @UniqueConstraint(
-                name = "uk_category_name_depth",
-                columnNames = {"name", "depth"}
+                name = "uk_category_parent_name",
+                columnNames = {"parent_id", "name"}
         )
 )
 public class TermCategory {
