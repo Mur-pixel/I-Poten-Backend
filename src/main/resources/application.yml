@@ -107,6 +107,11 @@ aws:
     access-key: ${AWS_SES_ACCESS_KEY}
     secret-key: ${AWS_SES_SECRET_KEY}
     from-email: ${AWS_SES_FROM_EMAIL}
+  s3:
+    bucket: ${AWS_S3_BUCKET}
+
+cdn:
+  base-url: ${BASE_URL}
 
 cloud:
   aws:
