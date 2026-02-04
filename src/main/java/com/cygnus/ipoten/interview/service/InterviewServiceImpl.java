@@ -143,7 +143,7 @@ public class InterviewServiceImpl implements InterviewService {
     }
 
     @Override
-    public NormalInterviewProgressResponse createNormalInterview(List<String> interviewList, NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId) {
+    public NormalInterviewProgressResponse createNormalInterview(List<InterviewWithAudio> interviewList, NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId) {
 
         log.info("1️⃣ Account 조회 시작, accountId={}", accountId);
         Account account = accountService.findById(accountId)

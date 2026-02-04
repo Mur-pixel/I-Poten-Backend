@@ -8,8 +8,12 @@ import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.util.Base64;
+import java.util.List;
 import java.util.Map;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
+import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 @Service
 public class GoogleTtsServiceImpl implements GoogleTtsService {
@@ -70,5 +74,12 @@ public class GoogleTtsServiceImpl implements GoogleTtsService {
 
         // ✅ CloudFront URL 반환
         return cdnBaseUrl + "/" + key;
+    }
+
+    @Override
+    public List<String> synthesizeAndUploadList(List<String> texts) {
+        return texts.stream()
+                .map(this::synthesizeAndUpload)
+                .collect(Collectors.toList());
     }
 }

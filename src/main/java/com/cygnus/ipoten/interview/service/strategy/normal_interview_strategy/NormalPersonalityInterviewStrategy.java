@@ -6,6 +6,7 @@ import com.cygnus.ipoten.interview.controller.request_form.InterviewProgressRequ
 import com.cygnus.ipoten.interview.controller.request_form.NormalInterviewCreateRequestForm;
 import com.cygnus.ipoten.interview.service.InterviewService;
 import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
+import com.cygnus.ipoten.interview.service.response.InterviewWithAudio;
 import com.cygnus.ipoten.interview.service.response.NormalInterviewProgressResponse;
 import com.cygnus.ipoten.personality_interview.entity.PersonalityInterview;
 import com.cygnus.ipoten.personality_interview.service.PersonalityInterviewService;
@@ -15,6 +16,7 @@ import org.springframework.stereotype.Component;
 
 import java.util.List;
 import java.util.stream.Collectors;
+import java.util.stream.IntStream;
 
 
 @RequiredArgsConstructor
@@ -33,11 +35,23 @@ public class NormalPersonalityInterviewStrategy implements NormalInterviewProgre
 
         List<PersonalityInterview> personalityInterviews = personalityInterviewService.getPersonalityInterviews();
 
+
         List<String> interviewList = personalityInterviews.stream()
                 .map(PersonalityInterview::getDescription)
                 .toList();
 
-        return interviewService.createNormalInterview(interviewList, interviewProgressRequestForm, accountId);
+        List<String> interviewQuestions = googleTtsService.synthesizeAndUploadList(interviewList);
+
+        List<InterviewWithAudio> mapped = IntStream.range(0, personalityInterviews.size())
+                .mapToObj(i -> new InterviewWithAudio(
+                        personalityInterviews.get(i).getDescription(),
+                        interviewQuestions.get(i)                     
+                ))
+                .toList();
+
+
+
+        return interviewService.createNormalInterview(mapped, interviewProgressRequestForm, accountId);
 
     }
 

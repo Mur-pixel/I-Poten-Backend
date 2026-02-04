@@ -14,7 +14,7 @@ public interface InterviewService {
 
     InterviewCreateResponse createInterview(InterviewCreateRequestForm interviewCreateRequestForm, Long accountId, String userToken);
 
-    NormalInterviewProgressResponse createNormalInterview(List<String> interviewList,NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId);
+    NormalInterviewProgressResponse createNormalInterview(List<InterviewWithAudio> interviewList,NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId);
     InterviewProgressResponse execute(InterviewType type, InterviewProgressRequestForm form, String userToken);
     NormalInterviewCreateResponseForm execute(InterviewType type, NormalInterviewCreateRequestForm form, String userToken);
     void endInterview(InterviewEndRequestForm interviewEndRequestForm, String userToken);
