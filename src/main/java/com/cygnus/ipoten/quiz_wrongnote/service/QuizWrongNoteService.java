@@ -12,4 +12,5 @@ public interface QuizWrongNoteService {
     WrongNoteListResponseForm listWrongNotes(Long accountId, int page, int size, WrongNoteSearchCondition condition, boolean includeAnswers);
     void updateResolved(Long accountId, Long wrongNoteId, boolean resolved);
     void deleteWrongNote(Long accountId, Long wrongNoteId);
+    void deleteWrongNotesBulk(Long accountId, List<Long> wrongNoteIds);
 }

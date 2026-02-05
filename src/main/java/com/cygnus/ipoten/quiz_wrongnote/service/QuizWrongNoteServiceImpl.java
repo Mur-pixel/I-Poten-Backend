@@ -222,6 +222,19 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
         }
     }
 
+    @Override
+    @Transactional
+    public void deleteWrongNotesBulk(Long accountId, List<Long> wrongNoteIds) {
+        List<Long> ids = wrongNoteIds.stream()
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (ids.isEmpty()) return;
+
+        long deleted = quizWrongNoteRepository.deleteByAccount_IdAndIdIn(accountId, ids);
+    }
+
     private String resolveMyAnswer(QuizWrongNote wn, Map<Long, String> choiceTextByChoiceId) {
         if (wn.getSubmittedText() != null && !wn.getSubmittedText().isBlank()) {
             return wn.getSubmittedText();
