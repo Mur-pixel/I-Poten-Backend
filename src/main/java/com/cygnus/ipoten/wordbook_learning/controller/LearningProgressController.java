@@ -53,11 +53,9 @@ public class LearningProgressController {
             log.warn("[memo:update:byTerm] 인증 실패");
             throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        log.debug("[memo:update:byTerm:req] accountId={}, termId={}, status={}", accountId, termId, requestForm.getStatus());
         UpdateLearningProgressRequest request = requestForm.toUpdateMemorizationRequest(accountId, termId);
         UpdateLearningProgressResponse response = learningProgressService.updateMemorization(request);
         log.info("[memo:update:byTerm] done");
-        log.debug("[memo:update:byTerm] response={}", response);
         return UpdateLearningProgressResponseForm.from(response);
     }
 
@@ -102,7 +100,6 @@ public class LearningProgressController {
         rows.forEach(p -> result.put(String.valueOf(p.getId().getTermId()), p.getStatus().name()));
 
         log.info("[memo:list] done");
-        log.debug("[memo:list] accountId={}, size={}", accountId, result.size());
         return result;
     }
 

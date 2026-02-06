@@ -40,8 +40,8 @@ public class JobRecommendedTermController {
         if (accountId == null) throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
 
         try {
-            log.info("[attachJobRecommendations] accountId={}, wordbookId={}, jobKey={}",
-                    accountId, wordbookId, requestForm.getJobKey());
+            log.info("[attachJobRecommendations] wordbookId={}, jobKey={}",
+                    wordbookId, requestForm.getJobKey());
 
             var response = jobRecommendedTermService.attachJobRecommendationsToWordbook(
                     accountId, wordbookId, requestForm.getJobKey()
@@ -51,8 +51,8 @@ public class JobRecommendedTermController {
                     .body(AttachTermsBulkResponseForm.from(response));
 
         } catch (Exception e) {
-            log.error("[attachJobRecommendations] FAILED accountId={} wordbookId={} jobKey={}",
-                    accountId, wordbookId, requestForm.getJobKey(), e);
+            log.error("[attachJobRecommendations] FAILED wordbookId={} jobKey={}",
+                    wordbookId, requestForm.getJobKey(), e);
             throw e;
         }
     }

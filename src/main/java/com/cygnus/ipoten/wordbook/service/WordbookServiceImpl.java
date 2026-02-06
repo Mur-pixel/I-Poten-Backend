@@ -86,7 +86,6 @@ public class WordbookServiceImpl implements WordbookService {
         Long wordbookId = request.getWordbookId();
 
         boolean owns = wordbookRepository.existsByIdAndAccount_Id(wordbookId, accountId);
-        log.info("[list] owns? accountId={}, wordbookId={}, result={}", accountId, wordbookId, owns);
         if (!owns) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 폴더를 찾을 수 없습니다.");
 
         int pageIdx = Math.max(0, request.getPage());
@@ -94,9 +93,6 @@ public class WordbookServiceImpl implements WordbookService {
         int size = (per == null) ? 20 : Math.min(Math.max(5, per), 100);
         Sort sort   = parseSortOrDefault(request.getSort(), Sort.by(Sort.Order.desc("createdAt")));
         Pageable pageable = PageRequest.of(pageIdx, size, sort);
-
-        log.info("[list] call repo: wordbookId={}, accountId={}, pageable={}", wordbookId, accountId, pageable);
-
         Page<WordbookTerm> paginatedList =
                 wordbookTermRepository.findPageByFolderAndOwnerFetch(wordbookId, accountId, pageable);
 
@@ -478,9 +474,6 @@ public class WordbookServiceImpl implements WordbookService {
         int requested = input.size();
         int skipped = duplicates.size();
         int failed = 0;
-
-        log.info("[attachTermsBulk] accountId={} wordbookId={} requested={} attached={} skipped={} invalid={}",
-                accountId, wordbookId, requested, attached, skipped, invalidIds.size());
 
         return new AttachTermsBulkResponse(
                 wordbookId,
