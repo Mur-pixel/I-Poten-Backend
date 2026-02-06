@@ -22,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,6 +45,15 @@ public class WordbookServiceImpl implements WordbookService {
 
     @Value("${ebook.max.termids.per.wordbook:5000}")
     private int maxTermIdsPerFolder;
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter KST_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private static String fmtKst(Instant t) {
+        if (t == null) return null;
+        return KST_FMT.format(t.atZone(KST));
+    }
 
     @Override
     @Transactional
@@ -200,9 +212,8 @@ public class WordbookServiceImpl implements WordbookService {
         }
 
         wordbook.setWordbookName(raw);
-        wordbookRepository.save(wordbook); // @PreUpdate에서 updatedAt 갱신됨
-
-        return map(wordbook);
+        Wordbook saved = wordbookRepository.save(wordbook);
+        return map(saved);
     }
 
     @Override
@@ -491,8 +502,8 @@ public class WordbookServiceImpl implements WordbookService {
                 .id(w.getId())
                 .wordbookName(w.getWordbookName())
                 .sortOrder(w.getSortOrder())
-                .createdAt(w.getCreatedAt())
-                .updatedAt(w.getUpdatedAt())
+                .createdAtKst(fmtKst(w.getCreatedAt()))
+                .updatedAtKst(fmtKst(w.getUpdatedAt()))
                 .build();
     }
 

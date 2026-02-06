@@ -11,6 +11,6 @@ public class RenameWordbookResponse {
     Long id;
     String wordbookName;
     Integer sortOrder;
-    Instant createdAt;
-    Instant updatedAt;
+    String createdAtKst;
+    String updatedAtKst;
 }
