@@ -58,13 +58,11 @@ public class WordbookController {
             log.warn("[wordbook:create] 인증 실패");
             throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        log.debug("[wordbook:create] requestForm={}, accountId={}", requestForm, accountId);
 
         try {
             CreateWordbookRequest request = requestForm.toCreateFolderRequest(accountId);
             CreateWordbookResponse response = wordbookService.registerWordbook(request);
             log.info("[wordbook:create] done");
-            log.debug("[wordbook:create] accountId={}, wordbookName={}", accountId, response.getWordbookName());
             return CreateWordbookResponseForm.from(response);
         } catch (Exception e) {
             log.error("[wordbook:create] 폴더 생성 중 오류 발생", e);
@@ -88,9 +86,7 @@ public class WordbookController {
             log.warn("[wordbook:reorder] 인증 실패");
             throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        log.debug("[wordbook:reorder] accountId={}, req={}", accountId, requestForm);
         wordbookService.reorder(requestForm.toRequest(accountId));
-        log.info("[wordbook:reorder] done");
     }
 
     // 단어장 폴더 리스트 조회하기 (단순 목록)
@@ -118,7 +114,6 @@ public class WordbookController {
                 })
                 .collect(Collectors.toList());
         log.info("[wordbook:list] done");
-        log.debug("[wordbook:list] accountId={}, count={}", accountId, result.size());
         return result;
     }
 
@@ -137,7 +132,7 @@ public class WordbookController {
             log.warn("[wordbook:attach] 인증 실패");
             throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        log.debug("[wordbook:rename] accountId={}, wordbookId={}", accountId, wordbookId);
+        log.debug("[wordbook:rename] wordbookId={}", wordbookId);
 
         var request = requestForm.toRequest(accountId, wordbookId);
         var response = wordbookService.rename(request);

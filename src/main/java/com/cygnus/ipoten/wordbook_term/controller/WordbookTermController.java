@@ -58,7 +58,7 @@ public class WordbookTermController {
             log.warn("[folder:attach] 인증 실패");
             throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
         }
-        log.debug("[folder:attach] accountId={}, folderId={}, reqForm={}", accountId, folderId, requestForm);
+        log.debug("[folder:attach] folderId={}, reqForm={}", folderId, requestForm);
         CreateWordbookTermRequest request = requestForm.toRequest(accountId, folderId);
         CreateWordbookTermResponse response = wordbookService.attachTerm(request);
         log.info("[folder:attach] done");
@@ -103,8 +103,8 @@ public class WordbookTermController {
         }
         var response = wordbookTermService.moveTerms(accountId, sourceWordbookId, requestForm.getTargetWordbookId(), requestForm.getTermIds());
         log.info("[wordbooks:move] done");
-        log.debug("[wordbooks:move] accountId={}, sourceWordbookId={}, targetWordbookId={}, count={}",
-                accountId, sourceWordbookId, requestForm.getTargetWordbookId(), requestForm.getTermIds().size());
+        log.debug("[wordbooks:move] sourceWordbookId={}, targetWordbookId={}, count={}",
+                sourceWordbookId, requestForm.getTargetWordbookId(), requestForm.getTermIds().size());
         return MoveWordbookTermsResponseForm.from(response);
     }
 
@@ -176,8 +176,6 @@ public class WordbookTermController {
             log.debug("[wordbook:remove-terms-bulk] termIds 비어 있음 - Skip");
             return;
         }
-
-        log.debug("[wordbook:remove-terms-bulk] accountId={}, termIds={}", accountId, termIds);
 
         wordbookTermService.removeTermsFromWordbook(
                 accountId,
