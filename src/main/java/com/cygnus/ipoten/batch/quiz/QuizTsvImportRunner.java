@@ -346,16 +346,7 @@ public class QuizTsvImportRunner implements CommandLineRunner {
         String questionText = nvl(row.getQuestionText(), "(빈 문제)").trim();
         questionText = questionText.replaceAll("\\s+", " ");
 
-        // 중복이면 “라벨만 붙이고 종료”
-        Optional<QuizQuestion> existing =
-                quizQuestionRepository.findFirstByQuestionTypeAndQuestionTextAndTerm_Id(type, questionText, termId);
-
-        if (existing.isPresent()) {
-            applyLabels(existing.get(), row);
-            return;
-        }
-
-        // 난이도 파싱
+        // 난이도 파싱 (existing/new 공통으로 필요하니 위로 올림)
         DifficultyLevel difficulty = DifficultyLevel.MEDIUM;
         String diffStr = safe(row.getDifficulty());
         if (!diffStr.isBlank()) {
@@ -366,8 +357,48 @@ public class QuizTsvImportRunner implements CommandLineRunner {
             }
         }
 
-        Term term = em.getReference(Term.class, termId);
         String explanation = safe(row.getExplanation());
+
+        // 중복이면 “업데이트 + 보기/정답 재구성 + 라벨 적용” 후 종료
+        Optional<QuizQuestion> existing =
+                quizQuestionRepository.findFirstByQuestionTypeAndQuestionTextAndTerm_Id(type, questionText, termId);
+
+        if (existing.isPresent()) {
+            QuizQuestion q = existing.get();
+
+            // 1) 본문/난이도/질문/해설 업데이트
+            q.setDifficulty(difficulty);
+            q.setExplanation(explanation);
+            q.setQuestionText(questionText);
+            quizQuestionRepository.save(q);
+
+            // 2) 기존 보기/정답 제거 (기록(session_answer)은 quiz_question_id만 참조하니 안전)
+            quizChoiceRepository.deleteByQuizQuestion_Id(q.getId());
+
+
+            // 3) 기존 텍스트 정답 제거 (중요: 벌크 delete 금지)
+            if (q.getQuizTextAnswer() != null) {
+                quizTextAnswerRepository.delete(q.getQuizTextAnswer());
+                q.detachTextAnswer();
+            } else {
+                quizTextAnswerRepository.deleteById(q.getId());
+            }
+
+            // 4) 타입별로 다시 생성
+            switch (type) {
+                case OX -> createOxChoices(q, row);
+                case CHOICE -> createChoiceChoices(q, row);
+                case INITIALS -> createTextAnswerRequired(q, row, type);
+                default -> createTextAnswerOptional(q, row, type);
+            }
+
+            // 5) 라벨 붙이기(중복 방지 로직 있음)
+            applyLabels(q, row);
+            return;
+        }
+
+        // ===== 신규 생성 =====
+        Term term = em.getReference(Term.class, termId);
 
         QuizQuestion q = new QuizQuestion(
                 term,
@@ -386,7 +417,6 @@ public class QuizTsvImportRunner implements CommandLineRunner {
             default -> createTextAnswerOptional(q, row, type);
         }
 
-        // 새로 만든 경우에도 라벨 붙이기
         applyLabels(q, row);
     }
 
