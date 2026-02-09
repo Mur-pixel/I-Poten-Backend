@@ -22,6 +22,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
 import java.util.*;
 import java.util.stream.Collectors;
 
@@ -42,6 +45,15 @@ public class WordbookServiceImpl implements WordbookService {
 
     @Value("${ebook.max.termids.per.wordbook:5000}")
     private int maxTermIdsPerFolder;
+
+    private static final ZoneId KST = ZoneId.of("Asia/Seoul");
+    private static final DateTimeFormatter KST_FMT =
+            DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss");
+
+    private static String fmtKst(Instant t) {
+        if (t == null) return null;
+        return KST_FMT.format(t.atZone(KST));
+    }
 
     @Override
     @Transactional
@@ -74,7 +86,6 @@ public class WordbookServiceImpl implements WordbookService {
         Long wordbookId = request.getWordbookId();
 
         boolean owns = wordbookRepository.existsByIdAndAccount_Id(wordbookId, accountId);
-        log.info("[list] owns? accountId={}, wordbookId={}, result={}", accountId, wordbookId, owns);
         if (!owns) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 폴더를 찾을 수 없습니다.");
 
         int pageIdx = Math.max(0, request.getPage());
@@ -82,9 +93,6 @@ public class WordbookServiceImpl implements WordbookService {
         int size = (per == null) ? 20 : Math.min(Math.max(5, per), 100);
         Sort sort   = parseSortOrDefault(request.getSort(), Sort.by(Sort.Order.desc("createdAt")));
         Pageable pageable = PageRequest.of(pageIdx, size, sort);
-
-        log.info("[list] call repo: wordbookId={}, accountId={}, pageable={}", wordbookId, accountId, pageable);
-
         Page<WordbookTerm> paginatedList =
                 wordbookTermRepository.findPageByFolderAndOwnerFetch(wordbookId, accountId, pageable);
 
@@ -200,9 +208,8 @@ public class WordbookServiceImpl implements WordbookService {
         }
 
         wordbook.setWordbookName(raw);
-        wordbookRepository.save(wordbook); // @PreUpdate에서 updatedAt 갱신됨
-
-        return map(wordbook);
+        Wordbook saved = wordbookRepository.save(wordbook);
+        return map(saved);
     }
 
     @Override
@@ -468,9 +475,6 @@ public class WordbookServiceImpl implements WordbookService {
         int skipped = duplicates.size();
         int failed = 0;
 
-        log.info("[attachTermsBulk] accountId={} wordbookId={} requested={} attached={} skipped={} invalid={}",
-                accountId, wordbookId, requested, attached, skipped, invalidIds.size());
-
         return new AttachTermsBulkResponse(
                 wordbookId,
                 requested,
@@ -491,8 +495,8 @@ public class WordbookServiceImpl implements WordbookService {
                 .id(w.getId())
                 .wordbookName(w.getWordbookName())
                 .sortOrder(w.getSortOrder())
-                .createdAt(w.getCreatedAt())
-                .updatedAt(w.getUpdatedAt())
+                .createdAtKst(fmtKst(w.getCreatedAt()))
+                .updatedAtKst(fmtKst(w.getUpdatedAt()))
                 .build();
     }
 

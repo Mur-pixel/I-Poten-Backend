@@ -41,8 +41,8 @@ public class WordbookTermServiceImpl implements WordbookTermService {
             Long accountId, Long sourceWordbookId, Long targetWordbookId, List<Long> termIds) {
 
         if (Objects.equals(sourceWordbookId, targetWordbookId)) {
-            log.info("[moveTerms] SAME_WORDBOOK accountId={} wordbookId={} requestedIds={}",
-                    accountId, sourceWordbookId, termIds);
+            log.info("[moveTerms] SAME_WORDBOOK wordbookId={} requestedIds={}",
+                    sourceWordbookId, termIds);
             final List<Long> ids = (termIds == null) ? Collections.emptyList() : termIds;
             return MoveWordbookTermsResponse.sameFolder(sourceWordbookId, ids);
         }
@@ -113,8 +113,8 @@ public class WordbookTermServiceImpl implements WordbookTermService {
                 .filter(s -> s.getReason() == MoveWordbookTermsResponse.Skipped.Reason.TERM_NOT_FOUND)
                 .count();
 
-        log.info("[moveTerms] accountId={} {} -> {} | requested={} moved={} skipped={} (dupe={}, notInSource={}, notFound={}) | movedTermIds={}",
-                accountId, sourceWordbookId, targetWordbookId,
+        log.info("[moveTerms] {} -> {} | requested={} moved={} skipped={} (dupe={}, notInSource={}, notFound={}) | movedTermIds={}",
+                sourceWordbookId, targetWordbookId,
                 distinctTermIds.size(), moved, skipped.size(), dupe, notInSrc, notFound, movedTermIds);
 
         return new MoveWordbookTermsResponse(sourceWordbookId, targetWordbookId, moved, skipped, movedTermIds);

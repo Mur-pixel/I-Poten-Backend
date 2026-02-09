@@ -24,6 +24,9 @@ public interface QuizWrongNoteRepository extends JpaRepository<QuizWrongNote, Lo
     // 단건 삭제
     long deleteByIdAndAccount_Id(Long id, Long accountId);
 
+    // 다건 삭제
+    long deleteByAccount_IdAndIdIn(Long accountId, List<Long> ids);
+    
     @Query(
             value = """
             select wn

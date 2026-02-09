@@ -35,7 +35,7 @@ public class WordbookPdfEraseService {
         // 계정 기준 일괄 삭제
         int delEbooks = execute("DELETE FROM ebook WHERE account_id = :id", accountId);
 
-        log.info("[ebook:erase] accountId={} deleted: ebooks={}", accountId, delEbooks);
+        log.info("[ebook:erase] deleted: ebooks={}", delEbooks);
         return new Result(delEbooks);
     }
 
