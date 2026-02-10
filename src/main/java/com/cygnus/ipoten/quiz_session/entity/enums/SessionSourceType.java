@@ -4,5 +4,6 @@ public enum SessionSourceType {
     WORDBOOK,
     TERM_CATEGORY,
     SET,
-    WRONG_NOTE
+    WRONG_NOTE,
+    LABELS
 }
