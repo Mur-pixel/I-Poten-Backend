@@ -19,10 +19,9 @@ import com.cygnus.ipoten.quiz_session_answer.controller.request_form.SubmitQuizS
 import com.cygnus.ipoten.quiz_session.controller.response_form.SubmitQuizSessionResponseForm;
 import com.cygnus.ipoten.quiz_session_answer.entity.QuizSessionAnswer;
 import com.cygnus.ipoten.quiz_session_answer.repository.QuizSessionAnswerRepository;
-import com.cygnus.ipoten.quiz_session_generator.service.util.AnswerIndexPlanner;
 import com.cygnus.ipoten.quiz_session_scope.value_objects.SessionSource;
-import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_set.entity.QuizSet;
+import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_set.repository.QuizSetRepository;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteService;
 import com.fasterxml.jackson.core.type.TypeReference;
@@ -34,10 +33,11 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.text.Normalizer;
 import java.time.*;
-import java.time.Instant;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
+
+import static com.cygnus.ipoten.quiz_question.util.HangulInitials.toInitialsHint;
 
 @Slf4j
 @Service
@@ -52,7 +52,7 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
     private final QuizTextAnswerRepository quizTextAnswerRepository;
     private final QuizSessionAnswerRepository quizSessionAnswerRepository;
     private final QuizWrongNoteService quizWrongNoteService;
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    private final ObjectMapper objectMapper;
 
     @Override
     @Transactional
@@ -70,7 +70,6 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
 
         Account account = accountRepository.getReferenceById(accountId);
 
-        // 응답용(세트 존재 확인)
         QuizSet quizSet = quizSetRepository.findById(quizSetId)
                 .orElseThrow(() -> new IllegalArgumentException("quizSet을 찾을 수 없습니다. id=" + quizSetId));
 
@@ -85,18 +84,10 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         // 질문 중복 제거 + 순서 보존
         List<Long> uniqIds = new ArrayList<>(new LinkedHashSet<>(questionIds));
 
-        // 질문 로드/검증
-        List<QuizQuestion> questions = quizQuestionRepository.findAllById(uniqIds);
-        Map<Long, QuizQuestion> qMap = questions.stream()
-                .collect(Collectors.toMap(QuizQuestion::getId, q -> q, (a, b) -> a, LinkedHashMap::new));
+        // 질문 로드/검증 (order: uniqIds 기준)
+        Map<Long, QuizQuestion> qMap = loadQuestionsAsMapOrThrow(uniqIds);
 
-        if (qMap.size() != uniqIds.size()) {
-            Set<Long> missing = new LinkedHashSet<>(uniqIds);
-            missing.removeAll(qMap.keySet());
-            throw new IllegalStateException("일부 질문을 찾지 못했습니다(삭제/비활성 가능): " + missing);
-        }
-
-        QuizSetType partType = resolvePartTypeFromQuestions(questions);
+        QuizSetType partType = resolvePartTypeFromQuestions(qMap.values());
 
         QuizSession session = new QuizSession();
         session.beginFromSource(
@@ -119,275 +110,18 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
 
         quizSessionRepository.save(session);
 
-        // 보기 배치 조회
+        // 보기 로드
         var allChoices = quizChoiceRepository.findByQuizQuestionIdInOrderByQuizQuestionIdAscIdAsc(uniqIds);
         Map<Long, List<QuizChoice>> byQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
-        long baseSeed = resolvedSeed;
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
-
-        List<Long> initialsQids = uniqIds.stream()
-                .filter(id -> qMap.get(id).getQuestionType() == QuestionType.INITIALS)
-                .toList();
-
-        Map<Long, String> answerTextByQid =
-                initialsQids.isEmpty()
-                    ? Map.of()
-                    : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
-                            .collect(Collectors.toMap(
-                                    a -> a.getQuizQuestion().getId(),
-                                    QuizTextAnswer::getAnswerText,
-                                    (a,b) -> a
-                            ));
+        Map<Long, String> answerTextByQid = loadInitialsAnswerTextMap(uniqIds, qMap);
 
         List<StartQuizSessionResponse.Item> items = uniqIds.stream()
-                .map(qid -> {
-                    QuizQuestion q = qMap.get(qid);
-
-                    if (q.getQuestionType() == QuestionType.INITIALS) {
-
-                        String answerText = Optional.ofNullable(answerTextByQid.get(qid))
-                                .map(String::trim)
-                                .orElse(null);
-
-                        // 정답이 없을 시 세션 생성이 안 되도록 함
-                        if (answerText == null || answerText.isBlank()) {
-                            throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: "+qid);
-                        }
-                        
-                        return new StartQuizSessionResponse.Item(
-                                q.getId(),
-                                q.getQuestionType(),
-                                q.getQuestionText(),
-                                q.getExplanation(),
-                                null,
-                                List.of(),
-                                answerText
-                        );
-                    }
-
-                    List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
-                    int optionCount = choices.size();
-
-                    if (optionCount < 2) {
-                        Long correctChoiceId = choices.stream()
-                                .filter(c -> Boolean.TRUE.equals(c.isAnswer()))
-                                .findFirst()
-                                .map(QuizChoice::getId)
-                                .orElse(null);
-
-                        var options = choices.stream()
-                                .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
-                                .toList();
-
-                        return new StartQuizSessionResponse.Item(
-                                q.getId(),
-                                q.getQuestionType(),
-                                q.getQuestionText(),
-                                q.getExplanation(),
-                                correctChoiceId,
-                                options,
-                                null
-                        );
-                    }
-
-                    AnswerIndexPlanner planner = planners.computeIfAbsent(
-                            optionCount,
-                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                    );
-
-                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
-                            q.getQuestionType(),
-                            choices,
-                            planner,
-                            mixSeed(baseSeed, qid)
-                    );
-
-                    Long correctChoiceId = ordered.stream()
-                            .filter(c -> Boolean.TRUE.equals(c.isAnswer()))
-                            .findFirst()
-                            .map(QuizChoice::getId)
-                            .orElse(null);
-
-                    var options = ordered.stream()
-                            .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
-                            .toList();
-
-                    return new StartQuizSessionResponse.Item(
-                            q.getId(),
-                            q.getQuestionType(),
-                            q.getQuestionText(),
-                            q.getExplanation(),
-                            correctChoiceId,
-                            options,
-                            null
-                    );
-                })
+                .map(qid -> buildStartItem(qid, qMap, byQ, answerTextByQid, resolvedSeed))
                 .toList();
 
         return new StartQuizSessionResponse(session.getId(), quizSet.getId(), uniqIds, items);
-    }
-
-    @Override
-    @Transactional
-    public SubmitQuizSessionResponseForm submitSession(Long sessionId, Long accountId, SubmitQuizSessionRequestForm requestForm) {
-
-        QuizSession session = quizSessionRepository
-                .findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
-                .orElseThrow(() -> new IllegalArgumentException("세션을 찾을 수 없습니다."));
-        if (!session.getAccount().getId().equals(accountId)) throw new SecurityException("세션 접근 권한이 없습니다.");
-        if (session.getSubmittedAt() != null) throw new IllegalStateException("이미 제출된 세션입니다.");
-
-        // 스냅샷 매칭(부분 제출 방지)
-        Set<Long> snapshotQids = parseSnapshotIds(session.getQuestionsSnapshotJson());
-        List<Long> submittedQids = requestForm.getAnswers().stream()
-                .map(SubmitQuizSessionRequestForm.AnswerForm::getQuizQuestionId)
-                .toList();
-
-        if (submittedQids.size() != snapshotQids.size()
-                || new HashSet<>(submittedQids).size() != submittedQids.size()) {
-            throw new IllegalArgumentException("제출 문항이 중복되었거나 스냅샷과 불일치합니다.");
-        }
-
-        // 배치 조회
-        Map<Long, QuizQuestion> qMap = quizQuestionRepository.findAllById(submittedQids)
-                .stream().collect(Collectors.toMap(QuizQuestion::getId, q -> q));
-
-        List<Long> choiceIds = requestForm.getAnswers().stream()
-                .map(SubmitQuizSessionRequestForm.AnswerForm::getSelectedChoiceId)
-                .filter(Objects::nonNull)
-                .toList();
-
-        Map<Long, QuizChoice> cMap = quizChoiceRepository.findAllById(choiceIds)
-                .stream().collect(Collectors.toMap(QuizChoice::getId, c -> c));
-
-        // INITIALS 정답 텍스트 배치 조회
-        List<Long> initialsQids = submittedQids.stream()
-                .filter(qid -> qMap.get(qid) != null && qMap.get(qid).getQuestionType() == QuestionType.INITIALS)
-                .toList();
-
-        Map<Long, String> expectedTextByQid =
-                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
-                        .collect(Collectors.toMap(
-                                a -> a.getQuizQuestion().getId(),
-                                QuizTextAnswer::getAnswerText,
-                                (a,b) -> a
-                        ));
-
-        // 정답 보기들(선택형)
-        Map<Long, List<Long>> correctIdsByQid = quizChoiceRepository.findByQuizQuestionIdIn(submittedQids)
-                .stream()
-                .filter(QuizChoice::isAnswer)
-                .collect(Collectors.groupingBy(
-                        c -> c.getQuizQuestion().getId(),
-                        Collectors.mapping(QuizChoice::getId, Collectors.toList())
-                ));
-
-        int correctCount = 0;
-        Instant now = Instant.now();
-
-        List<QuizSessionAnswer> answersToSave = new ArrayList<>();
-        List<SubmitQuizSessionResponseForm.Item> details = new ArrayList<>();
-
-        for (var a : requestForm.getAnswers()) {
-            QuizQuestion q = Optional.ofNullable(qMap.get(a.getQuizQuestionId()))
-                    .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 문제입니다: " + a.getQuizQuestionId()));
-
-            // ===== INITIALS(텍스트형) =====
-            if (q.getQuestionType() == QuestionType.INITIALS) {
-
-                String submittedRaw = Optional.ofNullable(a.getTextAnswer()).orElse("");
-                if (submittedRaw.isBlank()) throw new IllegalArgumentException("초성 퀴즈 답변이 비었습니다: " + q.getId());
-
-                String expectedRaw = Optional.ofNullable(expectedTextByQid.get(q.getId()))
-                        .orElseThrow(() -> new IllegalArgumentException("초성 퀴즈 정답이 등록되지 않았습니다: " + q.getId()));
-
-                String submittedNorm = normalizeTextAnswer(submittedRaw);
-                String expectedNorm = normalizeTextAnswer(expectedRaw);
-
-                boolean isCorrect = !submittedNorm.isBlank() && submittedNorm.equals(expectedNorm);
-                if (isCorrect) correctCount++;
-
-                String submittedToSave = submittedRaw.trim();
-                String expectedToShow  = expectedRaw.trim();
-
-                answersToSave.add(QuizSessionAnswer.forText(session, q, submittedToSave, isCorrect, now));
-
-                details.add(new SubmitQuizSessionResponseForm.Item(
-                        q.getId(),
-                        null,
-                        null,
-                        null,
-                        null,
-                        submittedToSave,
-                        expectedToShow,
-                        isCorrect
-                ));
-                continue;
-            }
-
-            // ===== CHOICE / OX =====
-            Long selectedId = a.getSelectedChoiceId();
-            if (selectedId == null) throw new IllegalArgumentException("선택형 보기 ID가 비었습니다: " + q.getId());
-
-            QuizChoice c = Optional.ofNullable(cMap.get(selectedId))
-                    .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 보기입니다: " + selectedId));
-
-            if (!c.getQuizQuestion().getId().equals(q.getId())) {
-                throw new IllegalArgumentException("선택한 보기는 해당 문제의 보기가 아닙니다.");
-            }
-
-            List<Long> correctIds = correctIdsByQid.getOrDefault(q.getId(), List.of());
-            Long correctChoiceId = (correctIds.size() == 1) ? correctIds.get(0) : null;
-            List<Long> correctChoiceIds = (correctIds.size() > 1) ? correctIds : null;
-
-            boolean isCorrect = c.isAnswer();
-            if (isCorrect) correctCount++;
-
-            answersToSave.add(QuizSessionAnswer.forChoice(
-                    session,
-                    q,
-                    c.getId(),
-                    c.getChoiceText(),
-                    isCorrect,
-                    now
-            ));
-
-            details.add(new SubmitQuizSessionResponseForm.Item(
-                    q.getId(),
-                    c.getId(),
-                    null,
-                    correctChoiceId,
-                    correctChoiceIds,
-                    null,
-                    null,
-                    isCorrect
-            ));
-        }
-
-        quizSessionAnswerRepository.saveAll(answersToSave);
-
-        Long elapsedMs = requestForm.getElapsedMs();
-        if (elapsedMs == null && session.getStartedAt() != null) {
-            elapsedMs = Duration.between(session.getStartedAt(), now).toMillis();
-        }
-
-        session.submit(correctCount, elapsedMs);
-        quizSessionRepository.save(session);
-
-        // 오답노트 저장(선택형+텍스트형 모두 QuizSessionAnswer 하나로 처리)
-        quizWrongNoteService.saveWrongNotes(answersToSave, accountId);
-
-        int total = submittedQids.size();
-        return new SubmitQuizSessionResponseForm(
-                session.getId(),
-                total,
-                correctCount,
-                elapsedMs,
-                details
-        );
     }
 
     @Override
@@ -422,18 +156,10 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         // 질문 중복 제거 + 순서 보존
         List<Long> uniqIds = new ArrayList<>(new LinkedHashSet<>(pickedQuestionIds));
 
-        List<QuizQuestion> questions = quizQuestionRepository.findAllById(uniqIds);
-        Map<Long, QuizQuestion> qMap = questions.stream()
-                .collect(Collectors.toMap(QuizQuestion::getId, q -> q, (a, b) -> a, LinkedHashMap::new));
-
-        if (qMap.size() != uniqIds.size()) {
-            Set<Long> missing = new LinkedHashSet<>(uniqIds);
-            missing.removeAll(qMap.keySet());
-            throw new IllegalStateException("일부 질문을 찾지 못했습니다(삭제/비활성 가능): " + missing);
-        }
+        Map<Long, QuizQuestion> qMap = loadQuestionsAsMapOrThrow(uniqIds);
 
         if (partType == null) {
-            partType = resolvePartTypeFromQuestions(questions);
+            partType = resolvePartTypeFromQuestions(qMap.values());
         }
 
         Account account = accountRepository.getReferenceById(accountId);
@@ -453,118 +179,20 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
                 seedValue
         );
 
-        // customTitle 저장
         if (customTitle != null && !customTitle.isBlank()) {
             session.changeTitle(customTitle.trim());
         }
 
         quizSessionRepository.save(session);
 
-        // 보기 배치 조회
         var allChoices = quizChoiceRepository.findByQuizQuestionIdInOrderByQuizQuestionIdAscIdAsc(uniqIds);
         Map<Long, List<QuizChoice>> byQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
-        long baseSeed = seedValue;
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
-        List<Long> initialsQids = uniqIds.stream()
-                .filter(id -> qMap.get(id).getQuestionType() == QuestionType.INITIALS)
-                .toList();
-
-        Map<Long, String> answerTextByQid =
-                initialsQids.isEmpty()
-                        ? Map.of()
-                        : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
-                        .collect(Collectors.toMap(
-                                a -> a.getQuizQuestion().getId(),
-                                QuizTextAnswer::getAnswerText,
-                                (a, b) -> a
-                        ));
+        Map<Long, String> answerTextByQid = loadInitialsAnswerTextMap(uniqIds, qMap);
 
         List<StartQuizSessionResponse.Item> items = uniqIds.stream()
-                .map(qid -> {
-                    QuizQuestion q = qMap.get(qid);
-
-                    if (q.getQuestionType() == QuestionType.INITIALS) {
-
-                        String answerText = Optional.ofNullable(answerTextByQid.get(qid))
-                                .map(String::trim)
-                                .orElse(null);
-
-                        // 정답이 없을 시 세션 생성이 안 되도록 함
-                        if (answerText == null) {
-                            throw new IllegalStateException("초성퀴즈 정답이 등록되지 않았습니다: "+qid);
-                        }
-
-                        return new StartQuizSessionResponse.Item(
-                                q.getId(),
-                                q.getQuestionType(),
-                                q.getQuestionText(),
-                                q.getExplanation(),
-                                null,
-                                List.of(),
-                                answerText
-                        );
-                    }
-
-                    List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
-                    int optionCount = choices.size();
-
-                    if (optionCount < 2) {
-                        Long correctChoiceId = choices.stream()
-                                .filter(QuizChoice::isAnswer)
-                                .findFirst()
-                                .map(QuizChoice::getId)
-                                .orElse(null);
-
-                        var options = choices.stream()
-                                .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
-                                .toList();
-
-                        return new StartQuizSessionResponse.Item(
-                                q.getId(),
-                                q.getQuestionType(),
-                                q.getQuestionText(),
-                                q.getExplanation(),
-                                correctChoiceId,
-                                options,
-                                null
-                        );
-                    }
-
-                    AnswerIndexPlanner planner = planners.computeIfAbsent(
-                            optionCount,
-                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                    );
-
-                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
-                            q.getQuestionType(),
-                            choices,
-                            planner,
-                            mixSeed(baseSeed, qid)
-                    );
-
-                    Long correctChoiceId = ordered.stream()
-                            .filter(QuizChoice::isAnswer)
-                            .findFirst()
-                            .map(QuizChoice::getId)
-                            .orElse(null);
-
-                    var options = ordered.stream()
-                            .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
-                            .toList();
-
-                    return new StartQuizSessionResponse.Item(
-                            q.getId(),
-                            q.getQuestionType(),
-                            q.getQuestionText(),
-                            q.getExplanation(),
-                            correctChoiceId,
-                            options,
-                            null
-                    );
-                })
+                .map(qid -> buildStartItem(qid, qMap, byQ, answerTextByQid, seedValue))
                 .toList();
 
         Long quizSetId = (sourceType == SessionSourceType.SET) ? sourceId : null;
@@ -583,41 +211,41 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
             throw new IllegalArgumentException("권한이 없습니다.");
         }
 
-        // 1) 세션 스냅샷에서 문항 순서 복구 (IN_PROGRESS에서도 항상 존재)
+        // 1) 스냅샷에서 문항 순서 복구
         List<Long> qids = parseSnapshotIdList(session.getQuestionsSnapshotJson());
         if (qids.isEmpty()) {
             return StartQuizSessionResponse.fromExistingWithItems(sessionId, null, List.of(), List.of());
         }
 
         // 2) 질문 로드
+        // loadForPlay는 "스냅샷 순서"를 유지해야 하므로 qMap만 만들고 순서는 qids로 돈다.
         List<QuizQuestion> questions = quizQuestionRepository.findAllById(qids);
         Map<Long, QuizQuestion> qById = questions.stream()
                 .collect(Collectors.toMap(QuizQuestion::getId, q -> q));
 
-        // 3) 보기 배치 로드
+        // 3) 보기 로드(정렬 안정화)
         List<QuizChoice> choices = quizChoiceRepository.findByQuizQuestionIdInOrderByQuizQuestionIdAscIdAsc(qids);
         Map<Long, List<QuizChoice>> choicesByQ = choices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
-        // 4) start 때와 동일한 옵션 순서 재현 (seed 기반)
-        long baseSeed = session.getSeedValue();
-
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
-        List<StartQuizSessionResponse.Item> items = new ArrayList<>();
-
+        // 4) INITIALS 정답 텍스트 로드
         List<Long> initialsQids = qids.stream()
                 .filter(id -> qById.get(id) != null && qById.get(id).getQuestionType() == QuestionType.INITIALS)
                 .toList();
 
         Map<Long, String> answerTextByQid =
-                quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                initialsQids.isEmpty()
+                        ? Map.of()
+                        : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
                         .collect(Collectors.toMap(
                                 a -> a.getQuizQuestion().getId(),
                                 QuizTextAnswer::getAnswerText,
-                                (a,b) -> a
+                                (a, b) -> a
                         ));
 
+        long seed = session.getSeedValue();
+
+        List<StartQuizSessionResponse.Item> items = new ArrayList<>(qids.size());
         for (Long qid : qids) {
             QuizQuestion q = qById.get(qid);
             if (q == null) continue;
@@ -628,44 +256,21 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
                         .orElse(null);
 
                 if (answerText == null || answerText.isBlank()) {
-                    throw new IllegalStateException("초성퀴즈 정답이 등록되지 않았습니다: "+qid);
+                    throw new IllegalStateException("초성퀴즈 정답이 등록되지 않았습니다: " + qid);
                 }
 
                 items.add(new StartQuizSessionResponse.Item(
                         q.getId(),
                         q.getQuestionType(),
                         q.getQuestionText(),
-                        q.getExplanation(),
-                        null,
-                        List.of(),
-                        answerText
+                        toInitialsHint(answerText),
+                        List.of()
                 ));
                 continue;
             }
 
             List<QuizChoice> cs = new ArrayList<>(choicesByQ.getOrDefault(qid, List.of()));
-            int optionCount = cs.size();
-
-            List<QuizChoice> ordered = cs;
-
-            if (optionCount >= 2) {
-                AnswerIndexPlanner planner = planners.computeIfAbsent(
-                        optionCount,
-                        oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                );
-                ordered = reorderWithBalancedAnswerIndex(
-                        q.getQuestionType(),
-                        cs,
-                        planner,
-                        mixSeed(baseSeed, qid)
-                );
-            }
-
-            Long correctChoiceId = ordered.stream()
-                    .filter(QuizChoice::isAnswer)
-                    .findFirst()
-                    .map(QuizChoice::getId)
-                    .orElse(null);
+            List<QuizChoice> ordered = reorderDeterministic(q.getQuestionType(), cs, seed, qid);
 
             List<StartQuizSessionResponse.Option> opts = ordered.stream()
                     .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
@@ -675,20 +280,261 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
                     q.getId(),
                     q.getQuestionType(),
                     q.getQuestionText(),
-                    q.getExplanation(),
-                    correctChoiceId,
-                    opts,
-                    null
+                    null,
+                    opts
             ));
         }
 
-        // quizSetId는 SET 세션이면 sourceId를 넣는 게 더 정확할 때가 많음
-        Long quizSetId = null;
-        if (session.getSourceType() == SessionSourceType.SET) {   // 엔티티 필드명에 맞게
-            quizSetId = session.getSourceId();
+        Long quizSetId = (session.getSourceType() == SessionSourceType.SET) ? session.getSourceId() : null;
+        return StartQuizSessionResponse.fromExistingWithItems(sessionId, quizSetId, qids, items);
+    }
+
+    @Override
+    @Transactional
+    public SubmitQuizSessionResponseForm submitSession(Long sessionId, Long accountId, SubmitQuizSessionRequestForm requestForm) {
+
+        QuizSession session = quizSessionRepository
+                .findByIdAndAccount_IdAndDeletedAtIsNull(sessionId, accountId)
+                .orElseThrow(() -> new IllegalArgumentException("세션을 찾을 수 없습니다."));
+        if (!session.getAccount().getId().equals(accountId)) throw new SecurityException("세션 접근 권한이 없습니다.");
+        if (session.getSubmittedAt() != null) throw new IllegalStateException("이미 제출된 세션입니다.");
+
+        // 스냅샷 매칭(부분 제출 방지)
+        Set<Long> snapshotQids = parseSnapshotIds(session.getQuestionsSnapshotJson());
+        List<Long> submittedQids = requestForm.getAnswers().stream()
+                .map(SubmitQuizSessionRequestForm.AnswerForm::getQuizQuestionId)
+                .toList();
+
+        Set<Long> submittedSet = new HashSet<>(submittedQids);
+
+        if (!snapshotQids.equals(submittedSet)) {
+            throw new IllegalArgumentException("제출 문항이 스냅샷과 불일치합니다.");
         }
 
-        return StartQuizSessionResponse.fromExistingWithItems(sessionId, quizSetId, qids, items);
+        // 배치 조회
+        Map<Long, QuizQuestion> qMap = quizQuestionRepository.findAllById(submittedQids)
+                .stream().collect(Collectors.toMap(QuizQuestion::getId, q -> q));
+
+        List<Long> choiceIds = requestForm.getAnswers().stream()
+                .map(SubmitQuizSessionRequestForm.AnswerForm::getSelectedChoiceId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Map<Long, QuizChoice> cMap = choiceIds.isEmpty()
+                ? Map.of()
+                : quizChoiceRepository.findAllById(choiceIds)
+                .stream().collect(Collectors.toMap(QuizChoice::getId, c -> c));
+
+        // INITIALS 정답 텍스트 배치 조회
+        List<Long> initialsQids = submittedQids.stream()
+                .filter(qid -> qMap.get(qid) != null && qMap.get(qid).getQuestionType() == QuestionType.INITIALS)
+                .toList();
+
+        Map<Long, String> expectedTextByQid =
+                initialsQids.isEmpty()
+                        ? Map.of()
+                        : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                        .collect(Collectors.toMap(
+                                a -> a.getQuizQuestion().getId(),
+                                QuizTextAnswer::getAnswerText,
+                                (a, b) -> a
+                        ));
+
+        int correctCount = 0;
+        Instant now = Instant.now();
+
+        List<QuizSessionAnswer> answersToSave = new ArrayList<>();
+        List<SubmitQuizSessionResponseForm.Item> details = new ArrayList<>();
+
+        for (var a : requestForm.getAnswers()) {
+            QuizQuestion q = Optional.ofNullable(qMap.get(a.getQuizQuestionId()))
+                    .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 문제입니다: " + a.getQuizQuestionId()));
+
+            // ===== INITIALS(텍스트형) =====
+            if (q.getQuestionType() == QuestionType.INITIALS) {
+
+                String submittedRaw = Optional.ofNullable(a.getTextAnswer()).orElse("");
+                if (submittedRaw.isBlank()) throw new IllegalArgumentException("초성 퀴즈 답변이 비었습니다: " + q.getId());
+
+                String expectedRaw = Optional.ofNullable(expectedTextByQid.get(q.getId()))
+                        .orElseThrow(() -> new IllegalArgumentException("초성 퀴즈 정답이 등록되지 않았습니다: " + q.getId()));
+
+                String submittedNorm = normalizeTextAnswer(submittedRaw);
+                String expectedNorm = normalizeTextAnswer(expectedRaw);
+
+                boolean isCorrect = !submittedNorm.isBlank() && submittedNorm.equals(expectedNorm);
+                if (isCorrect) correctCount++;
+
+                String submittedToSave = submittedRaw.trim();
+                if (submittedToSave.length() > 200) submittedToSave = submittedToSave.substring(0, 200);
+
+                answersToSave.add(QuizSessionAnswer.forText(session, q, submittedToSave, isCorrect, now));
+
+                details.add(new SubmitQuizSessionResponseForm.Item(
+                        q.getId(),
+                        null,
+                        submittedToSave,
+                        isCorrect
+                ));
+                continue;
+            }
+
+            // ===== CHOICE / OX =====
+            Long selectedId = a.getSelectedChoiceId();
+            if (selectedId == null) throw new IllegalArgumentException("선택형 보기 ID가 비었습니다: " + q.getId());
+
+            QuizChoice c = Optional.ofNullable(cMap.get(selectedId))
+                    .orElseThrow(() -> new IllegalArgumentException("유효하지 않은 보기입니다: " + selectedId));
+
+            if (!c.getQuizQuestion().getId().equals(q.getId())) {
+                throw new IllegalArgumentException("선택한 보기는 해당 문제의 보기가 아닙니다.");
+            }
+
+            boolean isCorrect = c.isAnswer();
+            if (isCorrect) correctCount++;
+
+            answersToSave.add(QuizSessionAnswer.forChoice(
+                    session,
+                    q,
+                    c.getId(),
+                    c.getChoiceText(),
+                    isCorrect,
+                    now
+            ));
+
+            details.add(new SubmitQuizSessionResponseForm.Item(
+                    q.getId(),
+                    c.getId(),
+                    null,
+                    isCorrect
+            ));
+        }
+
+        quizSessionAnswerRepository.saveAll(answersToSave);
+
+        Long elapsedMs = requestForm.getElapsedMs();
+        if (elapsedMs == null && session.getStartedAt() != null) {
+            elapsedMs = Duration.between(session.getStartedAt(), now).toMillis();
+        }
+
+        session.submit(correctCount, elapsedMs);
+        quizSessionRepository.save(session);
+
+        quizWrongNoteService.saveWrongNotes(answersToSave, accountId);
+
+        int total = submittedQids.size();
+        return new SubmitQuizSessionResponseForm(
+                session.getId(),
+                total,
+                correctCount,
+                elapsedMs,
+                details
+        );
+    }
+
+    /* =========================
+     * Internal helpers
+     * ========================= */
+
+    private StartQuizSessionResponse.Item buildStartItem(
+            Long qid,
+            Map<Long, QuizQuestion> qMap,
+            Map<Long, List<QuizChoice>> byQ,
+            Map<Long, String> answerTextByQid,
+            long seed
+    ) {
+        QuizQuestion q = qMap.get(qid);
+        if (q == null) {
+            throw new IllegalStateException("유효하지 않은 문제입니다: " + qid);
+        }
+
+        // ===== INITIALS =====
+        if (q.getQuestionType() == QuestionType.INITIALS) {
+            String answerText = Optional.ofNullable(answerTextByQid.get(qid))
+                    .map(String::trim)
+                    .orElse(null);
+
+            if (answerText == null || answerText.isBlank()) {
+                throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
+            }
+
+            return new StartQuizSessionResponse.Item(
+                    q.getId(),
+                    q.getQuestionType(),
+                    q.getQuestionText(),
+                    toInitialsHint(answerText),
+                    List.of()
+            );
+        }
+
+        // ===== CHOICE / OX =====
+        List<QuizChoice> choices = new ArrayList<>(byQ.getOrDefault(qid, List.of()));
+        List<QuizChoice> ordered = reorderDeterministic(q.getQuestionType(), choices, seed, qid);
+
+        List<StartQuizSessionResponse.Option> options = ordered.stream()
+                .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
+                .toList();
+
+        return new StartQuizSessionResponse.Item(
+                q.getId(),
+                q.getQuestionType(),
+                q.getQuestionText(),
+                null,
+                options
+        );
+    }
+
+    private Map<Long, QuizQuestion> loadQuestionsAsMapOrThrow(List<Long> orderedIds) {
+        List<QuizQuestion> questions = quizQuestionRepository.findAllById(orderedIds);
+
+        Map<Long, QuizQuestion> qMap = questions.stream()
+                .collect(Collectors.toMap(QuizQuestion::getId, q -> q, (a, b) -> a, LinkedHashMap::new));
+
+        if (qMap.size() != orderedIds.size()) {
+            Set<Long> missing = new LinkedHashSet<>(orderedIds);
+            missing.removeAll(qMap.keySet());
+            throw new IllegalStateException("일부 질문을 찾지 못했습니다(삭제/비활성 가능): " + missing);
+        }
+        return qMap;
+    }
+
+    private Map<Long, String> loadInitialsAnswerTextMap(List<Long> orderedIds, Map<Long, QuizQuestion> qMap) {
+        List<Long> initialsQids = orderedIds.stream()
+                .filter(id -> {
+                    QuizQuestion q = qMap.get(id);
+                    return q != null && q.getQuestionType() == QuestionType.INITIALS;
+                })
+                .toList();
+
+        if (initialsQids.isEmpty()) return Map.of();
+
+        return quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
+                .collect(Collectors.toMap(
+                        a -> a.getQuizQuestion().getId(),
+                        QuizTextAnswer::getAnswerText,
+                        (a, b) -> a
+                ));
+    }
+
+    private QuizSetType resolvePartTypeFromQuestions(Collection<QuizQuestion> questions) {
+        if (questions == null || questions.isEmpty()) return QuizSetType.MIX;
+
+        Set<QuestionType> types = questions.stream()
+                .map(QuizQuestion::getQuestionType)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+
+        if (types.isEmpty()) return QuizSetType.MIX;
+        if (types.size() == 1) return mapToPartType(types.iterator().next());
+        return QuizSetType.MIX;
+    }
+
+    private QuizSetType mapToPartType(QuestionType qt) {
+        try {
+            return QuizSetType.valueOf(qt.name());
+        } catch (IllegalArgumentException e) {
+            return QuizSetType.MIX;
+        }
     }
 
     private long resolveSeed(SeedMode seedMode, Long accountId, Long fixedSeed) {
@@ -726,30 +572,55 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         }
     }
 
-    private List<QuizChoice> reorderWithBalancedAnswerIndex(
+    private List<Long> parseSnapshotIdList(String json) {
+        if (json == null || json.isBlank()) return List.of();
+        try {
+            return objectMapper.readValue(json, new TypeReference<List<Long>>() {});
+        } catch (Exception e) {
+            log.warn("세션 스냅샷(List) 파싱 실패: {}", e.getMessage());
+            return List.of();
+        }
+    }
+
+    /**
+     * start/play/review 모두 동일하게 만들기 위한 "결정적 reorder".
+     * - OX: 항상 O -> X 고정
+     * - 그 외: (1) base(id 정렬) (2) (seed,qid)로 셔플 (3) targetIdx(=f(seed,qid,optionCount))에 정답 고정
+     */
+    private List<QuizChoice> reorderDeterministic(
             QuestionType questionType,
             List<QuizChoice> choices,
-            AnswerIndexPlanner planner,
-            long questionSeed
+            long sessionSeed,
+            long qid
     ) {
         if (choices == null || choices.size() <= 1) return choices;
 
-        // OX는 보기 순서 고정: "O" -> "X"
+        // OX는 항상 O -> X 고정
         if (questionType == QuestionType.OX) {
             return choices.stream()
                     .sorted(Comparator.comparing((QuizChoice c) -> {
                         String t = Optional.ofNullable(c.getChoiceText()).orElse("")
-                                .trim().toUpperCase();
+                                .trim().toUpperCase(Locale.ROOT);
                         return "O".equals(t) ? 0 : "X".equals(t) ? 1 : 2;
                     }).thenComparingLong(QuizChoice::getId))
                     .toList();
         }
 
-        List<QuizChoice> shuffled = new ArrayList<>(choices);
+        // 1) base order 안정화 (DB 반환 순서 흔들림 방지)
+        List<QuizChoice> base = normalizeBaseOrder(choices);
+
+        // 2) 문제 단위 셔플
+        long questionSeed = mixSeed(sessionSeed, qid);
+        List<QuizChoice> shuffled = new ArrayList<>(base);
         Collections.shuffle(shuffled, new Random(questionSeed));
 
-        int targetIdx = planner.nextIndex();
+        int optionCount = shuffled.size();
+        if (optionCount < 2) return shuffled;
 
+        // 3) qid 기반 targetIdx
+        int targetIdx = computeTargetAnswerIndex(sessionSeed, qid, optionCount);
+
+        // 정답 찾기
         int currentIdx = -1;
         for (int i = 0; i < shuffled.size(); i++) {
             if (Boolean.TRUE.equals(shuffled.get(i).isAnswer())) {
@@ -759,12 +630,25 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         }
         if (currentIdx < 0) return shuffled;
 
-        QuizChoice correct = shuffled.remove(currentIdx);
+        QuizChoice answer = shuffled.remove(currentIdx);
         int safeTarget = Math.max(0, Math.min(targetIdx, shuffled.size()));
-        shuffled.add(safeTarget, correct);
+        shuffled.add(safeTarget, answer);
+
         return shuffled;
     }
 
+    private static List<QuizChoice> normalizeBaseOrder(List<QuizChoice> choices) {
+        return choices.stream()
+                .sorted(Comparator.comparingLong(QuizChoice::getId))
+                .toList();
+    }
+
+    private static int computeTargetAnswerIndex(long sessionSeed, long qid, int optionCount) {
+        long h = mixSeed(sessionSeed, qid);
+        return Math.floorMod((int) h, optionCount);
+    }
+
+    /** 간단 시드 믹싱(결정성 유지) */
     private static long mixSeed(long a, long b) {
         long x = a ^ (b + 0x9E3779B97F4A7C15L);
         x = (x ^ (x >>> 30)) * 0xBF58476D1CE4E5B9L;
@@ -781,48 +665,11 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         }
     }
 
-    private QuizSetType resolvePartTypeFromQuestions(List<QuizQuestion> questions) {
-        if (questions == null || questions.isEmpty()) return QuizSetType.MIX;
-
-        Set<QuestionType> types = questions.stream()
-                .map(QuizQuestion::getQuestionType)
-                .filter(Objects::nonNull)
-                .collect(Collectors.toSet());
-
-        if (types.isEmpty()) return QuizSetType.MIX;
-        if (types.size() == 1) return mapToPartType(types.iterator().next());
-        return QuizSetType.MIX;
-    }
-
-    private QuizSetType mapToPartType(QuestionType qt) {
-        try {
-            return QuizSetType.valueOf(qt.name());
-        } catch (IllegalArgumentException e) {
-            return QuizSetType.MIX;
-        }
-    }
-
-    private List<Long> parseSnapshotIdList(String json) {
-        if (json == null || json.isBlank()) return List.of();
-        try {
-            return objectMapper.readValue(json, new TypeReference<List<Long>>() {});
-        } catch (Exception e) {
-            log.warn("세션 스냅샷(List) 파싱 실패: {}", e.getMessage());
-            return List.of();
-        }
-    }
-
     private static String normalizeTextAnswer(String s) {
         if (s == null) return "";
-        // (선택) 유니코드 정규화: 특수 케이스 대비
         String t = Normalizer.normalize(s, Normalizer.Form.NFKC);
-
-        // 모든 공백 제거(스페이스/탭/개행 등)
         t = t.replaceAll("\\s+", "");
-
-        // 대소문자 무시(영문 대비)
         t = t.toLowerCase(Locale.ROOT);
-
         return t;
     }
 }
