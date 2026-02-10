@@ -1,11 +1,9 @@
-FROM amazoncorretto:17
+FROM eclipse-temurin:17-jdk-jammy
 
 ARG JAR_FILE=build/libs/*.jar
-COPY ${JAR_FILE} /app.jar
+COPY ${JAR_FILE} app.jar
 
-ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /wait-for-it.sh
+ADD https://raw.githubusercontent.com/vishnubob/wait-for-it/master/wait-for-it.sh /
 RUN chmod +x /wait-for-it.sh
 
-EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/app.jar"]
-

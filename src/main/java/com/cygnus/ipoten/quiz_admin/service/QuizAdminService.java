@@ -115,12 +115,7 @@ public class QuizAdminService {
         long orphanChoices = 0;
         long orphanQuestions = 0;
         long orphanSets = 0;
-
         long totalSessions = (long) delChild + (long) delSessions;
-
-        log.info("[quiz:erase] accountId={} wrongNotes={} sessionAnswers={} sessions={} (child={}, parent={})",
-                accountId, delWrong, delSa, totalSessions, delChild, delSessions);
-
         return new Result(delWrong, delSa, totalSessions, orphanChoices, orphanQuestions, orphanSets);
     }
 

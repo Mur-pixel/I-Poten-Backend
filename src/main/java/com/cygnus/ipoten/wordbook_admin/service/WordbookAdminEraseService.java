@@ -72,8 +72,8 @@ public class WordbookAdminEraseService {
         int delWb = execute("DELETE FROM wordbook WHERE account_id = :id", accountId);
 
         log.info(
-                "[wordbook:erase] accountId={} deleted(lp={}, pdf={}, wbt={}, wb={}) before(lp={}, pdf={}, wbt={}, wb={})",
-                accountId, delLp, delPdf, delWbt, delWb,
+                "[wordbook:erase] deleted(lp={}, pdf={}, wbt={}, wb={}) before(lp={}, pdf={}, wbt={}, wb={})",
+                delLp, delPdf, delWbt, delWb,
                 lpBefore, pdfBefore, wbtBefore, wbBefore
         );
 

@@ -300,7 +300,7 @@ public class WordbookQueryServiceImpl implements WordbookQueryService {
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "폴더를 찾을 수 없습니다."));
 
         long count = wordbookTermRepository.countByWordbookIdAndAccountId(wordbookId, accountId);
-        log.debug("[folder:count] accountId={}, wordbookId={}, count={}", accountId, wordbookId, count);
+        log.debug("[folder:count] wordbookId={}, count={}", wordbookId, count);
         return count;
     }
 

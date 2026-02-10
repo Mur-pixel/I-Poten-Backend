@@ -3,6 +3,7 @@ package com.cygnus.ipoten.quiz_wrongnote.controller;
 import com.cygnus.ipoten.quiz_session.controller.response_form.CreateQuizSessionResponseForm;
 import com.cygnus.ipoten.quiz_session.service.QuizSessionRetryService;
 import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
+import com.cygnus.ipoten.quiz_wrongnote.controller.request_form.DeleteWrongNotesRequestForm;
 import com.cygnus.ipoten.quiz_wrongnote.controller.request_form.WrongNoteResolvedUpdateRequestForm;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteService;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteServiceImpl;
@@ -135,6 +136,29 @@ public class QuizWrongNoteController {
             return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
         } catch (Exception e) {
             log.error("deleteWrongNote failed wrongNoteId={}", wrongNoteId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
+    }
+
+    @DeleteMapping("/me/quiz/reviews/wrong")
+    public ResponseEntity<?> deleteWrongNotesBulk(
+            @RequestBody DeleteWrongNotesRequestForm requestForm,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        Long accountId = resolveAccountId(userToken);
+        if (accountId == null) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        if (requestForm == null || requestForm.getReviewIds() == null || requestForm.getReviewIds().isEmpty()) {
+            return ResponseEntity.badRequest().body(Map.of("message", "reviewIds가 필요합니다."));
+        }
+
+        try {
+            quizWrongNoteService.deleteWrongNotesBulk(accountId, requestForm.getReviewIds());
+            return ResponseEntity.noContent().build();
+        } catch (Exception e) {
+            log.error("deleteWrongNotesBulk failed reviewIds={}", requestForm.getReviewIds(), e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }

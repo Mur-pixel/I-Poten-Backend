@@ -69,7 +69,7 @@ public class WordbookPdfExportController {
         }
 
         try {
-            log.info("PDF(by-folder) 요청 - accountId={}, form={}", accountId, form);
+            log.info("PDF(by-folder) 요청 - form={}", form);
 
             // 최종적으로 PdfExportService에 넘길 termIds
             final java.util.List<Long> termIds;
