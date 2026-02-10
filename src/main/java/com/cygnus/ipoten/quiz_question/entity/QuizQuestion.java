@@ -10,6 +10,8 @@ import lombok.Getter;
 import lombok.NoArgsConstructor;
 import lombok.Setter;
 
+import java.time.Instant;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -57,6 +59,26 @@ public class QuizQuestion {
     @Setter
     @Column(name = "explanation", columnDefinition = "TEXT")
     private String explanation;
+
+    /** 질문 생성 시간 */
+    @Column(name = "created_at", updatable = false, nullable = false)
+    private Instant createdAt;
+
+    /** 질문 업데이트 시간 */
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
 
     /** 텍스트 정답과 양방향 매핑 */
     @OneToOne(mappedBy = "quizQuestion", fetch = FetchType.LAZY)
@@ -123,5 +145,9 @@ public class QuizQuestion {
 
         this.quizTextAnswer.changeAnswerText(answerText);
         return this.quizTextAnswer;
+    }
+
+    public void detachTextAnswer() {
+        this.quizTextAnswer = null;
     }
 }

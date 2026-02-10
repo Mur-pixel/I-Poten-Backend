@@ -176,4 +176,24 @@ public interface QuizQuestionRepository extends JpaRepository<QuizQuestion, Long
 
     @Query("select q.id from QuizQuestion q where q.id in :ids")
     List<Long> findExistingIds(@Param("ids") List<Long> ids);
+
+    @Query("""
+    select distinct q.id
+    from QuizQuestion q
+    where (:dl is null or q.difficulty = :dl)
+      and (:type is null or q.questionType = :type)
+      and exists (
+            select 1
+            from QuizQuestionLabel qql
+            join qql.quizLabel l
+            where qql.quizQuestion = q
+              and l.key in :labelKeys
+      )
+    order by q.id asc
+""")
+    List<Long> findIdsByLabelsFilters(
+            @Param("dl") DifficultyLevel dl,
+            @Param("type") QuestionType type,
+            @Param("labelKeys") List<String> labelKeys
+    );
 }

@@ -5,6 +5,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
+
 @Entity
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
@@ -32,6 +34,26 @@ public class QuizChoice {
     /** 정답 여부 */
     @Column(name = "is_answer", nullable = false)
     private boolean isAnswer;
+
+    /** 보기 생성 시간 */
+    @Column(name = "created_at", updatable = false, nullable = false)
+    private Instant createdAt;
+
+    /** 보기 업데이트 시간 */
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
 
     public QuizChoice(QuizQuestion quizQuestion, String choiceText, boolean isAnswer) {
         this.quizQuestion = quizQuestion;

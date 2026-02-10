@@ -17,8 +17,8 @@ public class StartQuizSessionUnifiedRequestForm {
 
     @NotBlank(message = "source는 필수입니다")
     @Pattern(
-            regexp = "(?i)wordbook|term_category|set|wrong_note",
-            message = "source는 wordbook|term_category|set|wrong_note 중 하나여야 합니다"
+            regexp = "(?i)wordbook|term_category|set|wrong_note|labels",
+            message = "source는 wordbook|term_category|set|wrong_note|labels 중 하나여야 합니다"
     )
     private String source;
 
@@ -67,9 +67,6 @@ public class StartQuizSessionUnifiedRequestForm {
         }
         String s = source.trim();
 
-        // 구버전 호환 정규화
-        // folder → wordbook
-        // category/job → term_category
         if ("folder".equalsIgnoreCase(s)) {
             s = "wordbook";
         } else if ("category".equalsIgnoreCase(s) || "job".equalsIgnoreCase(s)) {
@@ -81,7 +78,8 @@ public class StartQuizSessionUnifiedRequestForm {
         if ("wordbook".equalsIgnoreCase(s)
                 || "term_category".equalsIgnoreCase(s)
                 || "set".equalsIgnoreCase(s)
-                || "wrong_note".equalsIgnoreCase(s)) {
+                || "wrong_note".equalsIgnoreCase(s)
+                || "labels".equalsIgnoreCase(s)) {
             this.source = s.toLowerCase();
         } else {
             this.source = s;
@@ -111,21 +109,21 @@ public class StartQuizSessionUnifiedRequestForm {
         return !isSourceOneOf("set") || quizSetId != null;
     }
 
-    @AssertTrue(message = "count는 source in [wordbook, term_category] 일 때 1~100 사이여야 합니다")
+    @AssertTrue(message = "count는 source in [wordbook, term_category, labels] 일 때 1~100 사이여야 합니다")
     public boolean isCountValid() {
-        if (!isSourceOneOf("wordbook", "term_category")) return true;
+        if (!isSourceOneOf("wordbook", "term_category", "labels")) return true;
         return count != null && count >= 1 && count <= 100;
     }
 
-    @AssertTrue(message = "type은 source in [wordbook, term_category] 일 때 필수입니다")
+    @AssertTrue(message = "type은 source in [wordbook, term_category, labels] 일 때 필수입니다")
     public boolean isTypeValid() {
-        if (!isSourceOneOf("wordbook", "term_category")) return true;
+        if (!isSourceOneOf("wordbook", "term_category", "labels")) return true;
         return type != null && !type.isBlank();
     }
 
-    @AssertTrue(message = "level은 source in [wordbook, term_category] 일 때 필수입니다")
+    @AssertTrue(message = "level은 source in [wordbook, term_category, labels] 일 때 필수입니다")
     public boolean isLevelValid() {
-        if (!isSourceOneOf("wordbook", "term_category")) return true;
+        if (!isSourceOneOf("wordbook", "term_category", "labels")) return true;
         return level != null;
     }
 
@@ -133,6 +131,12 @@ public class StartQuizSessionUnifiedRequestForm {
     public boolean isWrongNoteIdsValid() {
         if (!isSourceOneOf("wrong_note")) return true;
         return questionIds != null && !questionIds.isEmpty();
+    }
+
+    @AssertTrue(message = "source=labels 일 때 labelKeys가 필요합니다")
+    public boolean isLabelsValid() {
+        if (!isSourceOneOf("labels")) return true;
+        return labelKeys != null && !labelKeys.isEmpty();
     }
 
     /* ---------- 기존 폼으로 위임 변환 ---------- */
@@ -198,6 +202,23 @@ public class StartQuizSessionUnifiedRequestForm {
                     seedPolicy,
                     customTitle
             );
+
+            case "labels" -> {
+                String safeType = (type == null || type.isBlank()) ? "mix" : type;
+                DifficultyLevel safeLevel = (level == null) ? DifficultyLevel.MEDIUM : level;
+                List<String> safeLabels = (labelKeys == null) ? List.of() : labelKeys;
+                yield ScopeCondition.forLabels(
+                        new LabelsScope(
+                                accountId,
+                                count,
+                                QuestionTypeScope.fromRaw(safeType),
+                                DifficultyScope.from(safeLevel),
+                                safeLabels
+                        ),
+                        seedPolicy,
+                        customTitle
+                );
+            }
 
             default -> throw new IllegalArgumentException("지원하지 않는 source: " + source);
         };

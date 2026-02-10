@@ -4,6 +4,7 @@ import com.cygnus.ipoten.quiz_question.entity.QuizChoice;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
 
@@ -27,4 +28,7 @@ public interface QuizChoiceRepository extends JpaRepository<QuizChoice, Long> {
       and c.isAnswer = true
 """)
     List<QuizChoice> findCorrectChoices(@Param("questionIds") List<Long> questionIds);
+
+    @Transactional
+    void deleteByQuizQuestion_Id(Long quizQuestionId);
 }
