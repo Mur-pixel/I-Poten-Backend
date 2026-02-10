@@ -30,8 +30,9 @@ public class SttService {
         try {
             // 1. FastAPI STT 엔드포인트 URL
             String sttUrl = fastApiUri + "stt";
+            long startTime = System.currentTimeMillis();
 
-            log.info("[STT] FastAPI 호출 시작 - URL: {}", sttUrl);
+            log.info("[STT] FastAPI 호출 시작 - URL: {}, 파일 크기: {}bytes", sttUrl, audioFile.getSize());
 
             // 2. Multipart 요청 헤더 설정
             HttpHeaders headers = new HttpHeaders();
@@ -67,7 +68,8 @@ public class SttService {
                     return "";
                 }
 
-                log.info("[STT] FastAPI 호출 성공");
+                long elapsed = System.currentTimeMillis() - startTime;
+                log.info("[STT] FastAPI 호출 성공 - 소요 시간: {}ms ({}초)", elapsed, elapsed / 1000.0);
                 return text;
             } else {
                 throw new Exception("FastAPI 응답 오류: " + response.getStatusCode());
