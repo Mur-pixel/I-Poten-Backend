@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.wordbook_learning.controller;
 
+import com.cygnus.ipoten.wordbook_event.service.WordbookEventService;
 import com.cygnus.ipoten.wordbook_learning.service.LearningProgressService;
 import com.cygnus.ipoten.wordbook_learning.controller.request_form.UpdateLearningProgressRequestForm;
 import com.cygnus.ipoten.wordbook_learning.controller.response_form.UpdateLearningProgressResponseForm;
@@ -8,6 +9,7 @@ import com.cygnus.ipoten.wordbook.service.WordbookQueryService;
 import com.cygnus.ipoten.wordbook_learning.service.request.UpdateLearningProgressRequest;
 import com.cygnus.ipoten.wordbook_learning.service.response.UpdateLearningProgressResponse;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
+import com.cygnus.ipoten.wordbook_term.repository.WordbookTermRepository;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -37,6 +39,8 @@ public class LearningProgressController {
     private final LearningProgressService learningProgressService;
     private final WordbookQueryService wordbookQueryService;
     private final LearningProgressRepository learningProgressRepository;
+    private final WordbookEventService wordbookEventService;
+    private final WordbookTermRepository wordbookTermRepository;
 
     @Operation(
             summary = "단어 학습 상태 변경",
@@ -55,7 +59,20 @@ public class LearningProgressController {
         }
         UpdateLearningProgressRequest request = requestForm.toUpdateMemorizationRequest(accountId, termId);
         UpdateLearningProgressResponse response = learningProgressService.updateMemorization(request);
-        log.info("[memo:update:byTerm] done");
+
+        Long wordbookId = null;
+        try {
+            wordbookId = wordbookTermRepository.findMinWordbookIdByAccountIdAndTermId(accountId, termId);
+        } catch (Exception e) {
+            log.debug("[wordbook_event] wordbookId resolve failed (ignored). termId={}", termId, e);
+        }
+
+        try {
+            wordbookEventService.recordMemoChanged(accountId, wordbookId, termId, response.getStatus().name());
+        } catch (Exception e) {
+            log.warn("[wordbook_event] MEMO_STATUS_CHANGED failed (ignored). termId={}", termId, e);
+        }
+
         return UpdateLearningProgressResponseForm.from(response);
     }
 
