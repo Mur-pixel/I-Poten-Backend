@@ -1,6 +1,6 @@
-package com.cygnus.ipoten.wordbook_event.service;
+package com.cygnus.ipoten.wordbook_log.service;
 
-public interface WordbookEventService {
+public interface WordbookLogService {
     void record(Long accountId, String eventType, Long wordbookId, Long termId, String memoStatus, Integer amount, String extra);
 
     default void recordTermSaved(Long accountId, Long wordbookId, Long termId) {

@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.wordbook_event.entity;
+package com.cygnus.ipoten.wordbook_log.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -10,14 +10,14 @@ import java.time.Instant;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "wordbook_event",
+@Table(name = "wordbook_log",
         indexes = {
-                @Index(name = "idx_wordbook_event_created_at", columnList = "created_at"),
-                @Index(name = "idx_wordbook_event_account_day", columnList = "account_id, created_at"),
-                @Index(name = "idx_wordbook_event_account_type_day", columnList = "account_id, event_type, created_at"),
-                @Index(name = "idx_wordbook_event_term_day", columnList = "term_id, created_at")
+                @Index(name = "idx_wordbook_log_created_at", columnList = "created_at"),
+                @Index(name = "idx_wordbook_log_account_day", columnList = "account_id, created_at"),
+                @Index(name = "idx_wordbook_log_account_type_day", columnList = "account_id, event_type, created_at"),
+                @Index(name = "idx_wordbook_log_term_day", columnList = "term_id, created_at")
         })
-public class WordbookEvent {
+public class WordbookLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -55,7 +55,7 @@ public class WordbookEvent {
         if (createdAt == null) createdAt = Instant.now();
     }
 
-    private WordbookEvent(Long accountId, String eventType, Long wordbookId, Long termId, String memoStatus, Integer amount, String extra) {
+    private WordbookLog(Long accountId, String eventType, Long wordbookId, Long termId, String memoStatus, Integer amount, String extra) {
         this.createdAt = Instant.now();
         this.accountId = accountId;
         this.eventType = eventType;
@@ -66,7 +66,7 @@ public class WordbookEvent {
         this.extra = extra;
     }
 
-    public static WordbookEvent create(Long accountId, String eventType, Long wordbookId, Long termId, String memoStatus, Integer amount, String extra) {
-        return new WordbookEvent(accountId, eventType, wordbookId, termId, memoStatus, amount, extra);
+    public static WordbookLog create(Long accountId, String eventType, Long wordbookId, Long termId, String memoStatus, Integer amount, String extra) {
+        return new WordbookLog(accountId, eventType, wordbookId, termId, memoStatus, amount, extra);
     }
 }

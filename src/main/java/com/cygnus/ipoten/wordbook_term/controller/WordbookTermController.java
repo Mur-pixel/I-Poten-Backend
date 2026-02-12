@@ -7,7 +7,7 @@ import com.cygnus.ipoten.wordbook.controller.request_form.MoveWordbookTermsReque
 import com.cygnus.ipoten.wordbook.controller.response_form.*;
 import com.cygnus.ipoten.wordbook.service.WordbookQueryService;
 import com.cygnus.ipoten.wordbook.service.WordbookService;
-import com.cygnus.ipoten.wordbook_event.service.WordbookEventService;
+import com.cygnus.ipoten.wordbook_log.service.WordbookLogService;
 import com.cygnus.ipoten.wordbook_term.controller.request_form.BulkRemoveWordbookTermRequestForm;
 import com.cygnus.ipoten.wordbook_term.repository.WordbookTermRepository;
 import com.cygnus.ipoten.wordbook_term.service.WordbookTermService;
@@ -28,7 +28,6 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Map;
-import java.util.stream.Collectors;
 
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
@@ -43,7 +42,7 @@ public class WordbookTermController {
     private final WordbookService wordbookService;
     private final RedisCacheService redisCacheService;
     private final WordbookQueryService wordbookQueryService;
-    private final WordbookEventService wordbookEventService;
+    private final WordbookLogService wordbookLogService;
     private final WordbookTermRepository wordbookTermRepository;
 
     @Operation(
@@ -67,9 +66,9 @@ public class WordbookTermController {
         CreateWordbookTermResponse response = wordbookService.attachTerm(request);
 
         try {
-            wordbookEventService.recordTermSaved(accountId, folderId, requestForm.getTermId());
+            wordbookLogService.recordTermSaved(accountId, folderId, requestForm.getTermId());
         } catch (Exception e) {
-            log.warn("[note_event] TERM_SAVED failed (ignored). accountId={}, folderId={}, termId={}",
+            log.warn("[wordbook_log] TERM_SAVED failed (ignored). accountId={}, folderId={}, termId={}",
                     accountId, folderId, requestForm.getTermId(), e);
         }
         return CreateUserWordbookTermResponseForm.from(response);
@@ -98,10 +97,10 @@ public class WordbookTermController {
                     : (int) requestForm.termIds().stream().filter(java.util.Objects::nonNull).distinct().count();
 
             if (count > 0) {
-                wordbookEventService.recordTermsSavedBulk(accountId, folderId, count);
+                wordbookLogService.recordTermsSavedBulk(accountId, folderId, count);
             }
         } catch (Exception e) {
-            log.warn("[wordbook_event] TERM_SAVED(BULK) failed (ignored). accountId={}, wordbookId={}",
+            log.warn("[wordbook_log] TERM_SAVED(BULK) failed (ignored). accountId={}, wordbookId={}",
                     accountId, folderId, e);
         }
 

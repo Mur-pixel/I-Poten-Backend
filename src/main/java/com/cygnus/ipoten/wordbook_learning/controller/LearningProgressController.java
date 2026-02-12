@@ -1,6 +1,6 @@
 package com.cygnus.ipoten.wordbook_learning.controller;
 
-import com.cygnus.ipoten.wordbook_event.service.WordbookEventService;
+import com.cygnus.ipoten.wordbook_log.service.WordbookLogService;
 import com.cygnus.ipoten.wordbook_learning.service.LearningProgressService;
 import com.cygnus.ipoten.wordbook_learning.controller.request_form.UpdateLearningProgressRequestForm;
 import com.cygnus.ipoten.wordbook_learning.controller.response_form.UpdateLearningProgressResponseForm;
@@ -39,7 +39,7 @@ public class LearningProgressController {
     private final LearningProgressService learningProgressService;
     private final WordbookQueryService wordbookQueryService;
     private final LearningProgressRepository learningProgressRepository;
-    private final WordbookEventService wordbookEventService;
+    private final WordbookLogService wordbookLogService;
     private final WordbookTermRepository wordbookTermRepository;
 
     @Operation(
@@ -64,13 +64,13 @@ public class LearningProgressController {
         try {
             wordbookId = wordbookTermRepository.findMinWordbookIdByAccountIdAndTermId(accountId, termId);
         } catch (Exception e) {
-            log.debug("[wordbook_event] wordbookId resolve failed (ignored). termId={}", termId, e);
+            log.debug("[wordbook_log] wordbookId resolve failed (ignored). termId={}", termId, e);
         }
 
         try {
-            wordbookEventService.recordMemoChanged(accountId, wordbookId, termId, response.getStatus().name());
+            wordbookLogService.recordMemoChanged(accountId, wordbookId, termId, response.getStatus().name());
         } catch (Exception e) {
-            log.warn("[wordbook_event] MEMO_STATUS_CHANGED failed (ignored). termId={}", termId, e);
+            log.warn("[wordbook_log] MEMO_STATUS_CHANGED failed (ignored). termId={}", termId, e);
         }
 
         return UpdateLearningProgressResponseForm.from(response);
