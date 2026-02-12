@@ -1,4 +1,4 @@
-package com.cygnus.ipoten.term_trending.entity;
+package com.cygnus.ipoten.term_log.entity;
 
 import jakarta.persistence.*;
 import lombok.AccessLevel;
@@ -11,15 +11,15 @@ import java.time.Instant;
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED)
 @Entity
-@Table(name = "term_search_event",
+@Table(name = "term_search_log",
         indexes = {
-                @Index(name = "idx_tsre_created_at", columnList = "created_at"),
-                @Index(name = "idx_tsre_actor_day", columnList = "actor_key, created_at"),
-                @Index(name = "idx_tsre_actor_query_day", columnList = "actor_key, query_norm, created_at"),
-                @Index(name = "idx_tsre_query_day", columnList = "query_norm, created_at"),
-                @Index(name = "idx_tsre_is_zero_day", columnList = "is_zero, created_at")
+                @Index(name = "idx_tsl_created_at", columnList = "created_at"),
+                @Index(name = "idx_tsl_actor_created_at", columnList = "actor_key, created_at"),
+                @Index(name = "idx_tsl_actor_query_created_at", columnList = "actor_key, query_norm, created_at"),
+                @Index(name = "idx_tsl_query_created_at", columnList = "query_norm, created_at"),
+                @Index(name = "idx_tsl_is_zero_created_at", columnList = "is_zero, created_at")
         })
-public class TermSearchEvent {
+public class TermSearchLog {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -56,7 +56,7 @@ public class TermSearchEvent {
     @Column(name = "include_tags", nullable = false)
     private boolean includeTags;
 
-    private TermSearchEvent(
+    private TermSearchLog(
             String actorKey, String queryRaw, String queryNorm, int resultCount, boolean isZero, Integer latencyMs, Long selectedCategoryId, String sortKey, boolean includeTags
     ) {
         this.actorKey = actorKey;
@@ -70,9 +70,9 @@ public class TermSearchEvent {
         this.includeTags = includeTags;
     }
 
-    public static TermSearchEvent create(
+    public static TermSearchLog create(
             String actorKey, String queryRaw, String queryNorm, int resultCount, boolean isZero, Integer latencyMs, Long selectedCategoryId, String sortKey, boolean includeTags
     ) {
-        return new TermSearchEvent(actorKey, queryRaw, queryNorm, resultCount, isZero, latencyMs, selectedCategoryId, sortKey, includeTags);
+        return new TermSearchLog(actorKey, queryRaw, queryNorm, resultCount, isZero, latencyMs, selectedCategoryId, sortKey, includeTags);
     }
 }

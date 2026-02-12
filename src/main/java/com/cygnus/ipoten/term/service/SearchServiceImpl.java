@@ -5,7 +5,7 @@ import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.term.service.request.SearchTermRequest;
 import com.cygnus.ipoten.term.service.response.SearchTermResponse;
 import com.cygnus.ipoten.term.support.HangulInitial;
-import com.cygnus.ipoten.term_trending.service.TermSearchEventService;
+import com.cygnus.ipoten.term_log.service.TermSearchLogService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -22,7 +22,7 @@ public class SearchServiceImpl implements SearchService {
 
     private final TermRepository termRepository;
     private final CategoryService categoryService;
-    private final TermSearchEventService termSearchEventService;
+    private final TermSearchLogService termSearchLogService;
 
     @Override
     public SearchTermResponse search(SearchTermRequest request) {
@@ -43,7 +43,7 @@ public class SearchServiceImpl implements SearchService {
             Page<Term> page = switchPrefix(request, pageable, targetCatIds);
 
             String qRaw = buildPrefixQueryRaw(request);
-            recordSearchEventSafe(request, qRaw, page, startNs);
+            recordSearchLogSafe(request, qRaw, page, startNs);
 
             return toResponse(page);
         }
@@ -57,7 +57,7 @@ public class SearchServiceImpl implements SearchService {
                 return toResponse(Page.empty(pageable)); // 아무 조건도 없으면 빈 결과
             }
             Page<Term> page = termRepository.findByTermCategoryIdIn(targetCatIds, pageable);
-            recordSearchEventSafe(request, "", page, startNs);
+            recordSearchLogSafe(request, "", page, startNs);
             return toResponse(page);
         }
 
@@ -73,8 +73,8 @@ public class SearchServiceImpl implements SearchService {
                     PageRequest.of(request.getPage(), request.getSize())
             );
 
-            termSearchEventService.recordTrendingEventIfMappable(q, page, request);
-            recordSearchEventSafe(request, q, page, startNs);
+            termSearchLogService.recordTrendingLogIfMappable(q, page, request);
+            recordSearchLogSafe(request, q, page, startNs);
 
             return toResponse(page);
         }
@@ -83,8 +83,8 @@ public class SearchServiceImpl implements SearchService {
                 ? termRepository.searchLikeInCategories(q, request.isIncludeTags(), targetCatIds, pageable)
                 : termRepository.searchLike(q, request.isIncludeTags(), pageable);
 
-        termSearchEventService.recordTrendingEventIfMappable(q, page, request);
-        recordSearchEventSafe(request, q, page, startNs);
+        termSearchLogService.recordTrendingLogIfMappable(q, page, request);
+        recordSearchLogSafe(request, q, page, startNs);
 
         return toResponse(page);
     }
@@ -157,7 +157,7 @@ public class SearchServiceImpl implements SearchService {
                 .build();
     }
 
-    private void recordSearchEventSafe(SearchTermRequest request, String qRaw, Page<Term> page, long startNs) {
+    private void recordSearchLogSafe(SearchTermRequest request, String qRaw, Page<Term> page, long startNs) {
         try {
             if (request.getActorKey() == null || request.getActorKey().isBlank()) return;
 
@@ -167,7 +167,7 @@ public class SearchServiceImpl implements SearchService {
             int resultCount = (int) page.getTotalElements();
             boolean isZero = (resultCount == 0);
 
-            termSearchEventService.recordSearchRequestEvent(
+            termSearchLogService.recordSearchRequestLog(
                     request.getActorKey(),
                     qRaw,
                     qNorm,
@@ -179,7 +179,7 @@ public class SearchServiceImpl implements SearchService {
                     request.isIncludeTags()
             );
         } catch (Exception e) {
-            log.warn("Search Event logging failed (ignored). q={}", qRaw, e);
+            log.warn("Search logging failed (ignored). q={}", qRaw, e);
         }
     }
 

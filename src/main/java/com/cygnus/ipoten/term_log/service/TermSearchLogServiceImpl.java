@@ -1,9 +1,9 @@
-package com.cygnus.ipoten.term_trending.service;
+package com.cygnus.ipoten.term_log.service;
 
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term.service.request.SearchTermRequest;
-import com.cygnus.ipoten.term_trending.entity.TermSearchEvent;
-import com.cygnus.ipoten.term_trending.repository.TermSearchEventRepository;
+import com.cygnus.ipoten.term_log.entity.TermSearchLog;
+import com.cygnus.ipoten.term_log.repository.TermSearchLogRepository;
 import com.cygnus.ipoten.term_trending.repository.TermSearchStatsDailyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -20,10 +20,10 @@ import java.util.List;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-public class TermSearchEventServiceImpl implements TermSearchEventService {
+public class TermSearchLogServiceImpl implements TermSearchLogService {
 
     private final TermSearchStatsDailyRepository termSearchStatsDailyRepository;
-    private final TermSearchEventRepository termSearchEventRepository;
+    private final TermSearchLogRepository termSearchLogRepository;
 
     @Override
     @Transactional
@@ -41,7 +41,7 @@ public class TermSearchEventServiceImpl implements TermSearchEventService {
 
     @Override
     @Transactional
-    public void recordTrendingEventIfMappable(String q, Page<Term> page, SearchTermRequest request) {
+    public void recordTrendingLogIfMappable(String q, Page<Term> page, SearchTermRequest request) {
         if (q == null || q.isBlank()) return;
 
         if (request.isPrefixMode()) return;
@@ -70,14 +70,14 @@ public class TermSearchEventServiceImpl implements TermSearchEventService {
 
     @Override
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    public void recordSearchRequestEvent(String actorKey, String queryRaw, String queryNorm, int resultCount, boolean isZero, int latencyMs, Long selectedCategoryId, String sortKey, boolean includeTags
+    public void recordSearchRequestLog(String actorKey, String queryRaw, String queryNorm, int resultCount, boolean isZero, int latencyMs, Long selectedCategoryId, String sortKey, boolean includeTags
     ) {
         if (actorKey == null || actorKey.isBlank()) return;
 
-        TermSearchEvent event = TermSearchEvent.create(
+        TermSearchLog termSearchLog = TermSearchLog.create(
                 actorKey, queryRaw, queryNorm, resultCount, isZero, latencyMs, selectedCategoryId, sortKey, includeTags
         );
 
-        termSearchEventRepository.save(event);
+        termSearchLogRepository.save(termSearchLog);
     }
 }
