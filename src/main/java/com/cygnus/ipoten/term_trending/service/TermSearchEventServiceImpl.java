@@ -2,11 +2,14 @@ package com.cygnus.ipoten.term_trending.service;
 
 import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term.service.request.SearchTermRequest;
+import com.cygnus.ipoten.term_trending.entity.TermSearchEvent;
+import com.cygnus.ipoten.term_trending.repository.TermSearchEventRepository;
 import com.cygnus.ipoten.term_trending.repository.TermSearchStatsDailyRepository;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.Page;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Propagation;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
@@ -18,7 +21,9 @@ import java.util.List;
 @Service
 @RequiredArgsConstructor
 public class TermSearchEventServiceImpl implements TermSearchEventService {
+
     private final TermSearchStatsDailyRepository termSearchStatsDailyRepository;
+    private final TermSearchEventRepository termSearchEventRepository;
 
     @Override
     @Transactional
@@ -61,5 +66,18 @@ public class TermSearchEventServiceImpl implements TermSearchEventService {
 
         // 규칙 3) 매칭 실패하면 1등 결과를 기록(트렌딩 데이터 확보 목적)
         recordTermSearched(items.get(0).getId(), request.getActorKey());
+    }
+
+    @Override
+    @Transactional(propagation = Propagation.REQUIRES_NEW)
+    public void recordSearchRequestEvent(String actorKey, String queryRaw, String queryNorm, int resultCount, boolean isZero, int latencyMs, Long selectedCategoryId, String sortKey, boolean includeTags
+    ) {
+        if (actorKey == null || actorKey.isBlank()) return;
+
+        TermSearchEvent event = TermSearchEvent.create(
+                actorKey, queryRaw, queryNorm, resultCount, isZero, latencyMs, selectedCategoryId, sortKey, includeTags
+        );
+
+        termSearchEventRepository.save(event);
     }
 }

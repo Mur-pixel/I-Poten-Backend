@@ -10,4 +10,8 @@ public interface TermSearchEventService {
      */
     void recordTermSearched(Long termId, String actorKey);
     void recordTrendingEventIfMappable(String q, Page<Term> page, SearchTermRequest request);
+
+    void recordSearchRequestEvent(
+            String actorKey, String queryRaw, String queryNorm, int resultCount, boolean isZero, int latencyMs, Long selectedCategoryId, String sortKey, boolean includeTags
+    );
 }

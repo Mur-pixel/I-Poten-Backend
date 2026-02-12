@@ -19,13 +19,18 @@ import com.cygnus.ipoten.term.service.response.CreateTermResponse;
 import com.cygnus.ipoten.term.service.response.ListTermResponse;
 import com.cygnus.ipoten.term.service.response.UpdateTermResponse;
 import com.cygnus.ipoten.term.support.TagTextParser;
+import jakarta.servlet.http.HttpServletRequest;
+import jakarta.servlet.http.HttpServletResponse;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseCookie;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.Duration;
 import java.util.*;
 
 import io.swagger.v3.oas.annotations.Operation;
@@ -215,10 +220,21 @@ public class TermController {
     })
     @GetMapping("/search")
     public ResponseEntity<SearchTermResponseForm> search(
-            @Valid @ModelAttribute SearchRequestForm requestForm) {
+            @Valid @ModelAttribute SearchRequestForm requestForm,
+            @CookieValue(name = "userToken", required = false) String userToken,
+            @CookieValue(name = ANON_COOKIE_NAME, required = false) String anonId,
+            HttpServletRequest httpServletRequest,
+            HttpServletResponse httpServletResponse
+    ) {
         log.debug("용어 검색 요청 - 페이지: {}, 크기: {}", requestForm.getPage(), requestForm.getSize());
         try {
-            var response = searchService.search(requestForm.toRequest());
+            Long accountId = resolveAccountId(userToken);
+            String ensuredAnonId = resolveOrIssueAnonId(anonId, httpServletRequest, httpServletResponse);
+
+            var request = requestForm.toRequest();
+            request.setActorKey(buildActorKey(accountId, ensuredAnonId));
+
+            var response = searchService.search(request);
             log.debug("용어 검색 완료 - 검색 결과 수: {}", response.getItems().size());
             return ResponseEntity.ok(SearchTermResponseForm.from(response));
         } catch (Exception e) {
@@ -375,5 +391,31 @@ public class TermController {
             log.error("[searchByTag] 조회 실패 - 태그: {}", tag, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    private static final String ANON_COOKIE_NAME = "anonId";
+    private static final Duration ANON_COOKIE_MAX_AGE = Duration.ofDays(365);
+
+    private String resolveOrIssueAnonId(String anonId, HttpServletRequest request, HttpServletResponse response) {
+        if (anonId != null && !anonId.isBlank()) return anonId;
+
+        String newAnonId = UUID.randomUUID().toString().replaceAll("-", "");
+
+        boolean secure = request.isSecure();
+        ResponseCookie cookie = ResponseCookie.from(ANON_COOKIE_NAME, newAnonId)
+                .httpOnly(true)
+                .secure(secure)
+                .sameSite("Lax")
+                .path("/")
+                .maxAge(ANON_COOKIE_MAX_AGE)
+                .build();
+
+        response.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
+        return newAnonId;
+    }
+
+    private String buildActorKey(Long accountId, String anonId) {
+        if (accountId != null) return "A_" + accountId;
+        return "N_" + anonId;
     }
 }

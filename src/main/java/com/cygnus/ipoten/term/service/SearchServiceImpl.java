@@ -6,7 +6,6 @@ import com.cygnus.ipoten.term.service.request.SearchTermRequest;
 import com.cygnus.ipoten.term.service.response.SearchTermResponse;
 import com.cygnus.ipoten.term.support.HangulInitial;
 import com.cygnus.ipoten.term_trending.service.TermSearchEventService;
-import com.cygnus.ipoten.term_trending.service.TermSearchEventServiceImpl;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.data.domain.*;
@@ -27,8 +26,12 @@ public class SearchServiceImpl implements SearchService {
 
     @Override
     public SearchTermResponse search(SearchTermRequest request) {
-        log.info("search page={}, catPathIds=?, selectedCategoryId={}",
+
+        final long startNs = System.nanoTime();
+
+        log.info("search page={}, catPathIds={}, selectedCategoryId={}",
                 request.getPage(), request.getCatPathIds(), request.getSelectedCategoryId());
+
         // 0) 카테고리 대상 id 계산
         final List<Long> targetCatIds = resolveTargetCategoryIds(request);
 
@@ -38,6 +41,10 @@ public class SearchServiceImpl implements SearchService {
         // 2) 접두(prefix) 모드 (initial | alpha | symbol 중 1개만 세팅)
         if (request.isPrefixMode()) {
             Page<Term> page = switchPrefix(request, pageable, targetCatIds);
+
+            String qRaw = buildPrefixQueryRaw(request);
+            recordSearchEventSafe(request, qRaw, page, startNs);
+
             return toResponse(page);
         }
 
@@ -50,42 +57,36 @@ public class SearchServiceImpl implements SearchService {
                 return toResponse(Page.empty(pageable)); // 아무 조건도 없으면 빈 결과
             }
             Page<Term> page = termRepository.findByTermCategoryIdIn(targetCatIds, pageable);
+            recordSearchEventSafe(request, "", page, startNs);
             return toResponse(page);
         }
 
         // 3-2) 키워드 검색 (+ 카테고리 필터)
         if (request.getSortKey() == SearchTermRequest.SortKey.RELEVANCE) {
-            // 가중치 정렬(native) 쿼리에 카테고리 필터가 들어간 버전이 있으면 그걸 사용
-            if (!targetCatIds.isEmpty()) {
-                Page<Term> page = termRepository.searchByRelevanceInCategories(
-                        q,
-                        request.isIncludeTags(),
-                        targetCatIds,
-                        PageRequest.of(request.getPage(), request.getSize()) // 정렬은 native 내부 처리
-                );
-                termSearchEventService.recordTrendingEventIfMappable(q, page, request);
-                return toResponse(page);
-            } else {
-                Page<Term> page = termRepository.searchByRelevance(
-                        q,
-                        request.isIncludeTags(),
-                        PageRequest.of(request.getPage(), request.getSize())
-                );
-                termSearchEventService.recordTrendingEventIfMappable(q, page, request);
-                return toResponse(page);
-            }
+            Page<Term> page = (!targetCatIds.isEmpty())
+                    ? termRepository.searchByRelevanceInCategories(
+                    q, request.isIncludeTags(), targetCatIds,
+                    PageRequest.of(request.getPage(), request.getSize())
+            )
+                    : termRepository.searchByRelevance(
+                    q, request.isIncludeTags(),
+                    PageRequest.of(request.getPage(), request.getSize())
+            );
+
+            termSearchEventService.recordTrendingEventIfMappable(q, page, request);
+            recordSearchEventSafe(request, q, page, startNs);
+
+            return toResponse(page);
         }
 
-        // TITLE/UPDATED_AT 정렬은 JPQL LIKE + Pageable 정렬 사용
-        if (!targetCatIds.isEmpty()) {
-            Page<Term> page = termRepository.searchLikeInCategories(q, request.isIncludeTags(), targetCatIds, pageable);
-            termSearchEventService.recordTrendingEventIfMappable(q, page, request);
-            return toResponse(page);
-        } else {
-            Page<Term> page = termRepository.searchLike(q, request.isIncludeTags(), pageable);
-            termSearchEventService.recordTrendingEventIfMappable(q, page, request);
-            return toResponse(page);
-        }
+        Page<Term> page = (!targetCatIds.isEmpty())
+                ? termRepository.searchLikeInCategories(q, request.isIncludeTags(), targetCatIds, pageable)
+                : termRepository.searchLike(q, request.isIncludeTags(), pageable);
+
+        termSearchEventService.recordTrendingEventIfMappable(q, page, request);
+        recordSearchEventSafe(request, q, page, startNs);
+
+        return toResponse(page);
     }
 
     public List<Long> resolveTargetCategoryIds(SearchTermRequest request) {
@@ -154,5 +155,46 @@ public class SearchServiceImpl implements SearchService {
                 .total(page.getTotalElements())
                 .items(items)
                 .build();
+    }
+
+    private void recordSearchEventSafe(SearchTermRequest request, String qRaw, Page<Term> page, long startNs) {
+        try {
+            if (request.getActorKey() == null || request.getActorKey().isBlank()) return;
+
+            int latencyMs = (int) ((System.nanoTime() - startNs) / 1_000_000);
+            String qNorm = normalizeQuery(qRaw);
+
+            int resultCount = (int) page.getTotalElements();
+            boolean isZero = (resultCount == 0);
+
+            termSearchEventService.recordSearchRequestEvent(
+                    request.getActorKey(),
+                    qRaw,
+                    qNorm,
+                    resultCount,
+                    isZero,
+                    latencyMs,
+                    request.getSelectedCategoryId(),
+                    request.getSortKey() == null ? null : request.getSortKey().name(),
+                    request.isIncludeTags()
+            );
+        } catch (Exception e) {
+            log.warn("Search Event logging failed (ignored). q={}", qRaw, e);
+        }
+    }
+
+    private String normalizeQuery(String q) {
+        if (q == null) return "";
+        String s = q.trim().toLowerCase();
+        s = s.replaceAll("\\s+", " ");
+        if (s.length() > 255) s = s.substring(0, 255);
+        return s;
+    }
+
+    private String buildPrefixQueryRaw(SearchTermRequest req) {
+        if (req.getInitial() != null) return "initial:" + req.getInitial();
+        if (req.getAlpha() != null) return "alpha:" + req.getAlpha();
+        if (req.getSymbol() != null) return "symbol:" + req.getSymbol();
+        return "";
     }
 }
