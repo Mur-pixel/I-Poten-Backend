@@ -14,7 +14,6 @@ import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
 import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import com.cygnus.ipoten.quiz_session.repository.QuizSessionRepository;
-import com.cygnus.ipoten.quiz_session.service.QuizSessionQueryService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
@@ -23,7 +22,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.List;
 import java.util.NoSuchElementException;
 import java.util.Objects;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -31,11 +29,11 @@ import java.util.stream.Collectors;
 public class DailyQuizPlayServiceImpl implements DailyQuizPlayService {
 
     private final QuizSessionRepository quizSessionRepository;
-    private final QuizSessionQueryService quizSessionQueryService;
     private final QuizQuestionRepository quizQuestionRepository;
     private final QuizChoiceRepository quizChoiceRepository;
     private final QuizTextAnswerRepository quizTextAnswerRepository;
     private final DailyQuizAnswerRepository dailyQuizAnswerRepository;
+    private final DailyQuizAnswerQueryService dailyQuizAnswerQueryService;
 
     /**
      * 데일리 문항 즉시 채점
@@ -76,12 +74,49 @@ public class DailyQuizPlayServiceImpl implements DailyQuizPlayService {
 
             NextInfo nextInfo = computeNextInfo(quizSession, questionId);
 
+            if (questionType == QuestionType.INITIALS) {
+                String incoming = requestForm.getAnswerText();
+                if (incoming == null || incoming.isBlank()) throw new IllegalArgumentException("answerText가 필요합니다.");
+
+                // 같은 답이면 그대로 반환 (idempotent)
+                if (normalize(incoming).equals(normalize(existing.getSubmittedText()))) {
+                    return new CheckDailyQuestionResponseForm(
+                            sessionId, questionId, existing.getQuestionType(), existing.isCorrect(),
+                            existing.getCorrectChoiceId(), safe(existing.getAnswerText()), safe(existing.getExplanation()),
+                            nextInfo.nextQuestionId(), nextInfo.lastQuestion()
+                    );
+                }
+
+                // 답이 달라졌으면 재채점 후 update
+                QuizTextAnswer ta = quizTextAnswerRepository.findByQuizQuestion_IdIn(List.of(questionId))
+                        .stream().findFirst()
+                        .orElseThrow(() -> new IllegalStateException("초성 정답 텍스트를 찾을 수 없습니다."));
+
+                String textAnswer = safe(ta.getAnswerText());
+                boolean correct = normalize(incoming).equals(normalize(textAnswer));
+
+                // DailyQuizAnswer에 updateInitialsAttempt 메서드 추가 권장
+                existing.updateInitialsAttempt(
+                        incoming,
+                        correct,
+                        textAnswer,
+                        safe(quizQuestion.getExplanation())
+                );
+                dailyQuizAnswerRepository.save(existing);
+
+                return new CheckDailyQuestionResponseForm(
+                        sessionId, questionId, questionType, correct,
+                        null, safe(textAnswer), safe(quizQuestion.getExplanation()),
+                        nextInfo.nextQuestionId(), nextInfo.lastQuestion()
+                );
+            }
+
             // CHOICE/OX: choiceId 기준
             if (questionType == QuestionType.CHOICE || questionType == QuestionType.OX) {
                 Long incoming = requestForm.getChoiceId();
                 if (incoming == null) throw new IllegalArgumentException("choiceId가 필요합니다.");
 
-                // ✅ 같은 선택이면 그대로 반환 (idempotent)
+                // 같은 선택이면 그대로 반환 (idempotent)
                 if (Objects.equals(existing.getChosenChoiceId(), incoming)) {
                     return new CheckDailyQuestionResponseForm(
                             sessionId, questionId, existing.getQuestionType(), existing.isCorrect(),
@@ -90,7 +125,7 @@ public class DailyQuizPlayServiceImpl implements DailyQuizPlayService {
                     );
                 }
 
-                // ✅ 선택이 달라졌으면 재채점 + UPDATE
+                // 선택이 달라졌으면 재채점 + UPDATE
                 QuizChoice correctChoice = quizChoiceRepository.findCorrectChoices(List.of(questionId))
                         .stream().findFirst()
                         .orElseThrow(() -> new IllegalStateException("정답 보기를 찾을 수 없습니다."));
@@ -194,23 +229,17 @@ public class DailyQuizPlayServiceImpl implements DailyQuizPlayService {
                     )
             );
         } catch (DataIntegrityViolationException e) {
-            // 다른 요청이 먼저 저장했을 수 있음 → 기존 답안 재조회해서 그대로 반환
-            DailyQuizAnswer a = dailyQuizAnswerRepository.findBySessionIdAndQuestionId(sessionId, questionId)
-                    .orElseThrow(() -> new IllegalStateException("이미 채점된 답안을 찾을 수 없습니다."));
+            if (isDuplicateKey(e)) {
+                DailyQuizAnswer a = dailyQuizAnswerQueryService.getBySessionAndQuestion(sessionId, questionId);
+                NextInfo ni = computeNextInfo(quizSession, questionId);
 
-            NextInfo ni = computeNextInfo(quizSession, questionId);
-
-            return new CheckDailyQuestionResponseForm(
-                    sessionId,
-                    questionId,
-                    a.getQuestionType(),
-                    a.isCorrect(),
-                    a.getCorrectChoiceId(),
-                    safe(a.getAnswerText()),
-                    safe(a.getExplanation()),
-                    ni.nextQuestionId(),
-                    ni.lastQuestion()
-            );
+                return new CheckDailyQuestionResponseForm(
+                        sessionId, questionId, a.getQuestionType(), a.isCorrect(),
+                        a.getCorrectChoiceId(), safe(a.getAnswerText()), safe(a.getExplanation()),
+                        ni.nextQuestionId(), ni.lastQuestion()
+                );
+            }
+            throw e;
         }
 
         // 9) 응답
@@ -258,5 +287,12 @@ public class DailyQuizPlayServiceImpl implements DailyQuizPlayService {
 
     private String safe(String s) {
         return s == null ? "" : s;
+    }
+
+    private boolean isDuplicateKey(DataIntegrityViolationException e) {
+        Throwable root = e.getMostSpecificCause();
+        if (root == null) return false;
+        String msg = root.getMessage();
+        return msg != null && msg.contains("Duplicate entry");
     }
 }

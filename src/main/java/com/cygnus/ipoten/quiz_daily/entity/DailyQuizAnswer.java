@@ -99,4 +99,12 @@ public class DailyQuizAnswer {
         this.explanation = explanation;
         this.answeredAt = LocalDateTime.now();
     }
+
+    public void updateInitialsAttempt(String submittedText, boolean correct, String answerText, String explanation) {
+        this.submittedText = submittedText;
+        this.correct = correct;
+        this.answerText = answerText;
+        this.explanation = explanation;
+        this.answeredAt = LocalDateTime.now();
+    }
 }

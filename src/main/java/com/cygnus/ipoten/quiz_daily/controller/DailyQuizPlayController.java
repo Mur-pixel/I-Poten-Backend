@@ -53,10 +53,21 @@ public class DailyQuizPlayController {
         } catch (IllegalStateException e) {
             return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("message", e.getMessage()));
         } catch (Exception e) {
-            log.error("daily check failed uri=/api/me/quiz/sessions/{}/questions/{}/check payload={}",
-                    sessionId, questionId, requestForm, e);
+            Throwable root = e;
+            while (root.getCause() != null) root = root.getCause();
+
+            log.error("[daily check] sessionId={} questionId={} payload={} rootType={} rootMsg={}",
+                    sessionId, questionId, requestForm,
+                    root.getClass().getName(),
+                    root.getMessage(),
+                    e
+            );
+
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
-                    .body(Map.of("message", "서버 내부 오류가 발생했습니다."));
+                    .body(Map.of(
+                            "message", "서버 내부 오류가 발생했습니다.",
+                            "debug", root.getClass().getSimpleName() + ": " + String.valueOf(root.getMessage())
+                    ));
         }
     }
 
