@@ -39,6 +39,7 @@ dependencies {
     implementation 'org.springframework.boot:spring-boot-starter-mail'
     implementation 'software.amazon.awssdk:ses:2.29.21'
 
+    implementation 'com.google.firebase:firebase-admin:9.4.3'
     implementation 'me.paulschwarz:spring-dotenv:3.0.0'
     implementation 'com.github.librepdf:openpdf:1.3.30'
     compileOnly 'org.projectlombok:lombok'
