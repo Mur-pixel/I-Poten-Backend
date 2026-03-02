@@ -16,7 +16,6 @@ import com.cygnus.ipoten.quiz_session.entity.enums.SessionStatus;
 import com.cygnus.ipoten.quiz_session.repository.QuizSessionRepository;
 import com.cygnus.ipoten.quiz_session_answer.repository.QuizSessionAnswerRepository;
 import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
-import com.cygnus.ipoten.quiz_session_generator.service.util.AnswerIndexPlanner;
 import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -29,6 +28,8 @@ import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.*;
 import java.util.stream.Collectors;
+
+import static com.cygnus.ipoten.quiz_question.util.HangulInitials.toInitialsHint;
 
 @Slf4j
 @Service
@@ -136,9 +137,6 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 (a, b) -> a
                         ));
 
-        long baseSeed = sessionSeed;
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
         List<StartQuizSessionResponse.Item> items = wrongQuestionIds.stream()
                 .map(qid -> {
                     QuizQuestion q = qMap.get(qid);
@@ -152,14 +150,14 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
                         }
 
+                        String initialsHint = toInitialsHint(answerText);
+
                         return new StartQuizSessionResponse.Item(
                                 q.getId(),
                                 q.getQuestionType(),
                                 q.getQuestionText(),
-                                q.getExplanation(),
-                                null,
-                                List.of(),
-                                answerText
+                                initialsHint,
+                                List.of()
                         );
                     }
 
@@ -176,22 +174,15 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 q.getQuestionType(),
                                 q.getQuestionText(),
                                 null,
-                                null,
-                                options,
-                                null
+                                options
                         );
                     }
 
-                    AnswerIndexPlanner planner = planners.computeIfAbsent(
-                            optionCount,
-                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                    );
-
-                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
+                    List<QuizChoice> ordered = reorderDeterministic(
                             q.getQuestionType(),
                             choices,
-                            planner,
-                            mixSeed(baseSeed, qid)
+                            sessionSeed,
+                            qid
                     );
 
                     var options = ordered.stream()
@@ -203,9 +194,7 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             q.getQuestionType(),
                             q.getQuestionText(),
                             null,
-                            null,
-                            options,
-                            null
+                            options
                     );
                 })
                 .toList();
@@ -304,9 +293,6 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                         ));
 
         // 9) 보기 배치(정답 위치 균등 분배 + seed 기반 섞기)
-        long baseSeed = sessionSeed;
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
         List<StartQuizSessionResponse.Item> items = questionIds.stream()
                 .map(qid -> {
                     QuizQuestion q = qMap.get(qid);
@@ -321,14 +307,14 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
                         }
 
+                        String initialsHint = toInitialsHint(answerText);
+
                         return new StartQuizSessionResponse.Item(
                                 q.getId(),
                                 q.getQuestionType(),
                                 q.getQuestionText(),
-                                q.getExplanation(),
-                                null,
-                                List.of(),
-                                answerText
+                                initialsHint,
+                                List.of()
                         );
                     }
 
@@ -340,20 +326,19 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
                                 .toList();
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                null,
+                                options
                         );
                     }
 
-                    AnswerIndexPlanner planner = planners.computeIfAbsent(
-                            optionCount,
-                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                    );
-
-                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
+                    List<QuizChoice> ordered = reorderDeterministic(
                             q.getQuestionType(),
                             choices,
-                            planner,
-                            mixSeed(baseSeed, qid)
+                            sessionSeed,
+                            qid
                     );
 
                     var options = ordered.stream()
@@ -361,7 +346,11 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             .toList();
 
                     return new StartQuizSessionResponse.Item(
-                            q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                            q.getId(),
+                            q.getQuestionType(),
+                            q.getQuestionText(),
+                            null,
+                            options
                     );
                 })
                 .toList();
@@ -482,9 +471,6 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 (a, b) -> a
                         ));
 
-        long baseSeed = sessionSeed;
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
         List<StartQuizSessionResponse.Item> items = questionIds.stream()
                 .map(qid -> {
                     QuizQuestion q = qMap.get(qid);
@@ -498,14 +484,14 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
                         }
 
+                        String initialsHint = toInitialsHint(answerText);
+
                         return new StartQuizSessionResponse.Item(
                                 q.getId(),
                                 q.getQuestionType(),
                                 q.getQuestionText(),
-                                q.getExplanation(),
-                                null,
-                                List.of(),
-                                answerText
+                                initialsHint,
+                                List.of()
                         );
                     }
 
@@ -517,20 +503,19 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
                                 .toList();
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                null,
+                                options
                         );
                     }
 
-                    AnswerIndexPlanner planner = planners.computeIfAbsent(
-                            optionCount,
-                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                    );
-
-                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
+                    List<QuizChoice> ordered = reorderDeterministic(
                             q.getQuestionType(),
                             choices,
-                            planner,
-                            mixSeed(baseSeed, qid)
+                            sessionSeed,
+                            qid
                     );
 
                     var options = ordered.stream()
@@ -538,7 +523,11 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             .toList();
 
                     return new StartQuizSessionResponse.Item(
-                            q.getId(), q.getQuestionType(), q.getQuestionText(), null, null, options, null
+                            q.getId(),
+                            q.getQuestionType(),
+                            q.getQuestionText(),
+                            null,
+                            options
                     );
                 })
                 .toList();
@@ -637,20 +626,19 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
     }
 
     /**
-     * 정답 위치를 AnswerIndexPlanner로 균등 분배하면서 보기들을 재배치한다.
-     * - 각 문항마다 정답이 들어갈 인덱스를 planner에서 하나 꺼내서 사용
-     * - 나머지 오답들은 seed 기반으로 섞어서 채운다.
+     * start/play/review 모두 동일하게 만들기 위한 "결정적 reorder".
+     * - OX: 항상 O -> X 고정
+     * - 그 외: (1) base(id 정렬) (2) (seed,qid)로 셔플 (3) targetIdx(=f(seed,qid,optionCount))에 정답 고정
      */
-    private List<QuizChoice> reorderWithBalancedAnswerIndex(
+    private List<QuizChoice> reorderDeterministic(
             QuestionType questionType,
             List<QuizChoice> choices,
-            AnswerIndexPlanner planner,
-            long seed
+            long sessionSeed,
+            long qid
     ) {
-        if (choices == null || choices.size() <= 1) {
-            return choices;
-        }
+        if (choices == null || choices.size() <= 1) return choices;
 
+        // OX는 항상 O -> X 고정
         if (questionType == QuestionType.OX) {
             return choices.stream()
                     .sorted(Comparator.comparing((QuizChoice c) -> {
@@ -661,41 +649,46 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                     .toList();
         }
 
-        int size = choices.size();
+        // 1) base order 안정화 (DB 반환 순서 흔들림 방지)
+        List<QuizChoice> base = normalizeBaseOrder(choices);
 
-        // 1) 현재 리스트에서 정답 위치 찾기 (없으면 0번)
-        int currentAnswerIndex = 0;
-        for (int i = 0; i < size; i++) {
-            if (choices.get(i).isAnswer()) {
-                currentAnswerIndex = i;
+        // 2) 문제 단위 셔플
+        long questionSeed = mixSeed(sessionSeed, qid);
+        List<QuizChoice> shuffled = new ArrayList<>(base);
+        Collections.shuffle(shuffled, new Random(questionSeed));
+
+        int optionCount = shuffled.size();
+        if (optionCount < 2) return shuffled;
+
+        // 3) qid 기반 targetIdx
+        int targetIdx = computeTargetAnswerIndex(sessionSeed, qid, optionCount);
+
+        // 정답 찾기
+        int currentIdx = -1;
+        for (int i = 0; i < shuffled.size(); i++) {
+            if (Boolean.TRUE.equals(shuffled.get(i).isAnswer())) {
+                currentIdx = i;
                 break;
             }
         }
+        if (currentIdx < 0) return shuffled;
 
-        QuizChoice answer = choices.get(currentAnswerIndex);
+        QuizChoice answer = shuffled.remove(currentIdx);
+        int safeTarget = Math.max(0, Math.min(targetIdx, shuffled.size()));
+        shuffled.add(safeTarget, answer);
 
-        // 2) planner로 목표 인덱스 선정
-        int targetIndex = planner.nextIndex();
-        if (targetIndex < 0 || targetIndex >= size) {
-            targetIndex = Math.floorMod(targetIndex, size);
-        }
+        return shuffled;
+    }
 
-        // 3) 오답 리스트 만들기 + seed 셔플
-        List<QuizChoice> distractors = new ArrayList<>(choices);
-        distractors.remove(currentAnswerIndex);
-        Collections.shuffle(distractors, new Random(seed));
+    private static List<QuizChoice> normalizeBaseOrder(List<QuizChoice> choices) {
+        return choices.stream()
+                .sorted(Comparator.comparingLong(QuizChoice::getId))
+                .toList();
+    }
 
-        // 4) targetIndex에 정답 배치 후 나머지 채우기
-        List<QuizChoice> ordered = new ArrayList<>(Collections.nCopies(size, (QuizChoice) null));
-        ordered.set(targetIndex, answer);
-
-        int di = 0;
-        for (int i = 0; i < size; i++) {
-            if (i == targetIndex) continue;
-            ordered.set(i, distractors.get(di++));
-        }
-
-        return ordered;
+    private static int computeTargetAnswerIndex(long sessionSeed, long qid, int optionCount) {
+        long h = mixSeed(sessionSeed, qid);
+        return Math.floorMod((int) h, optionCount);
     }
 
     /** 부모 체인에서 title이 있는 첫 title을 상속 */
@@ -812,9 +805,6 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 (a, b) -> a
                         ));
 
-        long baseSeed = sessionSeed;
-        Map<Integer, AnswerIndexPlanner> planners = new HashMap<>();
-
         List<StartQuizSessionResponse.Item> items = shuffledIds.stream()
                 .map(qid -> {
                     QuizQuestion q = qMap.get(qid);
@@ -828,9 +818,14 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             throw new IllegalStateException("초성 문제 정답이 등록되지 않았습니다: " + qid);
                         }
 
+                        String initialsHint = toInitialsHint(answerText);
+
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(),
-                                q.getExplanation(), null, List.of(), answerText
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                initialsHint,
+                                List.of()
                         );
                     }
 
@@ -842,21 +837,19 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                                 .map(c -> new StartQuizSessionResponse.Option(c.getId(), c.getChoiceText()))
                                 .toList();
                         return new StartQuizSessionResponse.Item(
-                                q.getId(), q.getQuestionType(), q.getQuestionText(),
-                                null, null, options, null
+                                q.getId(),
+                                q.getQuestionType(),
+                                q.getQuestionText(),
+                                null,
+                                options
                         );
                     }
 
-                    AnswerIndexPlanner planner = planners.computeIfAbsent(
-                            optionCount,
-                            oc -> new AnswerIndexPlanner(oc, mixSeed(baseSeed, oc))
-                    );
-
-                    List<QuizChoice> ordered = reorderWithBalancedAnswerIndex(
+                    List<QuizChoice> ordered = reorderDeterministic(
                             q.getQuestionType(),
                             choices,
-                            planner,
-                            mixSeed(baseSeed, qid)
+                            sessionSeed,
+                            qid
                     );
 
                     var options = ordered.stream()
@@ -864,8 +857,11 @@ public class QuizSessionRetryServiceImpl implements QuizSessionRetryService {
                             .toList();
 
                     return new StartQuizSessionResponse.Item(
-                            q.getId(), q.getQuestionType(), q.getQuestionText(),
-                            null, null, options, null
+                            q.getId(),
+                            q.getQuestionType(),
+                            q.getQuestionText(),
+                            null,
+                            options
                     );
                 })
                 .toList();

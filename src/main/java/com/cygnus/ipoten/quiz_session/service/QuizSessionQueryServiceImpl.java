@@ -27,6 +27,9 @@ import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_set.repository.QuizSetRepository;
 import com.cygnus.ipoten.quiz_set.service.QuizSetQueryService;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
+
+import static com.cygnus.ipoten.quiz_question.util.HangulInitials.toInitialsHint;
+
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
@@ -127,13 +130,13 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 .collect(Collectors.toMap(QuizQuestion::getId, q -> q));
 
         // 3) 보기 로드
-        List<QuizChoice> allChoices = quizChoiceRepository.findByQuizQuestionIdIn(pageIds);
+        List<QuizChoice> allChoices = quizChoiceRepository.findByQuizQuestionIdInOrderByQuizQuestionIdAscIdAsc(pageIds);
         Map<Long, List<QuizChoice>> choicesByQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
         // 4) 노출 정책
-        boolean canRevealAnswers = (effective == SessionStatus.SUBMITTED) && includeAnswers; // 정답(OX/객관식 + 초성 expectedText)
-        boolean canRevealExplanation = (effective == SessionStatus.SUBMITTED);              // 해설은 제출 후만
+        boolean canRevealAnswers = (effective == SessionStatus.SUBMITTED) && includeAnswers;
+        boolean canRevealExplanation = (effective == SessionStatus.SUBMITTED);
 
         // 5) INITIALS 정답 텍스트는 "힌트 생성"을 위해서도 필요하므로 pageIds 내 INITIALS만 배치 조회
         List<Long> initialsIds = pageIds.stream()
@@ -155,6 +158,8 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         // 6) 아이템 구성
         List<SessionItemsPageResponseForm.Item> items = new ArrayList<>(pageIds.size());
 
+        long baseSeed = Optional.ofNullable(quizsession.getSeedValue()).orElse(0L);
+
         for (Long qid : pageIds) {
             QuizQuestion question = byId.get(qid);
             if (question == null) continue;
@@ -165,38 +170,34 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             List<SessionItemsPageResponseForm.Choice> choiceList = List.of();
             Long correctChoiceId = null;
 
-            // 초성 힌트
             String initialsHint = null;
-
-            // 제출/리뷰에서만 내려갈 정답 텍스트(초성 정답)
             String expectedText = null;
 
             if (isInitials) {
                 String ans = expectedByQid.get(qid);
 
-                // 힌트는 항상 내려줌(정답 텍스트가 아니라 초성만)
                 initialsHint = toInitialsHint(ans);
 
-                // 제출 완료 + includeAnswers=true 일 때만 정답 텍스트 노출
                 if (canRevealAnswers) {
                     expectedText = ans;
                     if (expectedText == null) {
                         log.warn("[sessionItems] initials expectedText missing. qid={}", qid);
                     }
                 }
+
             } else {
                 List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
 
-                // OX는 보기 순서 고정
-                if (qt == QuestionType.OX) {
-                    qChoices = qChoices.stream()
-                            .sorted(Comparator.comparing((QuizChoice c) -> {
-                                String t = Optional.ofNullable(c.getChoiceText()).orElse("")
-                                        .trim().toUpperCase();
-                                return "O".equals(t) ? 0 : "X".equals(t) ? 1 : 2;
-                            }).thenComparingLong(QuizChoice::getId))
-                            .toList();
-                }
+                // start/page/review 모두 동일하게 만들기 위해:
+                // 1) 입력 안정화(id 정렬) -> 2) 문제 seed로 셔플 -> 3) qid 기반 targetIdx로 정답 위치 고정
+                qChoices = normalizeBaseOrder(qChoices);
+
+                qChoices = reorderDeterministic(
+                        qt,
+                        qChoices,
+                        baseSeed,
+                        qid
+                );
 
                 QuizChoice answerChoice = canRevealAnswers
                         ? qChoices.stream().filter(QuizChoice::isAnswer).findFirst().orElse(null)
@@ -238,11 +239,9 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     @Override
     @Transactional
     public SessionListResponseForm listMySessions(Long accountId, int limit, String statusFilter) {
-        // 정렬/페이징 가드 (limit: 1~100)
         int pageSize = Math.max(1, Math.min(100, limit));
         PageRequest pr = PageRequest.of(0, pageSize, Sort.by(Sort.Direction.DESC, "startedAt"));
 
-        // 상태 필터 파싱 (null/무효값이면 전체)
         SessionStatus status = null;
         if (statusFilter != null && !statusFilter.isBlank()) {
             try {
@@ -250,7 +249,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             } catch (IllegalArgumentException ignore) { /* ALL */ }
         }
 
-        // 조회
         var page = (status == null)
                 ? quizSessionRepository.findByAccount_IdAndDeletedAtIsNull(accountId, pr)
                 : quizSessionRepository.findByAccount_IdAndSessionStatusAndDeletedAtIsNull(accountId, status, pr);
@@ -260,7 +258,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         Map<Long, String> setTitleById = loadSetTitleByIdIncludingAncestors(sessions);
         Map<Long, String> catNameById  = loadCatNameByIdIncludingAncestors(sessions);
 
-        // 매핑
         List<SessionListResponseForm.Item> items = new ArrayList<>(page.getNumberOfElements());
         for (QuizSession s : sessions) {
 
@@ -314,7 +311,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             throw new IllegalStateException("제출 완료된 세션만 리뷰할 수 있습니다.");
         }
 
-        // 세션 스냅샷 순서 유지
         List<Long> qids = Optional.ofNullable(s.getSnapshotQuestionIds()).orElse(List.of());
         if (qids.isEmpty()) {
             return SessionReviewResponseForm.builder()
@@ -325,11 +321,10 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                     .build();
         }
 
-        // 질문/보기/답변 한번에 로드
         Map<Long, QuizQuestion> qById = quizQuestionRepository.findAllById(qids)
                 .stream().collect(Collectors.toMap(QuizQuestion::getId, q -> q));
 
-        List<QuizChoice> allChoices = quizChoiceRepository.findByQuizQuestionIdIn(qids);
+        List<QuizChoice> allChoices = quizChoiceRepository.findByQuizQuestionIdInOrderByQuizQuestionIdAscIdAsc(qids);
         Map<Long, List<QuizChoice>> choicesByQ = allChoices.stream()
                 .collect(Collectors.groupingBy(c -> c.getQuizQuestion().getId()));
 
@@ -338,7 +333,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 .map(QuizQuestion::getId)
                 .toList();
 
-        // INITIALS expectedText를 quiz_text_answer에서 가져오기
         Map<Long, String> expectedTextByQid = initialsQids.isEmpty()
                 ? Map.of()
                 : quizTextAnswerRepository.findByQuizQuestion_IdIn(initialsQids).stream()
@@ -355,6 +349,8 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         int correctCnt = 0;
         List<SessionReviewResponseForm.Item> items = new ArrayList<>();
 
+        long baseSeed = Optional.ofNullable(s.getSeedValue()).orElse(0L);
+
         for (Long qid : qids) {
             QuizQuestion q = qById.get(qid);
             if (q == null) continue;
@@ -367,33 +363,25 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             Long myChoiceId = (my != null) ? my.getSubmittedChoiceId() : null;
             String mySubmittedText = (my != null) ? my.getSubmittedText() : null;
 
-            // INITIALS expectedText
             String expectedText = isInitials ? expectedTextByQid.get(qid) : null;
 
-            // choice 기반 데이터
             List<SessionReviewResponseForm.Choice> optionList = List.of();
             Long answerChoiceId = null;
 
             if (!isInitials) {
                 List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
+                qChoices = normalizeBaseOrder(qChoices);
 
-                // OX는 보기 순서 고정
-                if (qt == QuestionType.OX) {
-                    qChoices = qChoices.stream()
-                            .sorted(Comparator.comparing((QuizChoice c) -> {
-                                String t = Optional.ofNullable(c.getChoiceText()).orElse("")
-                                        .trim().toUpperCase();
-                                return "O".equals(t) ? 0 : "X".equals(t) ? 1 : 2;
-                            }).thenComparingLong(QuizChoice::getId))
-                            .toList();
-                }
+                // getSessionItems와 동일한 순서 규칙
+                qChoices = reorderDeterministic(qt, qChoices, baseSeed, qid);
 
                 List<QuizChoice> answersChoiceList = qChoices.stream()
                         .filter(QuizChoice::isAnswer)
                         .toList();
 
                 if (answersChoiceList.size() > 1) {
-                    log.warn("[review] multiple correct choices. qid={}, answerIds={}", qid, answersChoiceList.stream().map(QuizChoice::getId).toList());
+                    log.warn("[review] multiple correct choices. qid={}, answerIds={}",
+                            qid, answersChoiceList.stream().map(QuizChoice::getId).toList());
                 }
 
                 QuizChoice answerChoice = answersChoiceList.isEmpty() ? null : answersChoiceList.get(0);
@@ -413,8 +401,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             if (isInitials) {
                 String submitted = Optional.ofNullable(mySubmittedText).orElse("").trim();
                 String expected  = Optional.ofNullable(expectedText).orElse("").trim();
-
-                // 원하면 대소문자 무시/공백 정규화도 가능
                 computedCorrect = !submitted.isEmpty() && submitted.equalsIgnoreCase(expected);
             } else {
                 computedCorrect = (myChoiceId != null && answerChoiceId != null && myChoiceId.equals(answerChoiceId));
@@ -458,15 +444,12 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
     @Override
     public QuizTimelineResponseForm getTimeline(Long accountId, String q, QuizSetType part, int page, int size) {
-
         var pr = PageRequest.of(Math.max(0, page), Math.max(1, Math.min(50, size)));
         var pageRes = timelineRepository.findTimelinePage(accountId, nullIfBlank(q), part, pr);
         var sessions = pageRes.getContent();
 
-        // SET 제목: 현재/부모(SET)까지 포함해서 로딩
         Map<Long, String> setTitleById = loadSetTitleByIdIncludingAncestors(sessions);
 
-        // 카테고리명: 현재/부모(TERM_CATEGORY)까지 포함해서 로딩
         Set<Long> catIds = new HashSet<>();
         for (QuizSession s : sessions) {
             if (s.getSourceType() == SessionSourceType.TERM_CATEGORY && s.getSourceId() != null) {
@@ -487,7 +470,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                         (a, b) -> a
                 ));
 
-        // 정답/응답 수 집계(페이지에 있는 세션들)
         List<Long> ids = sessions.stream().map(QuizSession::getId).toList();
 
         Map<Long, Integer> correctBySession = new HashMap<>();
@@ -502,11 +484,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             }
         }
 
-        // 타임라인 타이틀 결정(부모 세션 기준 포함)
-        // - 커스텀 타이틀 있으면 그걸 우선
-        // - SET이면 setTitleById
-        // - TERM_CATEGORY면 catNameById (없으면 "카테고리 퀴즈")
-        // - WORDBOOK/기타는 기존 규칙
         java.util.function.Function<QuizSession, String> timelineTitleOf = (QuizSession base) -> {
             if (base == null) return "제목없음";
 
@@ -521,7 +498,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             if (base.getSourceType() == SessionSourceType.TERM_CATEGORY) {
                 String name = (base.getSourceId() == null) ? null : catNameById.get(base.getSourceId());
                 return (name != null && !name.isBlank()) ? name : "카테고리 퀴즈";
-                // 원하면: return (name != null && !name.isBlank()) ? (name + " 퀴즈") : "카테고리 퀴즈";
             }
 
             if (base.getSourceType() == SessionSourceType.WORDBOOK) {
@@ -541,7 +517,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
             QuizSetType pt = Optional.ofNullable(s.getPartType()).orElse(QuizSetType.CHOICE);
 
-            // 카테고리(라벨칩) 표시용: 현재 세션이 TERM_CATEGORY일 때만
             String categoryName = null;
             if (s.getSourceType() == SessionSourceType.TERM_CATEGORY && s.getSourceId() != null) {
                 categoryName = catNameById.get(s.getSourceId());
@@ -552,13 +527,9 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
 
             QuizSession root = resolveRootSession(s);
 
-            // title: "현재 세션" 기준 (재도전 커스텀 타이틀이 여기 들어감)
             String title = timelineTitleOf.apply(s);
-
-            // originTitle: "원본(root)" 기준 (없으면 title로 폴백)
             String originTitle = Optional.ofNullable(timelineTitleOf.apply(root)).orElse(title);
 
-            // retryKind: 부모 있을 때만 결정
             QuizTimelineResponseForm.RetryKind retryKind = null;
             if (isRetry) {
                 SessionMode mode = Optional.ofNullable(s.getSessionMode()).orElse(SessionMode.FULL);
@@ -600,7 +571,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 .retryRate(retryRounded)
                 .build();
 
-        // 최근 이력
         var recentSessions = timelineRepository.findRecentSessions(accountId, 5);
         Map<Long, String> recentSetTitleById = loadSetTitleByIdIncludingAncestors(recentSessions);
 
@@ -666,13 +636,9 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         Long setId = session.getSourceId();
         if (setId == null) throw new IllegalStateException("SET 세션인데 sourceId가 비었습니다.");
 
-        // 1) 세션 스냅샷(id 리스트) 뽑기
         var qids = extractQuestionIds(session);
-
-        // 2) 세트의 전체 INITIALS 문항 엔티티 조회
         var all = quizSetQueryService.findInitialsQuestionsBySetId(setId);
 
-        // 3) 스냅샷 순서를 우선 보장
         var orderMap = new java.util.HashMap<Long, Integer>();
         for (int i = 0; i < qids.size(); i++) orderMap.put(qids.get(i), i);
 
@@ -680,18 +646,17 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 orderMap.getOrDefault(q.getId(), Integer.MAX_VALUE)
         ));
 
-        // 4) 스냅샷에 있는 것만 골라서 최대 3개
         List<InitialsQuestionsResponse.QuestionItem> picked = new ArrayList<>();
         int order = 1;
         for (var q : all) {
-            if (!orderMap.containsKey(q.getId())) continue; // 스냅샷에 없는 건 제외
+            if (!orderMap.containsKey(q.getId())) continue;
             picked.add(new InitialsQuestionsResponse.QuestionItem(
                     q.getId(),
                     order++,
                     Optional.ofNullable(q.getQuestionText()).orElse(""),
                     Optional.ofNullable(q.getExplanation()).orElse("")
             ));
-            if (picked.size() >= 3) break; // 오늘의 초성은 3개 고정
+            if (picked.size() >= 3) break;
         }
 
         return new InitialsQuestionsResponse(sessionId, picked.size(), picked);
@@ -731,33 +696,22 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         return current;
     }
 
-    /**
-     * QuizSession에서 질문 ID 목록을 추출한다.
-     * 우선순위:
-     *  0) 엔티티에 구현된 getSnapshotQuestionIds() 사용
-     *  1) getQuestionIds() 리플렉션 호출 (구버전 호환)
-     *  2) questionsSnapshotJson을 파싱해 [1,2,3] 또는 [{id:1}, {id:2}] 형태를 모두 지원
-     */
     private List<Long> extractQuestionIds(QuizSession session) {
-        // 0) 엔티티에 이미 구현된 헬퍼가 있으면 최우선 사용
         try {
-            List<Long> ids = session.getSnapshotQuestionIds(); // 존재함
+            List<Long> ids = session.getSnapshotQuestionIds();
             if (ids != null && !ids.isEmpty()) return ids;
         } catch (Exception ignore) {}
 
-        // 1) getQuestionIds()가 있는 환경을 위한 리플렉션 (없으면 그냥 통과)
         try {
             var m = session.getClass().getMethod("getQuestionIds");
             @SuppressWarnings("unchecked")
             List<Long> ids = (List<Long>) m.invoke(session);
             if (ids != null && !ids.isEmpty()) return ids;
         } catch (NoSuchMethodException ignore) {
-            // method가 없는 경우: 무시하고 스냅샷 JSON 파싱으로 진행
         } catch (Exception e) {
             log.warn("[initials] getQuestionIds() reflection failed", e);
         }
 
-        // 2) 스냅샷 JSON 파싱 (두 형태 모두 지원: [1,2,3] 또는 [{id:1}, {id:2}])
         String snap = session.getQuestionsSnapshotJson();
         if (snap == null || snap.isBlank()) return List.of();
 
@@ -786,7 +740,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         if (s.getSourceType() == SessionSourceType.TERM_CATEGORY) {
             return s.getSourceId();
         }
-        return null; // SET/WORDBOOK 등은 여기서 카테고리로 단정하지 않음
+        return null;
     }
 
     private Map<Long, String> loadSetTitleByIdIncludingAncestors(List<QuizSession> sessions) {
@@ -853,44 +807,6 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         return "제목없음";
     }
 
-    private static final char HANGUL_BASE = 0xAC00;
-    private static final char HANGUL_LAST = 0xD7A3;
-    private static final int  CHO_COUNT = 19;
-    private static final int  JUNG_COUNT = 21;
-    private static final int  JONG_COUNT = 28;
-    private static final int  SYLLABLE_BLOCK = JUNG_COUNT * JONG_COUNT; // 588
-
-    private static final String[] CHO = {
-            "ㄱ","ㄲ","ㄴ","ㄷ","ㄸ","ㄹ","ㅁ","ㅂ","ㅃ","ㅅ","ㅆ","ㅇ","ㅈ","ㅉ","ㅊ","ㅋ","ㅌ","ㅍ","ㅎ"
-    };
-
-    private String toInitialsHint(String answerText) {
-        if (answerText == null || answerText.isBlank()) return null;
-
-        StringBuilder sb = new StringBuilder();
-        for (int i = 0; i < answerText.length(); i++) {
-            char ch = answerText.charAt(i);
-
-            if (Character.isWhitespace(ch)) {
-                sb.append(' ');
-                continue;
-            }
-
-            if (ch >= HANGUL_BASE && ch <= HANGUL_LAST) {
-                int syllableIndex = ch - HANGUL_BASE;
-                int choIndex = syllableIndex / SYLLABLE_BLOCK;
-                if (choIndex >= 0 && choIndex < CHO_COUNT) sb.append(CHO[choIndex]);
-                else sb.append(ch);
-            } else {
-                // 한글이 아니면 그대로(영문/숫자/기호)
-                sb.append(ch);
-            }
-        }
-
-        String out = sb.toString().trim();
-        return out.isEmpty() ? null : out;
-    }
-
     private QuizSession resolveRootSession(QuizSession s) {
         if (s == null) return null;
         QuizSession cur = s;
@@ -900,5 +816,83 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
             cur = cur.getParentSession();
         }
         return cur;
+    }
+
+    private static long mixSeed(long a, long b) {
+        long x = a ^ (b + 0x9E3779B97F4A7C15L);
+        x = (x ^ (x >>> 30)) * 0xBF58476D1CE4E5B9L;
+        x = (x ^ (x >>> 27)) * 0x94D049BB133111EBL;
+        x = x ^ (x >>> 31);
+        return x;
+    }
+
+    private static List<QuizChoice> normalizeBaseOrder(List<QuizChoice> choices) {
+        if (choices == null) return List.of();
+        return choices.stream()
+                .sorted(Comparator.comparingLong(QuizChoice::getId))
+                .toList();
+    }
+
+    /**
+     * start/page/review 모두 동일하게 만드는 결정적 reorder:
+     * - OX: 항상 O -> X 고정
+     * - CHOICE: (1) base(id 정렬) (2) questionSeed로 셔플 (3) qid 기반 targetIdx에 정답을 고정
+     */
+    private List<QuizChoice> reorderDeterministic(
+            QuestionType questionType,
+            List<QuizChoice> choices,
+            long sessionSeed,
+            long qid
+    ) {
+        if (choices == null || choices.size() <= 1) return choices;
+
+        // OX는 항상 O -> X 고정
+        if (questionType == QuestionType.OX) {
+            return choices.stream()
+                    .sorted(Comparator.comparing((QuizChoice c) -> {
+                        String t = Optional.ofNullable(c.getChoiceText()).orElse("")
+                                .trim().toUpperCase();
+                        return "O".equals(t) ? 0 : "X".equals(t) ? 1 : 2;
+                    }).thenComparingLong(QuizChoice::getId))
+                    .toList();
+        }
+
+        List<QuizChoice> base = normalizeBaseOrder(choices);
+
+        // 문제 단위 셔플(= start와 동일하게 만들 seed 규칙)
+        long questionSeed = mixSeed(sessionSeed, qid);
+        List<QuizChoice> shuffled = new ArrayList<>(base);
+        Collections.shuffle(shuffled, new Random(questionSeed));
+
+        int optionCount = shuffled.size();
+        if (optionCount < 2) return shuffled;
+
+        // 핵심: targetIdx를 "qid 기반"으로 결정 → 호출 횟수/페이지 크기/재조회와 무관
+        int targetIdx = computeTargetAnswerIndex(sessionSeed, qid, optionCount);
+
+        // 정답 찾기
+        int currentIdx = -1;
+        for (int i = 0; i < shuffled.size(); i++) {
+            if (Boolean.TRUE.equals(shuffled.get(i).isAnswer())) {
+                currentIdx = i;
+                break;
+            }
+        }
+        if (currentIdx < 0) return shuffled;
+
+        QuizChoice correct = shuffled.remove(currentIdx);
+        int safeTarget = Math.max(0, Math.min(targetIdx, shuffled.size()));
+        shuffled.add(safeTarget, correct);
+
+        return shuffled;
+    }
+
+    /**
+     * seed/qid로 정답 보기 위치(0~N-1) 결정
+     * seed가 같으면 항상 동일, seed가 바뀌면 위치도 바뀜
+     */
+    private static int computeTargetAnswerIndex(long sessionSeed, long qid, int optionCount) {
+        long h = mixSeed(sessionSeed, qid);
+        return Math.floorMod((int) h, optionCount);
     }
 }
