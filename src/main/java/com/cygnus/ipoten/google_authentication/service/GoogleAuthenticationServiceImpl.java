@@ -10,7 +10,7 @@ import com.cygnus.ipoten.google_authentication.exception.GoogleAccessTokenExcept
 import com.cygnus.ipoten.google_authentication.exception.GoogleGetUserInfoException;
 import com.cygnus.ipoten.google_authentication.service.mobile_response.GoogleLoginMobileResponse;
 import com.cygnus.ipoten.google_authentication.service.response.GoogleLoginResponse;
-import com.cygnus.ipoten.kakao_authentication.service.response.KakaoLoginResponse;
+import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -36,6 +36,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
     private final AuthenticationService authenticationService;
     private final AccountProfileService accountProfileService;
     private final FrontendConfig frontendConfig;
+    private final RefreshTokenService refreshTokenService;
 
 
     public GoogleAuthenticationServiceImpl(
@@ -46,7 +47,8 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
             RestTemplate restTemplate,
             AuthenticationService authenticationService,
             AccountProfileService accountProfileService,
-            FrontendConfig frontendConfig
+            FrontendConfig frontendConfig,
+            RefreshTokenService refreshTokenService
     ) {
             this.clientId = clientId;
             this.clientSecret = clientSecret;
@@ -56,6 +58,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
             this.authenticationService = authenticationService;
             this.accountProfileService = accountProfileService;
             this.frontendConfig = frontendConfig;
+            this.refreshTokenService = refreshTokenService;
     }
 
 
@@ -159,19 +162,18 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
         log.info("이메일 :  {}", email);
         Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.GOOGLE);
 
-
-
         boolean isNewUser = accountProfile.isEmpty();
-
         log.info("회원가입 되어 있는지 여부 : {}", isNewUser);
 
-        String origin = frontendConfig.getOrigins().get(0);
+        if (isNewUser) {
+            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
+            return new GoogleLoginMobileResponse(true, tempToken, nickname, email);
+        }
 
-        String token = isNewUser
-                ? authenticationService.createTemporaryUserTokenWithAccessToken(accessToken)
-                : authenticationService.createUserTokenWithAccessToken(accountProfile.get().getAccount().getId(), accessToken);
-
-        return GoogleLoginResponse.ofMobile(isNewUser, token, nickname, email, origin);
+        var account = accountProfile.get().getAccount();
+        String userToken = authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken);
+        String refreshToken = refreshTokenService.createOrReplace(account);
+        return new GoogleLoginMobileResponse(false, userToken, nickname, email, refreshToken);
     }
 
 

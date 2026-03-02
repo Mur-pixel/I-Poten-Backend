@@ -8,6 +8,7 @@ import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import com.cygnus.ipoten.config.FrontendConfig;
 import com.cygnus.ipoten.kakao_authentication.service.mobile_response.KakaoLoginMobileResponse;
 import com.cygnus.ipoten.kakao_authentication.service.response.KakaoLoginResponse;
+import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.*;
@@ -32,6 +33,7 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
     private final AccountProfileService accountProfileService;
     private final FrontendConfig frontendConfig;
     private final AuthenticationService authenticationService;
+    private final RefreshTokenService refreshTokenService;
 
 
     public KakaoAuthenticationServiceImpl(
@@ -43,7 +45,8 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
             RestTemplate restTemplate,
             AccountProfileService accountProfileService,
             FrontendConfig frontendConfig,
-            AuthenticationService authenticationService) {
+            AuthenticationService authenticationService,
+            RefreshTokenService refreshTokenService) {
         this.loginUrl = loginUrl;
         this.clientId = clientId;
         this.redirectUri = redirectUri;
@@ -54,6 +57,7 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
         this.accountProfileService = accountProfileService;
         this.frontendConfig = frontendConfig;
         this.authenticationService = authenticationService;
+        this.refreshTokenService = refreshTokenService;
     }
 
 
@@ -192,19 +196,18 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
         log.info("이메일 :  {}", email);
         Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.KAKAO);
 
-
-
         boolean isNewUser = accountProfile.isEmpty();
-
         log.info("회원가입 되어 있는지 여부 : {}", isNewUser);
 
-        String origin = frontendConfig.getOrigins().get(0);
+        if (isNewUser) {
+            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
+            return new KakaoLoginMobileResponse(true, tempToken, nickname, email);
+        }
 
-        String token = isNewUser
-                ? authenticationService.createTemporaryUserTokenWithAccessToken(accessToken)
-                : authenticationService.createUserTokenWithAccessToken(accountProfile.get().getAccount().getId(), accessToken);
-
-        return KakaoLoginResponse.ofMobile(isNewUser, token, nickname, email, origin);
+        var account = accountProfile.get().getAccount();
+        String userToken = authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken);
+        String refreshToken = refreshTokenService.createOrReplace(account);
+        return new KakaoLoginMobileResponse(false, userToken, nickname, email, refreshToken);
     }
 
 
