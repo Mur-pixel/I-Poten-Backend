@@ -21,8 +21,6 @@ import org.springframework.transaction.annotation.Transactional;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
 
-import static com.cygnus.ipoten.quiz_session.entity.enums.SessionSourceType.WRONG_NOTE;
-
 @Slf4j
 @Service
 @RequiredArgsConstructor
@@ -207,6 +205,47 @@ public class QuizScopeServiceImpl implements QuizScopeService {
                         seedValue,
                         title
                 );
+            }
+
+            case LABELS -> {
+                var s = condition.getLabelsScope();
+                if (s == null) throw new IllegalArgumentException("LABELS 스코프가 없습니다.");
+
+                var typeScope = s.questionTypeScope();
+                boolean isMix = (typeScope == null) || typeScope.isMix();
+
+                SeedPolicy seed = (condition.getSeedPolicy() != null) ? condition.getSeedPolicy() : SeedPolicy.fromRaw(null, null);
+                SeedMode mode = (seed.getSeedMode() != null) ? seed.getSeedMode() : SeedMode.AUTO;
+                long seedValue = resolveSeedValue(mode, seed.getFixedSeed(), accountId);
+
+                int take = Math.max(1, Math.min(100, Optional.ofNullable(s.count()).orElse(10)));
+                DifficultyLevel dl = (s.difficultyScope() == null) ? null : s.difficultyScope().forRepoOrNull();
+
+                List<String> labels = normalizeLabelKeys(s.labelKeys());
+                if (labels.isEmpty()) throw new IllegalArgumentException("labelKeys가 비었습니다.");
+
+                if (isMix) {
+                    return startFromLabelsMix(accountId, labels, dl, seed, title, take);
+                }
+
+                QuestionType qt = typeScope.toEntityOrNull();
+                if (qt == null) {
+                    return startFromLabelsMix(accountId, labels, dl, seed, title, take);
+                }
+
+                List<Long> candidates = quizQuestionRepository.findIdsByLabelsFilters(dl, qt, labels);
+                if (candidates.size() < take) {
+                    throw new IllegalArgumentException("문항 수가 부족합니다. 요청=" + take + ", 확보=" + candidates.size());
+                }
+
+                List<Long> picked = new ArrayList<>(candidates);
+                Collections.shuffle(picked, new Random(seedValue));
+                picked = picked.subList(0, take);
+
+                long refId = Math.abs(Objects.hash(labels));
+                SessionSource source = SessionSource.of(SessionSourceType.LABELS, refId, QuizSetType.MIX);
+
+                return quizSessionAnswerService.startFromScope(accountId, source, picked, mode, seedValue, title);
             }
 
             default -> throw new IllegalStateException("지원하지 않는 SourceType: " + condition.getSourceType());
@@ -461,5 +500,87 @@ public class QuizScopeServiceImpl implements QuizScopeService {
         String s = title.trim();
         if (s.isBlank()) return null;
         return (s.length() > 40) ? s.substring(0, 40) : s;
+    }
+
+    private StartQuizSessionResponse startFromLabelsMix(
+            Long accountId,
+            List<String> labels,
+            DifficultyLevel dl,
+            SeedPolicy seedPolicy,
+            String customTitle,
+            int take
+    ) {
+        if (labels == null || labels.isEmpty()) {
+            throw new IllegalArgumentException("labelKeys가 비었습니다.");
+        }
+
+        take = Math.max(1, Math.min(100, take));
+
+        if (seedPolicy == null) seedPolicy = SeedPolicy.fromRaw(null, null);
+        SeedMode mode = (seedPolicy.getSeedMode() != null) ? seedPolicy.getSeedMode() : SeedMode.AUTO;
+
+        long seedValue;
+        if (mode == SeedMode.FIXED) {
+            if (seedPolicy.getFixedSeed() == null) {
+                throw new IllegalArgumentException("FIXED seedMode에는 fixedSeed가 필요합니다.");
+            }
+            seedValue = seedPolicy.getFixedSeed();
+        } else {
+            seedValue = ThreadLocalRandom.current().nextLong();
+        }
+
+        // pool 구성 (카테고리 mix와 동일한 전략)
+        int poolSize = Math.min(500, Math.max(50, take * 10));
+
+        List<Long> choicePool = new ArrayList<>(quizQuestionRepository.findIdsByLabelsFilters(dl, QuestionType.CHOICE, labels));
+        List<Long> oxPool = new ArrayList<>(quizQuestionRepository.findIdsByLabelsFilters(dl, QuestionType.OX, labels));
+        List<Long> initialsPool = new ArrayList<>(quizQuestionRepository.findIdsByLabelsFilters(dl, QuestionType.INITIALS, labels));
+
+        choicePool = limit(choicePool, poolSize);
+        oxPool = limit(oxPool, poolSize);
+        initialsPool = limit(initialsPool, poolSize);
+
+        if (choicePool.isEmpty() && oxPool.isEmpty() && initialsPool.isEmpty()) {
+            throw new IllegalArgumentException("조건에 맞는 문항이 없습니다. labels=" + labels);
+        }
+
+        Collections.shuffle(choicePool, new Random(mixSeed(seedValue, 1)));
+        Collections.shuffle(oxPool, new Random(mixSeed(seedValue, 2)));
+        Collections.shuffle(initialsPool, new Random(mixSeed(seedValue, 3)));
+
+        int each = take / 3;
+        int needOx = each;
+        int needInit = each;
+        int needChoice = take - needOx - needInit;
+
+        List<Long> picked = new ArrayList<>(take);
+
+        int gotOx = takeFrom(oxPool, needOx, picked);
+        int gotInit = takeFrom(initialsPool, needInit, picked);
+
+        needChoice += (needOx - gotOx) + (needInit - gotInit);
+        takeFrom(choicePool, needChoice, picked);
+
+        if (picked.size() < take) takeFrom(choicePool, take - picked.size(), picked);
+        if (picked.size() < take) takeFrom(oxPool, take - picked.size(), picked);
+        if (picked.size() < take) takeFrom(initialsPool, take - picked.size(), picked);
+
+        if (picked.size() < take) {
+            throw new IllegalArgumentException("문항 수가 부족합니다. 요청=" + take + ", 확보=" + picked.size());
+        }
+
+        Collections.shuffle(picked, new Random(seedValue));
+
+        long refId = Math.abs(Objects.hash(labels));
+        SessionSource source = SessionSource.of(SessionSourceType.LABELS, refId, QuizSetType.MIX);
+
+        return quizSessionAnswerService.startFromScope(
+                accountId,
+                source,
+                picked,
+                mode,
+                seedValue,
+                customTitle
+        );
     }
 }

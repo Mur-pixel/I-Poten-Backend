@@ -20,8 +20,7 @@ public class CreateQuizSessionResponseForm {
         private final Long questionId;
         private final QuestionType questionType;
         private final String questionText;
-        private final String explanation;
-        private final Long correctChoiceId;
+        private final String initialsHint;
         private final List<Option> options;
     }
 
@@ -49,18 +48,12 @@ public class CreateQuizSessionResponseForm {
                             it.getQuestionId(),
                             it.getQuestionType(),
                             it.getQuestionText(),
-                            it.getExplanation(),
-                            it.getCorrectChoiceId(),
+                            it.getInitialsHint(),
                             mappedOps
                     );
                 })
                 .toList();
 
-        return new CreateQuizSessionResponseForm(
-                s.getSessionId(),
-                s.getQuestionIds(),
-                mapped
-        );
+        return new CreateQuizSessionResponseForm(s.getSessionId(), s.getQuestionIds(), mapped);
     }
-
 }

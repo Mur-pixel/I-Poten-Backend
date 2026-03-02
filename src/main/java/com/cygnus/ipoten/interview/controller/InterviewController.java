@@ -2,6 +2,7 @@ package com.cygnus.ipoten.interview.controller;
 
 import com.cygnus.ipoten.account.service.AccountService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.fcm.service.FcmNotificationService;
 import com.cygnus.ipoten.infrastructure.external.email.EmailService;
 import com.cygnus.ipoten.interview.controller.request_form.*;
 import com.cygnus.ipoten.interview.controller.response_form.*;
@@ -31,6 +32,7 @@ public class InterviewController {
     private final InterviewResultService interviewResultService;
     private final AccountService accountService;
     private final AuthenticationService authenticationService;
+    private final FcmNotificationService fcmNotificationService;
 
     @PostMapping("/create")
     public ResponseEntity<InterviewCreateResponseForm> interviewCreate(
@@ -91,8 +93,16 @@ public class InterviewController {
     ){
         InterviewResultResponse interviewResultResponse = interviewService.interviewResult(interviewResultRequestForm);
 
-        emailService.sendInterviewResultNotification(interviewResultResponse.getSender(), interviewResultResponse.getResult().getInterview_id());
+        try {
+            emailService.sendInterviewResultNotification(interviewResultResponse.getSender(), interviewResultResponse.getResult().getInterview_id());
+        } catch (Exception e) {
+            log.error("이메일 발송 실패 - {}", e.getMessage());
+        }
 
+        Long accountId = redisCacheService.getValueByKey(interviewResultResponse.getUserToken(), Long.class);
+        if (accountId != null) {
+            fcmNotificationService.sendToAccount(accountId, "면접 결과가 도착했어요", "AI 면접 분석이 완료되었습니다. 결과를 확인해보세요!", interviewResultResponse.getResult().getInterview_id());
+        }
 
         return ResponseEntity.ok().build();
     }

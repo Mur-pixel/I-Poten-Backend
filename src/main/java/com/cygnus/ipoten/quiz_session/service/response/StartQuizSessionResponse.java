@@ -19,10 +19,8 @@ public class StartQuizSessionResponse {
         private final Long questionId;
         private final QuestionType questionType;
         private final String questionText;
-        private final String explanation;       // null 허용
-        private final Long correctChoiceId;     // null 허용
+        private final String initialsHint;
         private final List<Option> options;
-        private final String answerText;        // 초성 문제(INITIALS)의 경우 필수, 나머지는 null 허용
     }
 
     @Getter @RequiredArgsConstructor

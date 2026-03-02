@@ -12,12 +12,16 @@ public class SessionSource {
     QuizSetType partType;
 
     public static SessionSource of(SessionSourceType type, Long id, QuizSetType partType) {
+        Long safeId = (id == null) ? 0L : id;
+
         String key = switch (type) {
-            case SET -> "set:" + id;
-            case TERM_CATEGORY -> "termCategory:" + id;
-            case WORDBOOK -> "wordbook:" + id;
-            case WRONG_NOTE -> "wrongNote:" + id;
+            case SET -> "set:" + safeId;
+            case TERM_CATEGORY -> "termCategory:" + safeId;
+            case WORDBOOK -> "wordbook:" + safeId;
+            case WRONG_NOTE -> "wrongNote:" + safeId;
+            case LABELS -> "labels:" + safeId;
         };
+
         return new SessionSource(type, id, key, partType);
     }
 

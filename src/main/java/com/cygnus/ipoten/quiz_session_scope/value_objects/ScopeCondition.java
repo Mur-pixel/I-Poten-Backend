@@ -41,7 +41,7 @@ import lombok.Value;
 public class ScopeCondition {
 
     public enum SourceType {
-        WORDBOOK, TERM_CATEGORY, SET, WRONG_NOTE
+        WORDBOOK, TERM_CATEGORY, SET, WRONG_NOTE, LABELS
     }
 
     SourceType sourceType;
@@ -56,6 +56,9 @@ public class ScopeCondition {
     // WRONG_NOTE 전용
     WrongNoteScope wrongNoteScope;
 
+    // Label 전용
+    LabelsScope labelsScope;
+
     // 공통 시드 정책
     SeedPolicy seedPolicy;
 
@@ -69,6 +72,7 @@ public class ScopeCondition {
         return new ScopeCondition(
                 SourceType.WORDBOOK,
                 wordbookScope,
+                null,
                 null,
                 null,
                 null,
@@ -88,6 +92,7 @@ public class ScopeCondition {
                 termCategoryScope,
                 null,
                 null,
+                null,
                 seedPolicy,
                 customTitle
         );
@@ -103,6 +108,7 @@ public class ScopeCondition {
                 null,
                 null,
                 setScope,
+                null,
                 null,
                 seedPolicy,
                 customTitle
@@ -120,6 +126,20 @@ public class ScopeCondition {
                 null,
                 null,
                 wrongNoteScope,
+                null,
+                seedPolicy,
+                customTitle
+        );
+    }
+
+    public static ScopeCondition forLabels(LabelsScope scope, SeedPolicy seedPolicy, String customTitle) {
+        return new ScopeCondition(
+                SourceType.LABELS,
+                null,
+                null,
+                null,
+                null,
+                scope,
                 seedPolicy,
                 customTitle
         );

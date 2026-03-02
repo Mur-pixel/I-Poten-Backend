@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.wordbook_pdf.controller.export;
 
+import com.cygnus.ipoten.wordbook_log.service.WordbookLogService;
 import com.cygnus.ipoten.wordbook_pdf.controller.export.request_form.TermsPdfGenerateRequestForm;
 import com.cygnus.ipoten.wordbook_pdf.controller.export.response_form.TermsPdfGenerateResponseForm;
 import com.cygnus.ipoten.wordbook_pdf.service.WordbookPdfEraseService;
@@ -36,6 +37,7 @@ public class WordbookPdfExportController {
     private final RedisCacheService redisCacheService;
     private final WordbookPdfEraseService wordbookPdfEraseService;
     private final WordbookQueryService wordbookQueryService;
+    private final WordbookLogService wordbookLogService;
 
     /** 공통: 쿠키에서 토큰 추출 후 Redis에서 accountId 조회(없으면 null) — 쿠키 전용 */
     private Long resolveAccountId(String userToken) {
@@ -118,6 +120,14 @@ public class WordbookPdfExportController {
                     .build();
 
             final var result = pdfExportService.generate(request);
+
+            try {
+                Long ebookId = result.meta().getWordbookPdfId();
+                int count = result.meta().getCount();
+                wordbookLogService.recordPdfDownloaded(accountId, wordbookId, count, ebookId);
+            } catch (Exception e) {
+                log.warn("[wordbook_log] PDF_DOWNLOADED failed (ignored). wordbookId={}", wordbookId, e);
+            }
 
             final var responseForm = TermsPdfGenerateResponseForm.builder()
                     .ebookId(result.meta().getWordbookPdfId())

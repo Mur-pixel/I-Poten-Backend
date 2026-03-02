@@ -203,4 +203,15 @@ public interface WordbookTermRepository extends JpaRepository<WordbookTerm, Long
 
     @Query("select wt.term.id from WordbookTerm wt where wt.wordbook.id = :wordbookId")
     Set<Long> findTermIdsByWordbookId(@Param("wordbookId") Long wordbookId);
+
+    @Query("""
+        select min(wbt.wordbook.id)
+        from WordbookTerm wbt
+        where wbt.account.id = :accountId
+          and wbt.term.id = :termId
+    """)
+    Long findMinWordbookIdByAccountIdAndTermId(
+            @Param("accountId") Long accountId,
+            @Param("termId") Long termId
+    );
 }

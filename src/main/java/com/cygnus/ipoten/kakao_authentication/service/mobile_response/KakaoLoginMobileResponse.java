@@ -10,13 +10,21 @@ public class KakaoLoginMobileResponse {
     private String token;
     private String nickname;
     private String email;
-
+    private String refreshToken;
 
     public KakaoLoginMobileResponse(boolean isNewUser, String token, String nickname, String email) {
         this.isNewUser = isNewUser;
         this.token = token;
         this.nickname = nickname;
         this.email = email;
+    }
+
+    public KakaoLoginMobileResponse(boolean isNewUser, String token, String nickname, String email, String refreshToken) {
+        this.isNewUser = isNewUser;
+        this.token = token;
+        this.nickname = nickname;
+        this.email = email;
+        this.refreshToken = refreshToken;
     }
 
 }

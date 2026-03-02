@@ -9,6 +9,7 @@ build/
 
 .env
 .env.production
+*firebase-adminsdk*.json
 ### STS ###
 .apt_generated
 .classpath

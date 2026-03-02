@@ -5,6 +5,8 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
+import java.time.Instant;
+
 @Entity
 @Table(name = "quiz_text_answer")
 @Getter
@@ -22,6 +24,26 @@ public class QuizTextAnswer {
 
     @Column(name = "answer_text", nullable = false, length = 255)
     private String answerText;
+
+    /** 텍스트 정답 생성 시간 */
+    @Column(name = "created_at", updatable = false, nullable = false)
+    private Instant createdAt;
+
+    /** 텍스트 정답 업데이트 시간 */
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
+    @PrePersist
+    void onCreate() {
+        Instant now = Instant.now();
+        this.createdAt = now;
+        this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void onUpdate() {
+        this.updatedAt = Instant.now();
+    }
 
     private QuizTextAnswer(QuizQuestion question, String answerText) {
         this.quizQuestion = question;
