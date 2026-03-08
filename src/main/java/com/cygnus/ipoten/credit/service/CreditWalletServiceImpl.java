@@ -2,6 +2,7 @@ package com.cygnus.ipoten.credit.service;
 
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.service.AccountService;
+import com.cygnus.ipoten.credit.controller.request_form.CreditPayRequestForm;
 import com.cygnus.ipoten.credit.controller.response_form.CreditAccountResponseForm;
 import com.cygnus.ipoten.credit.entity.CreditTransaction;
 import com.cygnus.ipoten.credit.entity.CreditTransactionType;
@@ -9,6 +10,7 @@ import com.cygnus.ipoten.credit.entity.CreditWallet;
 import com.cygnus.ipoten.credit.repository.CreditTransactionRepository;
 import com.cygnus.ipoten.credit.repository.CreditWalletRepository;
 import com.cygnus.ipoten.credit.service.response.CreditAccountResponse;
+import com.cygnus.ipoten.credit.service.response.CreditPayResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -49,5 +51,26 @@ public class CreditWalletServiceImpl implements CreditWalletService {
         CreditWallet creditWallet = creditWalletRepository.findById(AccountId)
                 .orElseThrow(() -> new IllegalArgumentException("크레딧을 정보를 찾을 수 없습니다 "));
         return new CreditAccountResponse(creditWallet.getBalance());
+    }
+
+    @Override
+    public CreditPayResponse getCreditPayByAccountId(CreditPayRequestForm creditPayRequestForm) {
+
+
+        int result = creditWalletRepository.useCredit(
+                creditPayRequestForm.getAccountId(),
+                creditPayRequestForm.getPrice()
+        );
+
+        if (result == 0) {
+            throw new RuntimeException("크레딧이 부족합니다.");
+        }
+
+        CreditWallet wallet = creditWalletRepository
+                .findByAccountId(creditPayRequestForm.getAccountId())
+                .orElseThrow(() -> new RuntimeException("지갑 없음"));
+
+        return new CreditPayResponse(wallet.getBalance());
+
     }
 }

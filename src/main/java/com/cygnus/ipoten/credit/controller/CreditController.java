@@ -1,9 +1,12 @@
 package com.cygnus.ipoten.credit.controller;
 
 import com.cygnus.ipoten.credit.controller.request_form.CreditAccountRequestForm;
+import com.cygnus.ipoten.credit.controller.request_form.CreditPayRequestForm;
 import com.cygnus.ipoten.credit.controller.response_form.CreditAccountResponseForm;
+import com.cygnus.ipoten.credit.controller.response_form.CreditPayResponseForm;
 import com.cygnus.ipoten.credit.service.CreditWalletService;
 import com.cygnus.ipoten.credit.service.response.CreditAccountResponse;
+import com.cygnus.ipoten.credit.service.response.CreditPayResponse;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
@@ -27,10 +30,13 @@ public class CreditController {
 
     }
 
+    @PostMapping("/pay")
+    public ResponseEntity<CreditPayResponseForm> pay(@RequestBody CreditPayRequestForm creditPayRequestForm) {
+
+        CreditPayResponse creditPayByAccountId = creditWalletService.getCreditPayByAccountId(creditPayRequestForm);
+        CreditPayResponseForm creditPayResponseForm = creditPayByAccountId.toCreditPayResponseForm(creditPayByAccountId);
+        return ResponseEntity.ok(creditPayResponseForm);
 
 
-
-
-
-
+    }
 }
