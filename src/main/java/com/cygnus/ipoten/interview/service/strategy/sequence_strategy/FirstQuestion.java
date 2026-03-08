@@ -39,12 +39,11 @@ public class FirstQuestion implements InterviewSequenceStrategy {
     public InterviewProgressResponse getQuestionByCompany(InterviewSequenceRequest interviewSequenceRequest, String userToken) {
 
         log.info("자기소개를 제외한 첫 번째 질문 시도");
-        IntervieweeProfile intervieweeProfile = intervieweeProfileService.findById(interviewSequenceRequest.getInterviewId())
-                .orElseThrow(() ->
-                        new IllegalArgumentException("해당 ID의 인터뷰 정보를 찾을 수 없습니다 : " + interviewSequenceRequest.getInterviewId()));
 
         Interview interview = interviewService.findById(interviewSequenceRequest.getInterviewId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 ID의 인터뷰를 찾을 수 없습니다"));
+
+        IntervieweeProfile intervieweeProfile = interview.getIntervieweeProfile();
 
         // Enum을 사용하여 문자열을 ID로 변환
         JobCategory jobCategory = JobCategory.fromString(intervieweeProfile.getJob());

@@ -4,6 +4,7 @@ package com.cygnus.ipoten.interview.service;
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.service.AccountService;
 import com.cygnus.ipoten.account_project.service.AccountProjectService;
+import com.cygnus.ipoten.google_tts.service.GoogleTtsService;
 import com.cygnus.ipoten.infrastructure.external.fastapi.client.FastApiEndInterview;
 import com.cygnus.ipoten.interview.controller.request.InterviewAccountProjectRequest;
 import com.cygnus.ipoten.interview.controller.request.InterviewEndRequest;
@@ -53,6 +54,7 @@ public class InterviewServiceImpl implements InterviewService {
     private final InterviewResultService interviewResultService;
     private final InterviewResultDetailService interviewResultDetailService;
     private final InterviewScoreService interviewScoreService;
+    private final GoogleTtsService googleTtsService;
 
     @Value("${current_server.end_interview_url}")
     private String callbackUrl;
@@ -90,34 +92,25 @@ public class InterviewServiceImpl implements InterviewService {
             Long accountId,
             String userToken) {
         try {
-            log.info("1️⃣ Account 조회 시작, accountId={}", accountId);
             Account account = accountService.findById(accountId)
                     .orElseThrow(() -> new IllegalArgumentException("인터뷰 생성에서 account를 찾지 못함"));
-            log.info("✅ Account 조회 완료: {}", account.getId());
 
-            log.info("2️⃣ IntervieweeProfile 생성 및 저장 시작");
             IntervieweeProfile intervieweeProfile = intervieweeProfileService
                     .createIntervieweeProfile(interviewCreateRequestForm.toIntervieweeProfileRequest());
-            log.info("✅ IntervieweeProfile 생성 완료: {}", intervieweeProfile.getId());
 
-            log.info("3️⃣ Interview 생성 및 저장 시작");
             Interview interview = new Interview(account, intervieweeProfile, interviewCreateRequestForm.getInterviewType(), InterviewPlan.PREMIUM);
             interview = interviewRepository.save(interview);
-            log.info("✅ Interview 생성 완료: {}", interview.getId());
+            log.info(" ✅ 인터뷰 확인 : {}", interview.getId());
 
-            log.info("4️⃣ InterviewQA 생성 시작");
             InterviewQA interviewQA = interviewQAService
                     .createInterviewQA(interviewCreateRequestForm.toInterviewQARequest(interview));
-            log.info("✅ InterviewQA 생성 완료: {}", interviewQA.getId());
 
-            log.info("5️⃣ AccountProject 저장 시작");
             List<InterviewAccountProjectRequest> interviewAccountProjectRequests =
                     interviewCreateRequestForm.getInterviewAccountProjectRequests();
             accountProjectService.saveAllByInterviewAccountProjectRequest(interviewAccountProjectRequests, account);
             log.info("✅ AccountProject 저장 완료, 요청 개수: {}",
                     interviewAccountProjectRequests != null ? interviewAccountProjectRequests.size() : 0);
 
-            log.info("6️⃣ InterviewProgress 실행 시작");
             InterviewProgressRequestForm interviewProgressRequestForm = new InterviewProgressRequestForm(
                     interview.getId(),
                     1,
@@ -126,15 +119,17 @@ public class InterviewServiceImpl implements InterviewService {
                     interviewQA.getId()
             );
 
+            log.info("인터뷰 시퀀스 :  {}", interviewProgressRequestForm.getInterviewSequence());
+
             InterviewProgressResponse interviewProgressResponse = execute(
                     interviewCreateRequestForm.getInterviewType(),
                     interviewProgressRequestForm,
                     userToken
             );
-            log.info("✅ InterviewProgress 실행 완료");
 
-            log.info("🎉 InterviewCreateResponse 반환 준비");
-            return interviewProgressResponse.toInterviewCreateResponse();
+            String questionTTS = googleTtsService.synthesizeAndUpload(interviewProgressResponse.getInterviewQuestionText());
+
+            return interviewProgressResponse.toInterviewCreateResponseByTTS(questionTTS, interviewProgressResponse.getInterviewQuestionText());
 
         } catch (Exception e) {
             log.error("❌ createInterview 실행 중 예외 발생", e);
@@ -167,8 +162,11 @@ public class InterviewServiceImpl implements InterviewService {
         log.info("✅ 인터뷰 내용 : {},  {},  {}, {}", form.getInterviewId(),form.getInterviewQAId(), form.getInterviewSequence(), form.getAnswer());
 
         InterviewProcessStrategy strategy = context.getBean(String.valueOf(type), InterviewProcessStrategy.class);
+        InterviewProgressResponse process = strategy.process(form, userToken);
+        String questionTTS = googleTtsService.synthesizeAndUpload(process.getInterviewQuestionText());
 
-        return strategy.process(form, userToken);
+
+        return process.updateInterviewQuestion(questionTTS, process.getInterviewQuestionText());
     }
 
     @Override
