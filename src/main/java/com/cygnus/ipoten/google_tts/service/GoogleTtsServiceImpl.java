@@ -41,10 +41,11 @@ public class GoogleTtsServiceImpl implements GoogleTtsService {
                 "input", Map.of("text", text),
                 "voice", Map.of(
                         "languageCode", "ko-KR",
-                        "name", "en-US-Wavenet-D"
+                        "name", "ko-KR-Chirp3-HD-Iapetus"
                 ),
                 "audioConfig", Map.of(
-                        "audioEncoding", "MP3"
+                        "audioEncoding", "MP3",
+                        "speakingRate", 0.86   // 속도만 조절
                 )
         );
 
