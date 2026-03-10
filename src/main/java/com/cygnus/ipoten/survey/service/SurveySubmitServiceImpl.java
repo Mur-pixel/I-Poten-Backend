@@ -34,6 +34,10 @@ public class SurveySubmitServiceImpl implements SurveySubmitService {
         SurveyForm activeSurveyForm = surveyFormRepository.findFirstByActiveTrueOrderByVersionDesc()
                 .orElseThrow(() -> new NoSuchElementException("현재 진행 중인 i-Poten 후기 설문이 없습니다."));
 
+        if (surveyResponseRepository.existsBySurveyFormIdAndAccountId(activeSurveyForm.getId(), accountId)) {
+            throw new IllegalStateException("이미 해당 설문에 응답을 제출하셨습니다.");
+        }
+
         List<SurveyQuestion> questions = surveyQuestionRepository
                 .findBySurveyFormIdOrderByDisplayOrderAsc(activeSurveyForm.getId());
 

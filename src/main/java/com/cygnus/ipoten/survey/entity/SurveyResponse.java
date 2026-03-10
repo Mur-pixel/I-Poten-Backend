@@ -12,7 +12,15 @@ import java.time.Instant;
  */
 @Getter
 @Entity
-@Table(name = "survey_response")
+@Table(
+        name = "survey_response",
+        uniqueConstraints = {
+                @UniqueConstraint(
+                        name = "uk_survey_response_form_account",
+                        columnNames = {"survey_form_id", "account_id"}
+                )
+        }
+)
 @NoArgsConstructor
 public class SurveyResponse {
 
