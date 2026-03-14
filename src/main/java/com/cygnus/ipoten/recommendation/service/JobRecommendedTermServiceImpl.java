@@ -44,11 +44,12 @@ public class JobRecommendedTermServiceImpl implements JobRecommendedTermService 
         var recommendations = jobRecommendedTermRepository.findAllWithTermByJobKeyOrderByRankNo(jobKey);
 
         if (recommendations.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND,
-                    "Recommended set not found for jobKey = " + jobKey);
+            throw new ResponseStatusException(
+                    HttpStatus.NOT_FOUND,
+                    "Recommended set not found for jobKey = " + jobKey
+            );
         }
 
-        // 1) 추천 termIds (추천 데이터 내 중복 제거 + 순서 보존)
         var recommendedIds = recommendations.stream()
                 .map(r -> r.getTerm() == null ? null : r.getTerm().getId())
                 .filter(java.util.Objects::nonNull)
@@ -56,12 +57,11 @@ public class JobRecommendedTermServiceImpl implements JobRecommendedTermService 
 
         int requested = recommendedIds.size();
 
-        // 2) 이미 폴더에 들어있는 termIds 조회
+        // account 기준이 아니라 폴더 기준으로 기존 term 조회
         var existingIds = new HashSet<>(
-                wordbookTermRepository.findDistinctTermIdsByWordbookAndAccountOrderByTermIdAsc(wordbookId, accountId)
+                wordbookTermRepository.findDistinctTermIdsByWordbookId(wordbookId)
         );
 
-        // 3) attach 대상 = recommended - existing
         var toAttach = recommendedIds.stream()
                 .filter(id -> !existingIds.contains(id))
                 .collect(java.util.stream.Collectors.toCollection(java.util.ArrayList::new));

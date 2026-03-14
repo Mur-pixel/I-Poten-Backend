@@ -267,8 +267,13 @@ public interface WordbookTermRepository extends JpaRepository<WordbookTerm, Long
     List<Term> findTermsByAccountAndFolderStrict(@Param("accountId") Long accountId,
                                                  @Param("wordbookId") Long wordbookId);
 
-    @Query("select wt.term.id from WordbookTerm wt where wt.wordbook.id = :wordbookId")
-    Set<Long> findTermIdsByWordbookId(@Param("wordbookId") Long wordbookId);
+    @Query("""
+    select distinct wt.term.id
+    from WordbookTerm wt
+    where wt.wordbook.id = :wordbookId
+      and wt.term.id is not null
+""")
+    Set<Long> findDistinctTermIdsByWordbookId(@Param("wordbookId") Long wordbookId);
 
     @Query("""
         select min(wbt.wordbook.id)
