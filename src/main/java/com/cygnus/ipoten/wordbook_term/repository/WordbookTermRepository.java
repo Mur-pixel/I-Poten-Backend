@@ -36,7 +36,73 @@ public interface WordbookTermRepository extends JpaRepository<WordbookTerm, Long
               and acc.id = :accountId
             """
     )
-    Page<WordbookTerm> findPageByFolderAndOwnerFetch(
+    Page<WordbookTerm> findPageByFolderAndOwnerFetch(Long wordbookId, Long accountId, Pageable pageable);
+
+    @Query(
+            value = """
+                SELECT uwt.*
+                FROM wordbook_term uwt
+                JOIN term t
+                  ON t.id = uwt.term_id
+                JOIN wordbook wb
+                  ON wb.id = uwt.wordbook_id
+                LEFT JOIN learning_progress lp
+                  ON lp.account_id = uwt.account_id
+                 AND lp.term_id = uwt.term_id
+                WHERE uwt.wordbook_id = :wordbookId
+                  AND uwt.account_id = :accountId
+                ORDER BY
+                  CASE
+                    WHEN COALESCE(lp.status, 'LEARNING') = 'DONE' THEN 1
+                    ELSE 0
+                  END ASC,
+                  t.title ASC,
+                  uwt.id ASC
+                """,
+            countQuery = """
+                SELECT COUNT(*)
+                FROM wordbook_term uwt
+                WHERE uwt.wordbook_id = :wordbookId
+                  AND uwt.account_id = :accountId
+                """,
+            nativeQuery = true
+    )
+    Page<WordbookTerm> findPageByFolderAndOwnerOrderByStatusAsc(
+            @Param("wordbookId") Long wordbookId,
+            @Param("accountId") Long accountId,
+            Pageable pageable
+    );
+
+    @Query(
+            value = """
+                SELECT uwt.*
+                FROM wordbook_term uwt
+                JOIN term t
+                  ON t.id = uwt.term_id
+                JOIN wordbook wb
+                  ON wb.id = uwt.wordbook_id
+                LEFT JOIN learning_progress lp
+                  ON lp.account_id = uwt.account_id
+                 AND lp.term_id = uwt.term_id
+                WHERE uwt.wordbook_id = :wordbookId
+                  AND uwt.account_id = :accountId
+                ORDER BY
+                  CASE
+                    WHEN COALESCE(lp.status, 'LEARNING') = 'DONE' THEN 1
+                    ELSE 0
+                  END DESC,
+                  t.title ASC,
+                  uwt.id ASC
+                """,
+            countQuery = """
+                SELECT COUNT(*)
+                FROM wordbook_term uwt
+                WHERE uwt.wordbook_id = :wordbookId
+                  AND uwt.account_id = :accountId
+                """,
+            nativeQuery = true
+    )
+    Page<WordbookTerm> findPageByFolderAndOwnerOrderByStatusDesc(
             @Param("wordbookId") Long wordbookId,
             @Param("accountId") Long accountId,
             Pageable pageable

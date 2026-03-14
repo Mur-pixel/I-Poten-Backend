@@ -6,6 +6,8 @@ import com.cygnus.ipoten.term.entity.Term;
 import com.cygnus.ipoten.term.repository.TermRepository;
 import com.cygnus.ipoten.term.repository.TermTagRepository;
 import com.cygnus.ipoten.wordbook.entity.Wordbook;
+import com.cygnus.ipoten.wordbook.entity.enums.WordbookTermSort;
+import com.cygnus.ipoten.wordbook.repository.query.WordbookTermQueryRepository;
 import com.cygnus.ipoten.wordbook_term.entity.WordbookTerm;
 import com.cygnus.ipoten.wordbook_learning.repository.LearningProgressRepository;
 import com.cygnus.ipoten.wordbook.repository.WordbookRepository;
@@ -42,6 +44,7 @@ public class WordbookServiceImpl implements WordbookService {
     private final TermRepository termRepository;
     private final LearningProgressRepository learningProgressRepository;
     private final TermTagRepository termTagRepository;
+    private final WordbookTermQueryRepository wordbookTermQueryRepository;
 
     @Value("${ebook.max.termids.per.wordbook:5000}")
     private int maxTermIdsPerFolder;
@@ -86,15 +89,45 @@ public class WordbookServiceImpl implements WordbookService {
         Long wordbookId = request.getWordbookId();
 
         boolean owns = wordbookRepository.existsByIdAndAccount_Id(wordbookId, accountId);
-        if (!owns) throw new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 폴더를 찾을 수 없습니다.");
+        if (!owns) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "해당 폴더를 찾을 수 없습니다.");
+        }
 
         int pageIdx = Math.max(0, request.getPage());
         Integer per = request.getPerPage();
         int size = (per == null) ? 20 : Math.min(Math.max(5, per), 100);
-        Sort sort   = parseSortOrDefault(request.getSort(), Sort.by(Sort.Order.desc("createdAt")));
-        Pageable pageable = PageRequest.of(pageIdx, size, sort);
-        Page<WordbookTerm> paginatedList =
-                wordbookTermRepository.findPageByFolderAndOwnerFetch(wordbookId, accountId, pageable);
+
+        WordbookTermSort sortType = WordbookTermSort.fromParam(request.getSort());
+
+        Page<WordbookTerm> paginatedList;
+
+        switch (sortType) {
+            case STATUS_ASC -> {
+                Pageable pageable = PageRequest.of(pageIdx, size);
+                paginatedList = wordbookTermRepository
+                        .findPageByFolderAndOwnerOrderByStatusAsc(wordbookId, accountId, pageable);
+            }
+            case STATUS_DESC -> {
+                Pageable pageable = PageRequest.of(pageIdx, size);
+                paginatedList = wordbookTermRepository
+                        .findPageByFolderAndOwnerOrderByStatusDesc(wordbookId, accountId, pageable);
+            }
+            case TITLE_ASC, TITLE_DESC, CREATED_AT_DESC -> {
+                Sort sort = parseSortOrDefault(
+                        request.getSort(),
+                        Sort.by(Sort.Order.desc("createdAt"))
+                );
+                Pageable pageable = PageRequest.of(pageIdx, size, sort);
+                paginatedList = wordbookTermRepository
+                        .findPageByFolderAndOwnerFetch(wordbookId, accountId, pageable);
+            }
+            default -> {
+                Sort sort = Sort.by(Sort.Order.desc("createdAt"));
+                Pageable pageable = PageRequest.of(pageIdx, size, sort);
+                paginatedList = wordbookTermRepository
+                        .findPageByFolderAndOwnerFetch(wordbookId, accountId, pageable);
+            }
+        }
 
         return ListWordbookTermResponse.from(paginatedList);
     }
