@@ -9,4 +9,9 @@ public class CreditPayRequestForm {
     private Long accountId;
 
 
+    public void addAccountId(Long accountId) {
+        this.accountId = accountId;
+    }
+
+
 }

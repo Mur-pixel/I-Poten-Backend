@@ -31,8 +31,11 @@ public class CreditController {
     }
 
     @PostMapping("/pay")
-    public ResponseEntity<CreditPayResponseForm> pay(@RequestBody CreditPayRequestForm creditPayRequestForm) {
-
+    public ResponseEntity<CreditPayResponseForm> pay(
+            @RequestBody CreditPayRequestForm creditPayRequestForm,
+            @CookieValue(name = "userToken", required = false) String userToken
+    ) {
+        creditPayRequestForm.addAccountId(redisCacheService.getValueByKey(userToken, Long.class));
         CreditPayResponse creditPayByAccountId = creditWalletService.getCreditPayByAccountId(creditPayRequestForm);
         CreditPayResponseForm creditPayResponseForm = creditPayByAccountId.toCreditPayResponseForm(creditPayByAccountId);
         return ResponseEntity.ok(creditPayResponseForm);
