@@ -18,6 +18,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
 
@@ -65,7 +66,14 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
 
     @Override
     public AppleLoginMobileResponse handleLoginMobile(AppleLoginMobileRequest request) {
+        log.info("Apple mobile login start - clientId: {}, redirectUri: {}, codeLength: {}",
+                clientId,
+                redirectUri,
+                request.getAuthorizationCode() == null ? 0 : request.getAuthorizationCode().length());
+
         Map<String, Object> tokenResponse = exchangeAuthorizationCode(request.getAuthorizationCode());
+        log.info("Apple token exchange success - keys: {}", tokenResponse.keySet());
+
         String accessToken = asString(tokenResponse.get("access_token"));
         if (isBlank(accessToken)) {
             throw new IllegalArgumentException("애플 액세스 토큰이 비어 있습니다.");
@@ -85,11 +93,15 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
         String nickname = buildNickname(request.getGivenName(), request.getFamilyName(), email);
 
         if (isNewUser) {
+            log.info("Apple mobile login result - new user, email: {}", email);
             String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
             return new AppleLoginMobileResponse(true, tempToken, nickname, email);
         }
 
         AccountProfile profile = accountProfile.get();
+        log.info("Apple mobile login result - existing user, accountId: {}, email: {}",
+                profile.getAccount().getId(),
+                email);
         String userToken = authenticationService.createUserTokenWithAccessToken(profile.getAccount().getId(), accessToken);
         String refreshToken = refreshTokenService.createOrReplace(profile.getAccount());
         return new AppleLoginMobileResponse(false, userToken, profile.getNickname(), email, refreshToken);
@@ -121,7 +133,15 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
                 throw new IllegalStateException("애플 토큰 응답이 비어 있습니다.");
             }
             return body;
+        } catch (HttpStatusCodeException e) {
+            log.error("Apple token exchange failed - status: {}, body: {}", e.getStatusCode(), e.getResponseBodyAsString(), e);
+            throw new RuntimeException("애플 토큰 교환 실패: " + e.getMessage(), e);
         } catch (RestClientException e) {
+            log.error("Apple token exchange failed - clientId: {}, redirectUri: {}, message: {}",
+                    clientId,
+                    redirectUri,
+                    e.getMessage(),
+                    e);
             throw new RuntimeException("애플 토큰 교환 실패: " + e.getMessage(), e);
         }
     }
