@@ -40,7 +40,7 @@ public class AppleAuthenticationController {
     @Value("${apple.android-package-name}")
     private String androidPackageName;
 
-    @GetMapping("/spring/apple-authentication/test")
+    @GetMapping("/apple-authentication/test")
     public ResponseEntity<Map<String, Object>> appleTest() {
         log.info("Apple test endpoint hit - clientId: {}, redirectUri: {}, package: {}",
                 clientId,
@@ -55,7 +55,7 @@ public class AppleAuthenticationController {
         ));
     }
 
-    @RequestMapping(value = "/spring/apple-authentication/login", method = {RequestMethod.GET, RequestMethod.POST})
+    @RequestMapping(value = "/apple-authentication/login", method = {RequestMethod.GET, RequestMethod.POST})
     public void appleLoginCallback(
             @RequestParam MultiValueMap<String, String> params,
             HttpServletResponse response
