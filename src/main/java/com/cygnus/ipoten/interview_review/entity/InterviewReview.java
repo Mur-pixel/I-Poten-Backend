@@ -10,6 +10,7 @@ import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.jpa.domain.support.AuditingEntityListener;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 
 @Entity
 @Getter
@@ -27,11 +28,12 @@ public class InterviewReview {
 
     private int rating;
 
+    @Column(columnDefinition = "TEXT")
     private String comment;
 
     @CreatedDate
     @Column(nullable = false, updatable = false)
-    private LocalDate createdAt;
+    private LocalDateTime createdAt;
 
     public InterviewReview() {
 

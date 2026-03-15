@@ -138,6 +138,7 @@ public class InterviewController {
     ) {
         Long accountId = authenticationService.getAccountIdByUserToken(userToken);
 
+        log.info("accountId: {}", accountId);
         List<InterviewResultListResponse> interviewResultListByAccountId = interviewService.getInterviewResultListByAccountId(accountId);
 
         return ResponseEntity.ok(new InterviewResultListForm(interviewResultListByAccountId));
