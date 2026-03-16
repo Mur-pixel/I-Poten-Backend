@@ -48,8 +48,20 @@ public class CreditWalletServiceImpl implements CreditWalletService {
 
     @Override
     public CreditAccountResponse getCreditByAccountId(Long AccountId) {
-        CreditWallet creditWallet = creditWalletRepository.findById(AccountId)
-                .orElseThrow(() -> new IllegalArgumentException("크레딧을 정보를 찾을 수 없습니다 "));
+        CreditWallet creditWallet = creditWalletRepository.findByAccountId(AccountId)
+                .orElseGet(() -> {
+                    log.info("지갑이 없는 사용자(ID: {})를 위해 기본 지갑을 생성합니다.", AccountId);
+                    Account foundAccount = accountService.findById(AccountId)
+                            .orElseThrow(() -> new IllegalArgumentException("사용자를 찾을 수 없습니다: " + AccountId));
+                    
+                    CreditWallet newWallet = new CreditWallet(foundAccount, 10L);
+                    CreditTransaction creditTransaction = new CreditTransaction(
+                            newWallet, CreditTransactionType.BONUS, 10L, 10L, "시스템 자동 생성 보너스");
+                    
+                    creditWalletRepository.save(newWallet);
+                    creditTransactionRepository.save(creditTransaction);
+                    return newWallet;
+                });
         return new CreditAccountResponse(creditWallet.getBalance());
     }
 

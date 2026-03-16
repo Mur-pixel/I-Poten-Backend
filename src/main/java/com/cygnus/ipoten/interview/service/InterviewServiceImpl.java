@@ -10,6 +10,7 @@ import com.cygnus.ipoten.interview.controller.request.InterviewAccountProjectReq
 import com.cygnus.ipoten.interview.controller.request.InterviewEndRequest;
 import com.cygnus.ipoten.interview.controller.request_form.*;
 import com.cygnus.ipoten.interview.controller.response_form.NormalInterviewCreateResponseForm;
+import com.cygnus.ipoten.interview.controller.response_form.PersonalityInterviewResultResponseForm;
 import com.cygnus.ipoten.interview.entity.Interview;
 import com.cygnus.ipoten.interview.entity.InterviewPlan;
 import com.cygnus.ipoten.interview.entity.InterviewType;
@@ -281,6 +282,40 @@ public class InterviewServiceImpl implements InterviewService {
         }
 
         return interviewResultListResponses;
+    }
+
+    @Transactional
+    @Override
+    public void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form) {
+        Interview interview = interviewRepository.findById(form.getInterviewId())
+                .orElseThrow(() -> new IllegalArgumentException("인터뷰를 찾을 수 없음"));
+
+        for (NormalInterviewSubmitRequestForm.QAItem qaItem : form.getQaList()) {
+            interviewQAService.saveInterviewQAByInterview(
+                    interview,
+                    new InterviewQA(interview, qaItem.getQuestion(), qaItem.getAnswer())
+            );
+        }
+
+        interview.setFinished(true);
+        interviewRepository.save(interview);
+    }
+
+    @Override
+    public PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId) {
+        List<com.cygnus.ipoten.interviewQA.entity.InterviewQA> allQA = interviewQAService.findAllByInterviewId(interviewId);
+
+        List<PersonalityInterviewResultResponseForm.QAItem> qaItems = allQA.stream()
+                .map(qa -> PersonalityInterviewResultResponseForm.QAItem.builder()
+                        .question(qa.getQuestion())
+                        .answer(qa.getAnswer())
+                        .build())
+                .collect(Collectors.toList());
+
+        return PersonalityInterviewResultResponseForm.builder()
+                .interviewId(interviewId)
+                .qaList(qaItems)
+                .build();
     }
 
 

@@ -3,6 +3,7 @@ package com.cygnus.ipoten.interview.service;
 import com.cygnus.ipoten.interview.controller.request.InterviewEndRequest;
 import com.cygnus.ipoten.interview.controller.request_form.*;
 import com.cygnus.ipoten.interview.controller.response_form.NormalInterviewCreateResponseForm;
+import com.cygnus.ipoten.interview.controller.response_form.PersonalityInterviewResultResponseForm;
 import com.cygnus.ipoten.interview.entity.Interview;
 import com.cygnus.ipoten.interview.entity.InterviewType;
 import com.cygnus.ipoten.interview.service.response.*;
@@ -22,6 +23,8 @@ public interface InterviewService {
     Optional<Interview> findById(Long id);
     InterviewResultResponse interviewResult(InterviewResultRequestForm interviewResultRequestForm);
     List<InterviewResultListResponse> getInterviewResultListByAccountId(Long accountId);
+    void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form);
+    PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId);
 
 
 

@@ -6,6 +6,7 @@ import com.cygnus.ipoten.fcm.service.FcmNotificationService;
 import com.cygnus.ipoten.infrastructure.external.email.EmailService;
 import com.cygnus.ipoten.interview.controller.request_form.*;
 import com.cygnus.ipoten.interview.controller.response_form.*;
+import com.cygnus.ipoten.interview.controller.response_form.PersonalityInterviewResultResponseForm;
 import com.cygnus.ipoten.interview.service.InterviewService;
 import com.cygnus.ipoten.interview.service.response.InterviewCreateResponse;
 import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
@@ -143,6 +144,32 @@ public class InterviewController {
 
         return ResponseEntity.ok(new InterviewResultListForm(interviewResultListByAccountId));
 
+    }
+
+    @PostMapping("/normal/submit")
+    public ResponseEntity<Void> submitPersonalityInterview(
+            @CookieValue(name = "userToken", required = false) String userToken,
+            @RequestBody NormalInterviewSubmitRequestForm form
+    ) {
+        Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
+        if (accountId == null) {
+            return ResponseEntity.status(401).build();
+        }
+        interviewService.submitPersonalityInterviewAnswers(form);
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/normal/result/{interviewId}")
+    public ResponseEntity<PersonalityInterviewResultResponseForm> getPersonalityInterviewResult(
+            @CookieValue(name = "userToken", required = false) String userToken,
+            @PathVariable Long interviewId
+    ) {
+        Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
+        if (accountId == null) {
+            return ResponseEntity.status(401).build();
+        }
+        PersonalityInterviewResultResponseForm result = interviewService.getPersonalityInterviewResult(interviewId);
+        return ResponseEntity.ok(result);
     }
 
 
