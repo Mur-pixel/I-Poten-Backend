@@ -155,8 +155,12 @@ public class InterviewController {
         if (accountId == null) {
             return ResponseEntity.status(401).build();
         }
-        interviewService.submitPersonalityInterviewAnswers(form);
-        return ResponseEntity.ok().build();
+        try {
+            interviewService.submitPersonalityInterviewAnswers(form, accountId);
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
     }
 
     @GetMapping("/normal/result/{interviewId}")
@@ -168,8 +172,12 @@ public class InterviewController {
         if (accountId == null) {
             return ResponseEntity.status(401).build();
         }
-        PersonalityInterviewResultResponseForm result = interviewService.getPersonalityInterviewResult(interviewId);
-        return ResponseEntity.ok(result);
+        try {
+            PersonalityInterviewResultResponseForm result = interviewService.getPersonalityInterviewResult(interviewId, accountId);
+            return ResponseEntity.ok(result);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
     }
 
 

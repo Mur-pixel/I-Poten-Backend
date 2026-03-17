@@ -286,9 +286,19 @@ public class InterviewServiceImpl implements InterviewService {
 
     @Transactional
     @Override
-    public void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form) {
+    public void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form, Long accountId) {
         Interview interview = interviewRepository.findById(form.getInterviewId())
                 .orElseThrow(() -> new IllegalArgumentException("인터뷰를 찾을 수 없음"));
+
+        // ✅ 소유권 확인: 요청한 accountId와 인터뷰의 주인이 같은지 확인
+        if (!interview.getAccount().getId().equals(accountId)) {
+            throw new SecurityException("인터뷰 제출 권한이 없습니다.");
+        }
+
+        // ✅ 유형 확인: 인성 면접(PERSONAL) 타입인지 확인
+        if (interview.getInterviewType() != InterviewType.PERSONAL) {
+            throw new IllegalArgumentException("인성 면접 답변만 제출 가능한 엔드포인트입니다.");
+        }
 
         for (NormalInterviewSubmitRequestForm.QAItem qaItem : form.getQaList()) {
             interviewQAService.saveInterviewQAByInterview(
@@ -302,7 +312,20 @@ public class InterviewServiceImpl implements InterviewService {
     }
 
     @Override
-    public PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId) {
+    public PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId, Long accountId) {
+        Interview interview = interviewRepository.findById(interviewId)
+                .orElseThrow(() -> new IllegalArgumentException("인터뷰를 찾을 수 없음"));
+
+        // ✅ 소유권 확인: 요청한 accountId와 인터뷰의 주인이 같은지 확인
+        if (!interview.getAccount().getId().equals(accountId)) {
+            throw new SecurityException("인터뷰 결과 조회 권한이 없습니다.");
+        }
+
+        // ✅ 유형 확인: 인성 면접(PERSONAL) 타입인지 확인
+        if (interview.getInterviewType() != InterviewType.PERSONAL) {
+            throw new IllegalArgumentException("인성 면접 결과만 조회 가능한 엔드포인트입니다.");
+        }
+
         List<com.cygnus.ipoten.interviewQA.entity.InterviewQA> allQA = interviewQAService.findAllByInterviewId(interviewId);
 
         List<PersonalityInterviewResultResponseForm.QAItem> qaItems = allQA.stream()

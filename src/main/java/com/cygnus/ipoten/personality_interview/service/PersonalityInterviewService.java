@@ -9,5 +9,7 @@ public interface PersonalityInterviewService {
 
     List<PersonalityInterview> getPersonalityInterviews();
 
+    void saveAll(List<String> descriptions);
+
 
 }

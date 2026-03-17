@@ -23,8 +23,8 @@ public interface InterviewService {
     Optional<Interview> findById(Long id);
     InterviewResultResponse interviewResult(InterviewResultRequestForm interviewResultRequestForm);
     List<InterviewResultListResponse> getInterviewResultListByAccountId(Long accountId);
-    void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form);
-    PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId);
+    void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form, Long accountId);
+    PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId, Long accountId);
 
 
 
