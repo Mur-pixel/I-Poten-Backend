@@ -78,6 +78,45 @@ public class GoogleTtsServiceImpl implements GoogleTtsService {
     }
 
     @Override
+    public String synthesizeAndUploadToPath(String text, String keyPrefix) {
+        Map<String, Object> body = Map.of(
+                "input", Map.of("text", text),
+                "voice", Map.of(
+                        "languageCode", "ko-KR",
+                        "name", "ko-KR-Chirp3-HD-Iapetus"
+                ),
+                "audioConfig", Map.of(
+                        "audioEncoding", "MP3",
+                        "speakingRate", 0.86
+                )
+        );
+
+        String url = "https://texttospeech.googleapis.com/v1/text:synthesize?key=" + apiKey;
+        var response = restTemplate.postForEntity(url, body, Map.class);
+
+        if (response.getBody() == null || response.getBody().get("audioContent") == null) {
+            throw new RuntimeException("Google TTS API 응답 오류");
+        }
+
+        byte[] audioBytes = Base64.getDecoder()
+                .decode((String) response.getBody().get("audioContent"));
+
+        String key = keyPrefix + UUID.randomUUID() + ".mp3";
+
+        s3Client.putObject(
+                PutObjectRequest.builder()
+                        .bucket(bucketName)
+                        .key(key)
+                        .contentType("audio/mpeg")
+                        .cacheControl("public, max-age=86400")
+                        .build(),
+                RequestBody.fromBytes(audioBytes)
+        );
+
+        return cdnBaseUrl + "/" + key;
+    }
+
+    @Override
     public List<String> synthesizeAndUploadList(List<String> texts) {
         return texts.stream()
                 .map(this::synthesizeAndUpload)

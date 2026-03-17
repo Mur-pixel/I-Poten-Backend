@@ -33,7 +33,7 @@ public class GoogleTtsController {
         List<PersonalityInterview> interviews = personalityInterviewRepository.findAll();
 
         for (PersonalityInterview interview : interviews) {
-            String audioUrl = googleTtsService.synthesizeAndUpload(interview.getDescription());
+            String audioUrl = googleTtsService.synthesizeAndUploadToPath(interview.getDescription(), "personality/questions/");
 
             personalityInterviewAudioRepository.findById(interview.getId())
                     .ifPresentOrElse(
