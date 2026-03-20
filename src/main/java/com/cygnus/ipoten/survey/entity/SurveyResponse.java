@@ -1,6 +1,7 @@
 package com.cygnus.ipoten.survey.entity;
 
 import jakarta.persistence.*;
+import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
 
@@ -21,7 +22,7 @@ import java.time.Instant;
                 )
         }
 )
-@NoArgsConstructor
+@NoArgsConstructor(access = AccessLevel.PROTECTED)
 public class SurveyResponse {
 
     @Id

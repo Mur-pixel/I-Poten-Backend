@@ -3,7 +3,6 @@ package com.cygnus.ipoten.survey.entity;
 import jakarta.persistence.*;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
-import org.aspectj.weaver.patterns.TypePatternQuestions;
 
 import java.time.Instant;
 
@@ -32,9 +31,11 @@ public class SurveyResponseAnswer {
     private Long id;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "survey_response_id", nullable = false)
     private SurveyResponse surveyResponse; // 소속 응답
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
+    @JoinColumn(name = "survey_question_id", nullable = false)
     private SurveyQuestion surveyQuestion; // 대상 문항
 
     @Column(name = "selected_option_code", length = 100)
