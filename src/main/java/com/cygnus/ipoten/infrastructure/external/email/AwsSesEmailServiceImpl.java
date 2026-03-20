@@ -17,255 +17,173 @@ public class AwsSesEmailServiceImpl implements EmailService {
     @Value("${aws.ses.from-email}")
     private String fromEmail;
 
+    private static final String BRAND_COLOR = "#3b82f6";
+    private static final String BRAND_GRADIENT = "linear-gradient(135deg, #3b82f6 0%, #2563eb 100%)";
+
     @Override
     public void sendInterviewResultNotification(String to, Long interviewId) {
         try {
-            String subject = "[잡스푼] AI 면접 평가가 완료되었습니다";
+            String subject = "[I-Poten] AI 면접 평가 리포트가 도착했습니다";
             String htmlBody = buildNotificationEmail(interviewId);
-
-            SendEmailRequest request = SendEmailRequest.builder()
-                    .source(fromEmail)
-                    .destination(Destination.builder()
-                            .toAddresses(to)
-                            .build())
-                    .message(Message.builder()
-                            .subject(Content.builder()
-                                    .charset("UTF-8")
-                                    .data(subject)
-                                    .build())
-                            .body(Body.builder()
-                                    .html(Content.builder()
-                                            .charset("UTF-8")
-                                            .data(htmlBody)
-                                            .build())
-                                    .build())
-                            .build())
-                    .build();
-
-            SendEmailResponse response = sesClient.sendEmail(request);
-            log.info("✅ SES 이메일 발송 성공: {} (MessageId: {})", to, response.messageId());
-
-        } catch (SesException e) {
-            log.error("❌ SES 이메일 발송 실패: {}", e.awsErrorDetails().errorMessage());
-            throw new RuntimeException("이메일 발송 실패", e);
+            sendEmail(to, subject, htmlBody);
+            log.info("✅ 리포트 알림 메일 발송 성공: {}", to);
+        } catch (Exception e) {
+            log.error("❌ 리포트 알림 메일 발송 실패: {}", e.getMessage());
         }
     }
 
     @Override
     public void sendErrorNotification(String to, Long interviewId) {
         try {
-            String subject = "[잡스푼] AI 면접 평가 중 오류 발생";
+            String subject = "[I-Poten] AI 면접 평가 처리 지연 안내";
             String htmlBody = buildErrorEmail(interviewId);
-
-            SendEmailRequest request = SendEmailRequest.builder()
-                    .source(fromEmail)
-                    .destination(Destination.builder()
-                            .toAddresses(to)
-                            .build())
-                    .message(Message.builder()
-                            .subject(Content.builder()
-                                    .charset("UTF-8")
-                                    .data(subject)
-                                    .build())
-                            .body(Body.builder()
-                                    .html(Content.builder()
-                                            .charset("UTF-8")
-                                            .data(htmlBody)
-                                            .build())
-                                    .build())
-                            .build())
-                    .build();
-
-            sesClient.sendEmail(request);
-            log.info("✅ SES 오류 알림 발송 성공: {}", to);
-
-        } catch (SesException e) {
-            log.error("❌ SES 이메일 발송 실패: {}", e.awsErrorDetails().errorMessage());
+            sendEmail(to, subject, htmlBody);
+            log.info("✅ 오류 알림 발송 성공: {}", to);
+        } catch (Exception e) {
+            log.error("❌ 오류 알림 발송 실패: {}", e.getMessage());
         }
     }
 
     @Override
     public void sendSignupWelcomeEmail(String to, String nickname) {
         try {
-            String subject = "[잡스푼] 회원가입을 환영합니다";
+            String subject = "[I-Poten] 회원가입을 진심으로 환영합니다";
             String htmlBody = buildSignupEmail(nickname);
-
-            SendEmailRequest request = SendEmailRequest.builder()
-                    .source(fromEmail)
-                    .destination(Destination.builder().toAddresses(to).build())
-                    .message(Message.builder()
-                            .subject(Content.builder().charset("UTF-8").data(subject).build())
-                            .body(Body.builder()
-                                    .html(Content.builder().charset("UTF-8").data(htmlBody).build())
-                                    .build())
-                            .build())
-                    .build();
-
-            SendEmailResponse response = sesClient.sendEmail(request);
-            log.info("✅ 회원가입 환영 메일 발송 성공: {} (MessageId: {})", to, response.messageId());
-        } catch (SesException e) {
-            log.error("❌ 회원가입 환영 메일 발송 실패: {}", e.awsErrorDetails().errorMessage());
+            sendEmail(to, subject, htmlBody);
+            log.info("✅ 웰컴 메일 발송 성공: {}", to);
+        } catch (Exception e) {
+            log.error("❌ 웰컴 메일 발송 실패: {}", e.getMessage());
         }
     }
 
     @Override
     public void sendWithdrawalConfirmationEmail(String to, String nickname) {
         try {
-            String subject = "[잡스푼] 회원 탈퇴가 완료되었습니다";
+            String subject = "[I-Poten] 회원 탈퇴 처리가 완료되었습니다";
             String htmlBody = buildWithdrawalEmail(nickname);
-
-            SendEmailRequest request = SendEmailRequest.builder()
-                    .source(fromEmail)
-                    .destination(Destination.builder().toAddresses(to).build())
-                    .message(Message.builder()
-                            .subject(Content.builder().charset("UTF-8").data(subject).build())
-                            .body(Body.builder()
-                                    .html(Content.builder().charset("UTF-8").data(htmlBody).build())
-                                    .build())
-                            .build())
-                    .build();
-
-            SendEmailResponse response = sesClient.sendEmail(request);
-            log.info("✅ 회원탈퇴 완료 메일 발송 성공: {} (MessageId: {})", to, response.messageId());
-        } catch (SesException e) {
-            log.error("❌ 회원탈퇴 완료 메일 발송 실패: {}", e.awsErrorDetails().errorMessage());
+            sendEmail(to, subject, htmlBody);
+            log.info("✅ 탈퇴 확인 메일 발송 성공: {}", to);
+        } catch (Exception e) {
+            log.error("❌ 탈퇴 확인 메일 발송 실패: {}", e.getMessage());
         }
     }
 
+    private void sendEmail(String to, String subject, String htmlBody) {
+        SendEmailRequest request = SendEmailRequest.builder()
+                .source(fromEmail)
+                .destination(Destination.builder().toAddresses(to).build())
+                .message(Message.builder()
+                        .subject(Content.builder().charset("UTF-8").data(subject).build())
+                        .body(Body.builder().html(Content.builder().charset("UTF-8").data(htmlBody).build()).build())
+                        .build())
+                .build();
+        sesClient.sendEmail(request);
+    }
+
+    private String getHeader() {
+        return "<div style='text-align: center; padding: 40px 0;'><img src='https://i-poten.com/assets/Logo.png' alt='I-Poten' style='height: 32px; width: auto;'></div>";
+    }
+
+    private String getFooter() {
+        return "<div style='margin-top: 40px; padding-top: 24px; border-top: 1px solid #e5e7eb; text-align: center;'>" +
+               "<p style='font-size: 13px; color: #9ca3af; margin: 0;'>본 메일은 발신 전용이며, 회신되지 않습니다.<br>" +
+               "문의사항: <a href='mailto:support@i-poten.com' style='color: #3b82f6; text-decoration: none;'>support@i-poten.com/a></p>" +
+               "<p style='font-size: 12px; color: #d1d5db; margin-top: 12px;'>© 2025 I-Poten. All rights reserved.</p></div>";
+    }
+
     private String buildNotificationEmail(Long interviewId) {
-        return "<!DOCTYPE html>" +
-                "<html>" +
-                "<head><meta charset='UTF-8'></head>" +
-                "<body style='font-family: Arial, sans-serif; line-height: 1.6; color: #333;'>" +
-                "<div style='max-width: 600px; margin: 0 auto; padding: 20px;'>" +
-
-                "<div style='text-align: center; padding: 20px 0;'>" +
-                "<h1 style='color: #4CAF50; margin: 0;'>🎉 AI 면접 평가 완료!</h1>" +
-                "</div>" +
-
-                "<div style='background-color: #f9f9f9; padding: 30px; border-radius: 10px; margin: 20px 0;'>" +
-                "<p style='font-size: 16px; margin-bottom: 20px;'>안녕하세요,</p>" +
-                "<p style='font-size: 16px; margin-bottom: 20px;'>" +
-                "방금 완료하신 <strong>AI 면접 평가 결과</strong>가 준비되었습니다! 🎊" +
-                "</p>" +
-                "<p style='font-size: 16px; margin-bottom: 20px;'>" +
-                "아래 버튼을 클릭하여 상세한 평가 결과를 확인해보세요." +
-                "</p>" +
-                "</div>" +
-
-                "<div style='text-align: center; margin: 40px 0;'>" +
-                "<a href='https://job-spoon.com/vue-ai-interview/ai-interview/result/" + interviewId + "' " +
-                "style='display: inline-block; padding: 15px 40px; background-color: #4CAF50; color: white; " +
-                "text-decoration: none; border-radius: 8px; font-size: 18px; font-weight: bold;'>" +
-                "📊 결과 확인하기" +
-                "</a>" +
-                "</div>" +
-
-                "<div style='background-color: #e3f2fd; padding: 15px; border-radius: 8px; margin: 20px 0;'>" +
-                "<p style='margin: 0; font-size: 14px; color: #1976d2;'>" +
-                "💡 <strong>결과 페이지에서 확인할 수 있는 내용:</strong><br>" +
-                "• 질문별 상세 피드백 및 첨삭<br>" +
-                "• 육각형 역량 차트<br>" +
-                "• 전체 면접 총평" +
-                "</p>" +
-                "</div>" +
-
-                "<hr style='border: none; border-top: 1px solid #ddd; margin: 30px 0;'>" +
-                "<p style='font-size: 12px; color: #999; text-align: center;'>" +
-                "이 이메일은 잡스푼 AI 면접 서비스에서 자동으로 발송되었습니다.<br>" +
-                "문의사항: support@job-spoon.com" +
-                "</p>" +
-
-                "</div>" +
-                "</body>" +
-                "</html>";
+        return """
+            <!DOCTYPE html>
+            <html lang="ko">
+            <body style="font-family: 'Pretendard', sans-serif; background-color: #f9fafb; margin: 0; padding: 40px 20px; color: #1f2937;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; padding: 40px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1);">
+                    %s
+                    <div style="text-align: center;">
+                        <h1 style="font-size: 24px; font-weight: 800; color: #111827; margin-bottom: 16px;">AI 면접 분석이 완료되었습니다</h1>
+                        <p style="font-size: 16px; color: #4b5563; line-height: 1.6; margin-bottom: 32px;">방금 진행하신 면접의 평가 결과가 생성되었습니다.<br>나의 역량을 확인하고 한 단계 더 성장해 보세요!</p>
+                        <div style="background-color: #f3f4f6; border-radius: 12px; padding: 24px; margin-bottom: 32px; text-align: left;">
+                            <h3 style="font-size: 14px; font-weight: 700; color: #374151; margin: 0 0 12px;">📊 리포트 하이라이트</h3>
+                            <ul style="margin: 0; padding-left: 20px; font-size: 14px; color: #6b7280; line-height: 1.8;">
+                                <li>질문별 상세 피드백 및 모범 답안 첨삭</li>
+                                <li>시각화된 육각형 역량 지표 차트</li>
+                                <li>전문가 수준의 전체 면접 총평</li>
+                            </ul>
+                        </div>
+                        <a href="https://i-poten.com/vue-ai-interview/ai-interview/result/%d" 
+                           style="display: inline-block; padding: 16px 48px; background: %s; color: #ffffff; text-decoration: none; border-radius: 50px; font-size: 16px; font-weight: 700;">결과 확인하기</a>
+                    </div>
+                    %s
+                </div>
+            </body>
+            </html>
+            """.formatted(getHeader(), interviewId, BRAND_GRADIENT, getFooter());
     }
 
     private String buildErrorEmail(Long interviewId) {
-        return "<!DOCTYPE html>" +
-                "<html>" +
-                "<head><meta charset='UTF-8'></head>" +
-                "<body style='font-family: Arial, sans-serif;'>" +
-                "<div style='max-width: 600px; margin: 0 auto; padding: 20px;'>" +
-                "<h1 style='color: #f44336;'>⚠️ 평가 처리 중 오류 발생</h1>" +
-                "<p>죄송합니다. AI 면접 평가 처리 중 일시적인 오류가 발생했습니다.</p>" +
-                "<p>고객센터로 문의해주세요: support@job-spoon.com</p>" +
-                "<p>참조 코드: " + interviewId + "</p>" +
-                "</div>" +
-                "</body>" +
-                "</html>";
+        return """
+            <!DOCTYPE html>
+            <html lang="ko">
+            <body style="font-family: 'Pretendard', sans-serif; background-color: #f9fafb; margin: 0; padding: 40px 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; padding: 40px; border: 1px solid #fee2e2;">
+                    %s
+                    <div style="text-align: center;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                        <h1 style="font-size: 22px; font-weight: 800; color: #991b1b; margin-bottom: 16px;">평가 처리 중 기술적 문제가 발생했습니다</h1>
+                        <p style="font-size: 15px; color: #4b5563; line-height: 1.6; margin-bottom: 24px;">불편을 드려 죄송합니다. AI 평가 엔진에서 일시적인 오류가 발생하여 현재 복구 중에 있습니다.</p>
+                        <div style="background-color: #fef2f2; color: #b91c1c; padding: 12px; border-radius: 8px; font-size: 13px; font-family: monospace;">참조 코드: #%d</div>
+                    </div>
+                    %s
+                </div>
+            </body>
+            </html>
+            """.formatted(getHeader(), interviewId, getFooter());
     }
 
     private String buildSignupEmail(String nickname) {
         return """
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8" />
-        <title>JobSpoon 회원가입 환영</title>
-    </head>
-    <body style="font-family: 'Arial', sans-serif; background-color:#f3f4f6; margin:0; padding:40px;">
-        <div style="max-width:640px; margin:0 auto; background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb; padding:24px;">
-            <h3 style="font-size:18px; font-weight:700; color:#111827; text-align:center; margin-bottom:16px;">
-                회원가입 완료 메일
-            </h3>
-            <div style="background:white; border-radius:10px; padding:32px 28px; color:#374151; line-height:1.7; text-align:center;">
-                <h4 style="font-size:16px; font-weight:600; color:#111827;">
-                    <span style="color:#2563eb; font-weight:700;">JobSpoon</span>에 오신 것을 진심으로 환영합니다!
-                </h4>
-                <p style="font-size:14px;">안녕하세요, %s님 😊</p>
-                <p style="font-size:14px;">지금 바로 아래 가이드와 함께 시작해보세요.</p>
-                <ul style="list-style:none; padding-left:0; margin:16px 0; color:#1f2937;">
-                    <li><b>마이페이지 설정하기</b> — 프로필과 관심 분야를 등록해보세요.</li>
-                    <li><b>AI 면접 체험하기</b> — 실전 대비 모의 면접으로 연습하세요.</li>
-                    <li><b>신뢰점수 살펴보기</b> — 활동에 따라 성장하는 나의 신뢰 지수를 확인해보세요.</li>
-                </ul>
-                <a href="https://job-spoon.com/mypage"
-                   style="display:inline-block; background:#2563eb; color:white; font-weight:600; padding:10px 22px;
-                          border-radius:8px; text-decoration:none; margin-top:16px;">시작하기</a>
-                <p style="font-size:12px; color:#9ca3af; margin-top:32px;">
-                    본 메일은 발신 전용입니다. 문의사항은 support@job-spoon.com 으로 보내주세요.<br/>
-                    © 2025 JobSpoon. All rights reserved.
-                </p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """.formatted(nickname);
+            <!DOCTYPE html>
+            <html lang="ko">
+            <body style="font-family: 'Pretendard', sans-serif; background-color: #f9fafb; margin: 0; padding: 40px 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 24px; padding: 48px; box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.05);">
+                    %s
+                    <div style="text-align: center;">
+                        <h1 style="font-size: 26px; font-weight: 800; color: #111827; margin-bottom: 8px;">환영합니다, %s님!</h1>
+                        <p style="font-size: 17px; color: #3b82f6; font-weight: 600; margin-bottom: 32px;">JobSpoon의 새로운 여정이 시작되었습니다.</p>
+                        <div style="text-align: left; background-color: #fafafa; border: 1px solid #f0f0f0; border-radius: 16px; padding: 28px; margin-bottom: 32px;">
+                            <div style="margin-bottom: 20px;">
+                                <b style="color: #111827; display: block; margin-bottom: 4px;">🚀 스마트한 면접 준비</b>
+                                <span style="font-size: 14px; color: #6b7280;">최신 AI 기술을 활용하여 실전과 같은 긴장감 속에서 연습하세요.</span>
+                            </div>
+                            <div>
+                                <b style="color: #111827; display: block; margin-bottom: 4px;">🎯 정교한 역량 분석</b>
+                                <span style="font-size: 14px; color: #6b7280;">나의 답변을 분석하여 개선점과 합격 팁을 정밀하게 가이드해 드립니다.</span>
+                            </div>
+                        </div>
+                        <a href="https://i-poten.com/vue-ai-interview/ai-interview/select" style="display: inline-block; padding: 18px 56px; background: %s; color: #ffffff; text-decoration: none; border-radius: 12px; font-size: 16px; font-weight: 700;">첫 면접 시작하기</a>
+                    </div>
+                    %s
+                </div>
+            </body>
+            </html>
+            """.formatted(getHeader(), nickname, BRAND_GRADIENT, getFooter());
     }
 
     private String buildWithdrawalEmail(String nickname) {
         return """
-    <!DOCTYPE html>
-    <html lang="ko">
-    <head>
-        <meta charset="UTF-8" />
-        <title>JobSpoon 회원탈퇴 확인</title>
-    </head>
-    <body style="font-family: 'Arial', sans-serif; background-color:#f3f4f6; margin:0; padding:40px;">
-        <div style="max-width:640px; margin:0 auto; background:#f9fafb; border-radius:12px; border:1px solid #e5e7eb; padding:24px;">
-            <h3 style="font-size:18px; font-weight:700; color:#111827; text-align:center; margin-bottom:16px;">
-                회원탈퇴 확인 메일
-            </h3>
-            <div style="background:white; border-radius:10px; padding:32px 28px; color:#374151; line-height:1.7; text-align:center;">
-                <h4 style="font-size:16px; font-weight:600; color:#111827;">
-                    그동안 <span style="color:#2563eb; font-weight:700;">JobSpoon</span>을 이용해주셔서 감사합니다.
-                </h4>
-                <p style="font-size:14px;">회원 탈퇴가 정상적으로 처리되었습니다.</p>
-                <p style="font-size:14px;"><b>계정 정보 및 이용 기록은 7일간 보관 후 완전히 삭제</b>됩니다.</p>
-                <hr style="border:none; border-top:1px solid #e5e7eb; margin:20px 0; width:80%;" />
-                <p style="font-size:14px;">언제든 다시 돌아오신다면, 이전보다 더 나은 JobSpoon으로 맞이하겠습니다 💚</p>
-                <a href="https://job-spoon.com/signup"
-                   style="display:inline-block; background:#2563eb; color:white; font-weight:600; padding:10px 22px;
-                          border-radius:8px; text-decoration:none; margin-top:16px;">다시 가입하기</a>
-                <p style="font-size:12px; color:#9ca3af; margin-top:32px;">
-                    본 메일은 발신 전용입니다.<br/>
-                    재가입 문의: support@job-spoon.com
-                </p>
-            </div>
-        </div>
-    </body>
-    </html>
-    """.formatted(nickname);
+            <!DOCTYPE html>
+            <html lang="ko">
+            <body style="font-family: 'Pretendard', sans-serif; background-color: #f9fafb; margin: 0; padding: 40px 20px;">
+                <div style="max-width: 600px; margin: 0 auto; background-color: #ffffff; border-radius: 20px; padding: 48px;">
+                    %s
+                    <div style="text-align: center;">
+                        <h1 style="font-size: 22px; font-weight: 800; color: #111827; margin-bottom: 16px;">회원 탈퇴가 완료되었습니다</h1>
+                        <p style="font-size: 15px; color: #4b5563; line-height: 1.7; margin-bottom: 32px;">그동안 I-Poten과 함께해 주셔서 진심으로 감사드립니다.<br>%s님께서 남겨주신 소중한 시간들을 기억하겠습니다.</p>
+                        <a href="https://i-poten.com/vue-account/account/signup" style="color: #3b82f6; font-size: 14px; font-weight: 700;">나중에 다시 가입하기</a>
+                    </div>
+                    %s
+                </div>
+            </body>
+            </html>
+            """.formatted(getHeader(), nickname, getFooter());
     }
 }

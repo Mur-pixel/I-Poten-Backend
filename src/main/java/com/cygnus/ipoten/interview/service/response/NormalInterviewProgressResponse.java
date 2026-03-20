@@ -14,9 +14,9 @@ import java.util.List;
 public class NormalInterviewProgressResponse {
 
     private Long interviewId;
-    private List<String> interviewList;
+    private List<InterviewWithAudio> interviewList;
 
-    public NormalInterviewProgressResponse(List<String> interviewList) {
+    public NormalInterviewProgressResponse(List<InterviewWithAudio> interviewList) {
         this.interviewList = interviewList;
     }
 
@@ -24,7 +24,7 @@ public class NormalInterviewProgressResponse {
         this.interviewId = interviewId;
     }
 
-    public NormalInterviewProgressResponse(Long interviewId, List<String> interviewList) {
+    public NormalInterviewProgressResponse(Long interviewId, List<InterviewWithAudio> interviewList) {
         this.interviewId = interviewId;
         this.interviewList = interviewList;
     }

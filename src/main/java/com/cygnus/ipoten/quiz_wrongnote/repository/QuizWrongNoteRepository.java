@@ -18,6 +18,13 @@ import java.util.Optional;
 
 public interface QuizWrongNoteRepository extends JpaRepository<QuizWrongNote, Long> {
 
+    @Query("""
+        select max(wn.updatedAt)
+        from QuizWrongNote wn
+        where wn.account.id = :accountId
+    """)
+    Optional<Instant> findLatestUpdatedAtByAccountId(@Param("accountId") Long accountId);
+
     boolean existsByAccount_IdAndQuizQuestion_Id(Long accountId, Long quizQuestionId);
     Optional<QuizWrongNote> findByAccount_IdAndQuizQuestion_Id(Long accountId, Long quizQuestionId);
 

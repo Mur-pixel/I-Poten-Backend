@@ -9,12 +9,20 @@ import org.springframework.data.jpa.repository.Modifying;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.time.Instant;
 import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
 
 public interface WordbookTermRepository extends JpaRepository<WordbookTerm, Long> {
+
+    @Query("""
+        select max(wbt.createdAt)
+        from WordbookTerm wbt
+        where wbt.account.id = :accountId
+    """)
+    Optional<Instant> findLatestCreatedAtByAccountId(@Param("accountId") Long accountId);
 
     // 조회(목록) - 폴더 소유자 기준 페이지 조회
     @Query(

@@ -46,10 +46,15 @@ jobs:
           username: i-cygnus
           password: ${{ secrets.GHCR_TOKEN }}
 
-      - name: Build and push Docker image (AMD64 only)
+      - name: Create Firebase credentials file  
         run: |
-          docker build --platform linux/amd64 -t ghcr.io/i-cygnus/spring-backend:latest .
-          docker push ghcr.io/i-cygnus/spring-backend:latest
+          echo "${{ secrets.FIREBASE_JSON }}" > i-poten-1fdd0-firebase-adminsdk-fbsvc-573e118da8.json
+ 
+
+      - name: Build and push Docker image (Multi-arch)
+        run: |
+          docker buildx create --use
+          docker buildx build --platform linux/amd64,linux/arm64 -t ghcr.io/i-cygnus/spring-backend:latest --push .
 
 
 

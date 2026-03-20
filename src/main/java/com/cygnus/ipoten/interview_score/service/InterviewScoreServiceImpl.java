@@ -36,14 +36,19 @@ public class InterviewScoreServiceImpl implements InterviewScoreService {
 
         InterviewResultRequestForm.EvaluationResult evaluationResult = interviewResultRequestForm.getResult().getEvaluation_result();
 
+        if (evaluationResult == null) {
+            log.warn("⚠️ evaluation_result가 null입니다. interviewId: {} — 기본값 0으로 저장합니다.", interviewId);
+            evaluationResult = new InterviewResultRequestForm.EvaluationResult();
+        }
+
         InterviewScore interviewScore = new InterviewScore(
                 interview,
-                evaluationResult.getCommunication(),
-                evaluationResult.getProductivity(),
-                evaluationResult.getDocumentation_skills(),
-                evaluationResult.getFlexibility(),
-                evaluationResult.getProblem_solving(),
-                evaluationResult.getTechnical_skills()
+                evaluationResult.getCommunication()          != null ? evaluationResult.getCommunication()          : 0,
+                evaluationResult.getProductivity()           != null ? evaluationResult.getProductivity()           : 0,
+                evaluationResult.getDocumentation_skills()   != null ? evaluationResult.getDocumentation_skills()   : 0,
+                evaluationResult.getFlexibility()            != null ? evaluationResult.getFlexibility()            : 0,
+                evaluationResult.getProblem_solving()        != null ? evaluationResult.getProblem_solving()        : 0,
+                evaluationResult.getTechnical_skills()       != null ? evaluationResult.getTechnical_skills()       : 0
         );
 
         return interviewScoreRepository.save(interviewScore);

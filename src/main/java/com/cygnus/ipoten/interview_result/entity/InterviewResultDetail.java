@@ -26,7 +26,7 @@ public class InterviewResultDetail {
     private String correction;  // 첨삭
 
 
-    public InterviewResultDetail(Long interviewResultId, String question, String answer, String intent, String feedback) {
+    public InterviewResultDetail(Long interviewResultId, String question, String answer, String intent, String feedback, String correction) {
         this.interviewResultId = interviewResultId;
         this.question = question;
         this.answer = answer;

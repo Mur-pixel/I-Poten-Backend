@@ -26,7 +26,7 @@ public class InterviewResultDetailServiceImpl implements InterviewResultDetailSe
         List<InterviewResultDetail> interviewResultDetails = new ArrayList<>();
         for (InterviewResultRequestForm.QaScore qaScore : qaScores) {
             InterviewResultDetail interviewResultDetail = new InterviewResultDetail(
-                    interviewResultId,qaScore.getQuestion(),qaScore.getAnswer(),qaScore.getFeedback(),qaScore.getCorrection()
+                    interviewResultId, qaScore.getQuestion(), qaScore.getAnswer(), qaScore.getIntent(), qaScore.getFeedback(), qaScore.getCorrection()
             );
             InterviewResultDetail savedInterviewResultDetail = interviewResultDetailRepository.save(interviewResultDetail);
             interviewResultDetails.add(savedInterviewResultDetail);

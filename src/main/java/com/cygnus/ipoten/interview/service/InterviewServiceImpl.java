@@ -4,11 +4,13 @@ package com.cygnus.ipoten.interview.service;
 import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.account.service.AccountService;
 import com.cygnus.ipoten.account_project.service.AccountProjectService;
+import com.cygnus.ipoten.google_tts.service.GoogleTtsService;
 import com.cygnus.ipoten.infrastructure.external.fastapi.client.FastApiEndInterview;
 import com.cygnus.ipoten.interview.controller.request.InterviewAccountProjectRequest;
 import com.cygnus.ipoten.interview.controller.request.InterviewEndRequest;
 import com.cygnus.ipoten.interview.controller.request_form.*;
 import com.cygnus.ipoten.interview.controller.response_form.NormalInterviewCreateResponseForm;
+import com.cygnus.ipoten.interview.controller.response_form.PersonalityInterviewResultResponseForm;
 import com.cygnus.ipoten.interview.entity.Interview;
 import com.cygnus.ipoten.interview.entity.InterviewPlan;
 import com.cygnus.ipoten.interview.entity.InterviewType;
@@ -53,6 +55,7 @@ public class InterviewServiceImpl implements InterviewService {
     private final InterviewResultService interviewResultService;
     private final InterviewResultDetailService interviewResultDetailService;
     private final InterviewScoreService interviewScoreService;
+    private final GoogleTtsService googleTtsService;
 
     @Value("${current_server.end_interview_url}")
     private String callbackUrl;
@@ -90,34 +93,25 @@ public class InterviewServiceImpl implements InterviewService {
             Long accountId,
             String userToken) {
         try {
-            log.info("1️⃣ Account 조회 시작, accountId={}", accountId);
             Account account = accountService.findById(accountId)
                     .orElseThrow(() -> new IllegalArgumentException("인터뷰 생성에서 account를 찾지 못함"));
-            log.info("✅ Account 조회 완료: {}", account.getId());
 
-            log.info("2️⃣ IntervieweeProfile 생성 및 저장 시작");
             IntervieweeProfile intervieweeProfile = intervieweeProfileService
                     .createIntervieweeProfile(interviewCreateRequestForm.toIntervieweeProfileRequest());
-            log.info("✅ IntervieweeProfile 생성 완료: {}", intervieweeProfile.getId());
 
-            log.info("3️⃣ Interview 생성 및 저장 시작");
             Interview interview = new Interview(account, intervieweeProfile, interviewCreateRequestForm.getInterviewType(), InterviewPlan.PREMIUM);
             interview = interviewRepository.save(interview);
-            log.info("✅ Interview 생성 완료: {}", interview.getId());
+            log.info(" ✅ 인터뷰 확인 : {}", interview.getId());
 
-            log.info("4️⃣ InterviewQA 생성 시작");
             InterviewQA interviewQA = interviewQAService
                     .createInterviewQA(interviewCreateRequestForm.toInterviewQARequest(interview));
-            log.info("✅ InterviewQA 생성 완료: {}", interviewQA.getId());
 
-            log.info("5️⃣ AccountProject 저장 시작");
             List<InterviewAccountProjectRequest> interviewAccountProjectRequests =
                     interviewCreateRequestForm.getInterviewAccountProjectRequests();
             accountProjectService.saveAllByInterviewAccountProjectRequest(interviewAccountProjectRequests, account);
             log.info("✅ AccountProject 저장 완료, 요청 개수: {}",
                     interviewAccountProjectRequests != null ? interviewAccountProjectRequests.size() : 0);
 
-            log.info("6️⃣ InterviewProgress 실행 시작");
             InterviewProgressRequestForm interviewProgressRequestForm = new InterviewProgressRequestForm(
                     interview.getId(),
                     1,
@@ -126,15 +120,17 @@ public class InterviewServiceImpl implements InterviewService {
                     interviewQA.getId()
             );
 
+            log.info("인터뷰 시퀀스 :  {}", interviewProgressRequestForm.getInterviewSequence());
+
             InterviewProgressResponse interviewProgressResponse = execute(
                     interviewCreateRequestForm.getInterviewType(),
                     interviewProgressRequestForm,
                     userToken
             );
-            log.info("✅ InterviewProgress 실행 완료");
 
-            log.info("🎉 InterviewCreateResponse 반환 준비");
-            return interviewProgressResponse.toInterviewCreateResponse();
+            String questionTTS = googleTtsService.synthesizeAndUpload(interviewProgressResponse.getInterviewQuestionText());
+
+            return interviewProgressResponse.toInterviewCreateResponseByTTS(questionTTS, interviewProgressResponse.getInterviewQuestionText());
 
         } catch (Exception e) {
             log.error("❌ createInterview 실행 중 예외 발생", e);
@@ -143,7 +139,7 @@ public class InterviewServiceImpl implements InterviewService {
     }
 
     @Override
-    public NormalInterviewProgressResponse createNormalInterview(List<String> interviewList, NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId) {
+    public NormalInterviewProgressResponse createNormalInterview(List<InterviewWithAudio> interviewList, NormalInterviewCreateRequestForm normalInterviewCreateRequestForm, Long accountId) {
 
         log.info("1️⃣ Account 조회 시작, accountId={}", accountId);
         Account account = accountService.findById(accountId)
@@ -167,8 +163,11 @@ public class InterviewServiceImpl implements InterviewService {
         log.info("✅ 인터뷰 내용 : {},  {},  {}, {}", form.getInterviewId(),form.getInterviewQAId(), form.getInterviewSequence(), form.getAnswer());
 
         InterviewProcessStrategy strategy = context.getBean(String.valueOf(type), InterviewProcessStrategy.class);
+        InterviewProgressResponse process = strategy.process(form, userToken);
+        String questionTTS = googleTtsService.synthesizeAndUpload(process.getInterviewQuestionText());
 
-        return strategy.process(form, userToken);
+
+        return process.updateInterviewQuestion(questionTTS, process.getInterviewQuestionText());
     }
 
     @Override
@@ -283,6 +282,63 @@ public class InterviewServiceImpl implements InterviewService {
         }
 
         return interviewResultListResponses;
+    }
+
+    @Transactional
+    @Override
+    public void submitPersonalityInterviewAnswers(NormalInterviewSubmitRequestForm form, Long accountId) {
+        Interview interview = interviewRepository.findById(form.getInterviewId())
+                .orElseThrow(() -> new IllegalArgumentException("인터뷰를 찾을 수 없음"));
+
+        // ✅ 소유권 확인: 요청한 accountId와 인터뷰의 주인이 같은지 확인
+        if (!interview.getAccount().getId().equals(accountId)) {
+            throw new SecurityException("인터뷰 제출 권한이 없습니다.");
+        }
+
+        // ✅ 유형 확인: 인성 면접(PERSONAL) 타입인지 확인
+        if (interview.getInterviewType() != InterviewType.PERSONAL) {
+            throw new IllegalArgumentException("인성 면접 답변만 제출 가능한 엔드포인트입니다.");
+        }
+
+        for (NormalInterviewSubmitRequestForm.QAItem qaItem : form.getQaList()) {
+            interviewQAService.saveInterviewQAByInterview(
+                    interview,
+                    new InterviewQA(interview, qaItem.getQuestion(), qaItem.getAnswer())
+            );
+        }
+
+        interview.setFinished(true);
+        interviewRepository.save(interview);
+    }
+
+    @Override
+    public PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId, Long accountId) {
+        Interview interview = interviewRepository.findById(interviewId)
+                .orElseThrow(() -> new IllegalArgumentException("인터뷰를 찾을 수 없음"));
+
+        // ✅ 소유권 확인: 요청한 accountId와 인터뷰의 주인이 같은지 확인
+        if (!interview.getAccount().getId().equals(accountId)) {
+            throw new SecurityException("인터뷰 결과 조회 권한이 없습니다.");
+        }
+
+        // ✅ 유형 확인: 인성 면접(PERSONAL) 타입인지 확인
+        if (interview.getInterviewType() != InterviewType.PERSONAL) {
+            throw new IllegalArgumentException("인성 면접 결과만 조회 가능한 엔드포인트입니다.");
+        }
+
+        List<com.cygnus.ipoten.interviewQA.entity.InterviewQA> allQA = interviewQAService.findAllByInterviewId(interviewId);
+
+        List<PersonalityInterviewResultResponseForm.QAItem> qaItems = allQA.stream()
+                .map(qa -> PersonalityInterviewResultResponseForm.QAItem.builder()
+                        .question(qa.getQuestion())
+                        .answer(qa.getAnswer())
+                        .build())
+                .collect(Collectors.toList());
+
+        return PersonalityInterviewResultResponseForm.builder()
+                .interviewId(interviewId)
+                .qaList(qaItems)
+                .build();
     }
 
 

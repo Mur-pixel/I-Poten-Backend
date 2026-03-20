@@ -3,9 +3,11 @@ package com.cygnus.ipoten.fcm.service;
 import com.cygnus.ipoten.fcm.entity.AccountFcmToken;
 import com.cygnus.ipoten.fcm.repository.AccountFcmTokenRepository;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class FcmTokenServiceImpl implements FcmTokenService {
