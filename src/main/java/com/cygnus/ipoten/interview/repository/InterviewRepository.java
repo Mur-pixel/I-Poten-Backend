@@ -11,6 +11,24 @@ import java.util.Optional;
 
 public interface InterviewRepository extends JpaRepository<Interview, Long> {
 
+    @Query("""
+        select max(i.createdAt)
+        from Interview i
+        where i.account.id = :accountId
+          and i.deletedAt is null
+    """)
+    Optional<LocalDateTime> findLatestCreatedAt(@Param("accountId") Long accountId);
+
+    @Query("""
+        select i
+        from Interview i
+        left join fetch i.intervieweeProfile p
+        where i.account.id = :accountId
+          and i.deletedAt is null
+        order by i.createdAt desc
+    """)
+    List<Interview> findRecentWithProfileByAccountId(@Param("accountId") Long accountId);
+
     @Query("SELECT i FROM Interview i WHERE i.account.id = :accountId AND i.deletedAt IS NULL")
     List<Interview> getInterviewResultListByAccountId(@Param("accountId") Long accountId);
 
