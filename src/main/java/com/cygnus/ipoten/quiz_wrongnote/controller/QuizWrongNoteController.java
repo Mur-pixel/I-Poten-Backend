@@ -1,14 +1,10 @@
 package com.cygnus.ipoten.quiz_wrongnote.controller;
 
-import com.cygnus.ipoten.quiz_session.controller.response_form.CreateQuizSessionResponseForm;
-import com.cygnus.ipoten.quiz_session.service.QuizSessionRetryService;
-import com.cygnus.ipoten.quiz_session.service.response.StartQuizSessionResponse;
+import com.cygnus.ipoten.common.annotation.LoginUser;
 import com.cygnus.ipoten.quiz_wrongnote.controller.request_form.DeleteWrongNotesRequestForm;
 import com.cygnus.ipoten.quiz_wrongnote.controller.request_form.WrongNoteResolvedUpdateRequestForm;
 import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteService;
-import com.cygnus.ipoten.quiz_wrongnote.service.QuizWrongNoteServiceImpl;
 import com.cygnus.ipoten.quiz_wrongnote.service.WrongNoteSearchCondition;
-import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import lombok.RequiredArgsConstructor;
@@ -28,52 +24,32 @@ import java.util.NoSuchElementException;
 @RequestMapping("/api")
 public class QuizWrongNoteController {
 
-    private final RedisCacheService redisCacheService;
     private final QuizWrongNoteService quizWrongNoteService;
 
-    @Operation(
-            summary = "내 오답노트 목록 조회",
-            description = "오답노트(리뷰) 중 오답 항목을 페이지네이션으로 조회합니다. " +
-                    "type/sessionId/from~to + q/difficulty/unresolvedOnly/sort 필터를 지원합니다. " +
-                    "includeAnswers=true면 정답/해설 등 정보를 함께 내려줄 수 있습니다."
-    )
+    @Operation(summary = "내 오답노트 목록 조회")
     @GetMapping("/me/quiz/reviews/wrong")
     public ResponseEntity<?> listWrongNotes(
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
-
-            @Parameter(description = "문제 유형(CHOICE/OX/INITIALS 등)", example = "CHOICE")
+            @Parameter(description = "문제 유형(CHOICE/OX/INITIALS 등)")
             @RequestParam(required = false) String type,
-
-            @Parameter(description = "난이도(EASY/MEDIUM/HARD)", example = "HARD")
+            @Parameter(description = "난이도(EASY/MEDIUM/HARD)")
             @RequestParam(required = false) String difficulty,
-
-            @Parameter(description = "미해결만 조회(resolved=false)", example = "true")
+            @Parameter(description = "미해결만 조회")
             @RequestParam(defaultValue = "false") boolean unresolvedOnly,
-
-            @Parameter(description = "검색어(문제/해설/용어/카테고리/세션제목)", example = "Redis")
+            @Parameter(description = "검색어")
             @RequestParam(required = false) String q,
-
-            @Parameter(description = "정렬(RECENT/OLDEST)", example = "RECENT")
+            @Parameter(description = "정렬(RECENT/OLDEST)")
             @RequestParam(defaultValue = "RECENT") String sort,
-
             @RequestParam(required = false) Long sessionId,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to,
             @RequestParam(defaultValue = "true") boolean includeAnswers,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            log.warn("인증 실패: 계정 식별 불가");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId) {
 
         try {
             WrongNoteSearchCondition condition = WrongNoteSearchCondition.of(
-                    q, type, difficulty, unresolvedOnly, sort, sessionId, from, to
-            );
-
+                    q, type, difficulty, unresolvedOnly, sort, sessionId, from, to);
             var body = quizWrongNoteService.listWrongNotes(accountId, page, size, condition, includeAnswers);
             return ResponseEntity.ok(body);
         } catch (IllegalArgumentException e) {
@@ -84,20 +60,12 @@ public class QuizWrongNoteController {
         }
     }
 
-    @Operation(
-            summary = "오답노트 해결 여부 변경",
-            description = "오답노트 항목을 '해결 완료(resolved=true)' 또는 '미해결(resolved=false)'로 변경합니다. "
-    )
+    @Operation(summary = "오답노트 해결 여부 변경")
     @PatchMapping("/me/quiz/reviews/{wrongNoteId}")
     public ResponseEntity<?> updateWrongNoteResolved(
             @PathVariable Long wrongNoteId,
             @RequestBody WrongNoteResolvedUpdateRequestForm requestForm,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId) {
 
         if (requestForm == null || requestForm.getResolved() == null) {
             return ResponseEntity.badRequest().body("resolved 값이 필요합니다.");
@@ -112,23 +80,14 @@ public class QuizWrongNoteController {
             log.error("updateWrongNoteResolved failed", e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
-
     }
 
-
-    @Operation(
-            summary = "오답노트 항목 삭제",
-            description = "내 오답노트(wrong note) 항목 1개를 삭제합니다."
-    )
+    @Operation(summary = "오답노트 항목 삭제")
     @DeleteMapping("/me/quiz/reviews/{wrongNoteId}")
     public ResponseEntity<?> deleteWrongNote(
             @PathVariable Long wrongNoteId,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId) {
+
         try {
             quizWrongNoteService.deleteWrongNote(accountId, wrongNoteId);
             return ResponseEntity.noContent().build();
@@ -143,12 +102,7 @@ public class QuizWrongNoteController {
     @DeleteMapping("/me/quiz/reviews/wrong")
     public ResponseEntity<?> deleteWrongNotesBulk(
             @RequestBody DeleteWrongNotesRequestForm requestForm,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId) {
 
         if (requestForm == null || requestForm.getReviewIds() == null || requestForm.getReviewIds().isEmpty()) {
             return ResponseEntity.badRequest().body(Map.of("message", "reviewIds가 필요합니다."));
@@ -162,17 +116,4 @@ public class QuizWrongNoteController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
     }
-
-    /**
-     * 공통: 쿠키에서 userToken을 읽어 Redis에서 accountId를 조회한다.
-     * - 토큰이 없거나 공백이면 null
-     * - Redis에 존재하지 않거나 TTL 만료된 경우도 null
-     */
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) {
-            return null;
-        }
-        return redisCacheService.getValueByKey(userToken, Long.class); // TTL 만료/무효면 null
-    }
-
 }

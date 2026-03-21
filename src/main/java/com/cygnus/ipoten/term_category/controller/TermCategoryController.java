@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.term_category.controller;
 
+import com.cygnus.ipoten.common.annotation.PublicEndpoint;
 import com.cygnus.ipoten.term_category.controller.response_form.CategoryResponseForm;
 import com.cygnus.ipoten.term_category.entity.TermCategory;
 import com.cygnus.ipoten.term_category.repository.TermCategoryRepository;
@@ -19,6 +20,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.responses.ApiResponses;
 import io.swagger.v3.oas.annotations.tags.Tag;
 
+@PublicEndpoint
 @Slf4j
 @RestController
 @RequiredArgsConstructor

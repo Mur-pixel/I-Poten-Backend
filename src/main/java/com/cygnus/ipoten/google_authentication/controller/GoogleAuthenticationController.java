@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.google_authentication.controller;
 
+import com.cygnus.ipoten.common.util.CookieUtil;
 import com.cygnus.ipoten.google_authentication.service.GoogleAuthenticationService;
 import com.cygnus.ipoten.google_authentication.service.mobile_response.GoogleLoginMobileResponse;
 import com.cygnus.ipoten.google_authentication.service.response.GoogleLoginResponse;
@@ -36,13 +37,7 @@ public class GoogleAuthenticationController {
             log.info("구글 로그인 시도함");
             GoogleLoginResponse googleLoginResponse = googleAuthenticationService.handleLogin(code);
             if (!googleLoginResponse.isNewUser()) {
-                String cookieHeader = String.format(
-                        "userToken=%s; Max-Age=%d; Path=/; HttpOnly; Secure; SameSite=Strict",
-                        googleLoginResponse.getUserToken(),
-                        6 * 60 * 60
-                );
-                response.addHeader("Set-Cookie", cookieHeader);
-
+                CookieUtil.addUserToken(response, googleLoginResponse.getUserToken());
             }
 
             response.setContentType("text/html;charset=utf-8");

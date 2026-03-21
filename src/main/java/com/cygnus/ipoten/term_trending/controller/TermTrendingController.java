@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.term_trending.controller;
 
+import com.cygnus.ipoten.common.annotation.PublicEndpoint;
 import com.cygnus.ipoten.term_trending.controller.request_form.TrendingTermRequestForm;
 import com.cygnus.ipoten.term_trending.controller.response_form.TrendingTermResponseForm;
 import com.cygnus.ipoten.term_trending.service.TermTrendingService;
@@ -13,6 +14,7 @@ import org.springframework.web.bind.annotation.ModelAttribute;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
+@PublicEndpoint
 @Slf4j
 @RestController
 @RequiredArgsConstructor

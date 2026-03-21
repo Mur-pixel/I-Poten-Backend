@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.meta_authentication.controller;
 
+import com.cygnus.ipoten.common.util.CookieUtil;
 import com.cygnus.ipoten.meta_authentication.service.MetaAuthenticationService;
 import com.cygnus.ipoten.meta_authentication.service.response.MetaLoginResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -35,14 +36,7 @@ public class MetaAuthenticationController {
             MetaLoginResponse metaLoginResponse = metaAuthenticationService.handleLogin(code);
 
             if(!metaLoginResponse.getIsNewUser()){
-                String cookieHeader = String.format(
-                        "userToken=%s; Max-Age=%d; Path=/; HttpOnly; Secure; SameSite=Strict",
-                        metaLoginResponse.getUserToken(),
-//                    12 * 60 * 60
-                        6 * 60 * 60// 6시간
-
-                );        // CSRF 방어
-                response.addHeader("Set-Cookie", cookieHeader);
+                CookieUtil.addUserToken(response, metaLoginResponse.getUserToken());
             }
 
             response.setContentType("text/html;charset=UTF-8");

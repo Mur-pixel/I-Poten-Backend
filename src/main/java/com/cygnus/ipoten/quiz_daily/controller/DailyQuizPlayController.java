@@ -1,9 +1,9 @@
 package com.cygnus.ipoten.quiz_daily.controller;
 
+import com.cygnus.ipoten.common.annotation.LoginUser;
 import com.cygnus.ipoten.quiz_daily.controller.request_form.CheckDailyQuestionRequestForm;
 import com.cygnus.ipoten.quiz_daily.controller.response_form.CheckDailyQuestionResponseForm;
 import com.cygnus.ipoten.quiz_daily.service.DailyQuizPlayService;
-import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -21,24 +21,15 @@ import java.util.NoSuchElementException;
 @RequestMapping("/api")
 public class DailyQuizPlayController {
 
-    private final RedisCacheService redisCacheService;
     private final DailyQuizPlayService dailyQuizPlayService;
 
-    @Operation(
-            summary = "데일리 문항 즉시 채점",
-            description = "데일리 퀴즈 진행 중 문항 단위로 정오, 정답, 해설, 다음 문항 ID를 반환합니다."
-    )
+    @Operation(summary = "데일리 문항 즉시 채점")
     @PostMapping("/me/quiz/daily/sessions/{sessionId}/questions/{questionId}/check")
     public ResponseEntity<?> checkQuestion(
             @PathVariable Long sessionId,
             @PathVariable Long questionId,
             @Valid @RequestBody CheckDailyQuestionRequestForm requestForm,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId) {
 
         try {
             CheckDailyQuestionResponseForm responseForm =
@@ -55,24 +46,16 @@ public class DailyQuizPlayController {
         } catch (Exception e) {
             Throwable root = e;
             while (root.getCause() != null) root = root.getCause();
-
             log.error("[daily check] sessionId={} questionId={} payload={} rootType={} rootMsg={}",
                     sessionId, questionId, requestForm,
                     root.getClass().getName(),
                     root.getMessage(),
-                    e
-            );
-
+                    e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of(
                             "message", "서버 내부 오류가 발생했습니다.",
                             "debug", root.getClass().getSimpleName() + ": " + String.valueOf(root.getMessage())
                     ));
         }
-    }
-
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) return null;
-        return redisCacheService.getValueByKey(userToken, Long.class);
     }
 }

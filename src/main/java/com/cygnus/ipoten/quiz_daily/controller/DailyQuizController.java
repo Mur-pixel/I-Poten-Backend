@@ -1,10 +1,10 @@
 package com.cygnus.ipoten.quiz_daily.controller;
 
+import com.cygnus.ipoten.common.annotation.LoginUser;
 import com.cygnus.ipoten.quiz_daily.controller.response_form.DailyQuizStartResponseForm;
 import com.cygnus.ipoten.quiz_daily.entity.enums.DailyStartMode;
 import com.cygnus.ipoten.quiz_daily.service.DailyQuizService;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
-import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -21,20 +21,13 @@ import java.util.Map;
 @RequestMapping("/api/me/quiz/daily")
 public class DailyQuizController {
 
-    private final RedisCacheService redisCacheService;
     private final DailyQuizService dailyQuizService;
 
-    @Operation(
-            summary = "오늘의 퀴즈 시작",
-            description = "KST 기준 오늘 날짜로 seed를 생성하여 객관식 3, OX 3, 초성 3 세션을 생성합니다."
-    )
+    @Operation(summary = "오늘의 퀴즈 시작")
     @PostMapping("/general/start")
     public ResponseEntity<?> startGeneralDaily(
             @RequestParam(name = "mode", required = false) DailyStartMode mode,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            @LoginUser Long accountId) {
 
         try {
             var started = dailyQuizService.startGeneralDaily(accountId, mode);
@@ -76,12 +69,5 @@ public class DailyQuizController {
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR)
                     .body(Map.of("message", e.getMessage()));
         }
-
     }
-
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) return null;
-        return redisCacheService.getValueByKey(userToken, Long.class);
-    }
-
 }

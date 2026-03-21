@@ -1,6 +1,7 @@
 package com.cygnus.ipoten.kakao_authentication.controller;
 
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.common.util.CookieUtil;
 import com.cygnus.ipoten.kakao_authentication.service.KakaoAuthenticationService;
 import com.cygnus.ipoten.kakao_authentication.service.mobile_response.KakaoLoginMobileResponse;
 import com.cygnus.ipoten.kakao_authentication.service.response.KakaoLoginResponse;
@@ -34,18 +35,8 @@ public class KakaoAuthenticationController {
             KakaoLoginResponse kakaoLoginResponse = kakaoAuthenticationService.handleLogin(code);
 
             if(!kakaoLoginResponse.getIsNewUser()){
-                String cookieHeader = String.format(
-                        "userToken=%s; Max-Age=%d; Path=/; HttpOnly; Secure; SameSite=Strict",
-                        kakaoLoginResponse.getUserToken(),
-//                    12 * 60 * 60
-                        6 * 60 * 60// 6시간
-
-                );        // CSRF 방어
-                response.addHeader("Set-Cookie", cookieHeader);
+                CookieUtil.addUserToken(response, kakaoLoginResponse.getUserToken());
                 Long accountId = authenticationService.getAccountIdByUserToken(kakaoLoginResponse.getUserToken());
-
-
-
             }
 
 

@@ -9,7 +9,7 @@ import com.cygnus.ipoten.accountProfile.controller.response.UpdateNicknameRespon
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.controller.request.RegisterAccountProfileRequest;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
-import com.cygnus.ipoten.administer.service.dto.AccountProfileRow;
+//import com.cygnus.ipoten.administer.service.dto.AccountProfileRow;
 
 import java.util.List;
 import java.util.Optional;
@@ -19,7 +19,7 @@ public interface AccountProfileService {
     Optional<AccountProfile> loadProfileByEmailAndLoginType(String email, LoginType loginType);
     //2025.09.13 발키리 추가
     Optional<AccountProfile> loadProfileByEmail(String email);
-    List<AccountProfileRow> getProfilesAfterId(long lastId, int limit);
+//    List<AccountProfileRow> getProfilesAfterId(long lastId, int limit);
     // 닉네임 수정
     Optional<UpdateNicknameResponse> updateNickname(Long accountId, String newNickname);
     Optional<AccountProfile> findByAccountId(Long accountId);

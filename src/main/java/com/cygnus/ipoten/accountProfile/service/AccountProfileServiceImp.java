@@ -9,7 +9,6 @@ import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.controller.request.RegisterAccountProfileRequest;
 import com.cygnus.ipoten.accountProfile.controller.response.NicknameResponse;
 import com.cygnus.ipoten.accountProfile.repository.AccountProfileRepository;
-import com.cygnus.ipoten.administer.service.dto.AccountProfileRow;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
@@ -21,6 +20,7 @@ import java.util.Optional;
 @Service
 @RequiredArgsConstructor
 public class AccountProfileServiceImp implements AccountProfileService {
+
 
     private final AccountProfileRepository accountProfileRepository;
 
@@ -48,22 +48,18 @@ public class AccountProfileServiceImp implements AccountProfileService {
         return accountProfileRepository.findWithAccountByEmailAndLoginType(email, loginType);
     }
 
-    //2025.09.13 발키리 추가
-    @Override
-    public Optional<AccountProfile> loadProfileByEmail(String email) {
-        return accountProfileRepository.findWithAccountByEmail(email);
-    }
-    @Override
-    public List<AccountProfileRow> getProfilesAfterId(long lastId, int limit) {
-//        log.info("getProfilesAfterId is working");
-        return accountProfileRepository.findNextProfilesAfterId(lastId, limit);
-    }
     private String requireText(String text, String msg) {
-        if(text == null || text.trim().isEmpty()) {
+        if (text == null || text.trim().isEmpty()) {
             throw new IllegalArgumentException(msg);
         }
         return text;
     }
+
+    @Override
+    public Optional<AccountProfile> loadProfileByEmail(String email) {
+        return accountProfileRepository.findWithAccountByEmail(email);
+    }
+
 
     @Override
     public Optional<UpdateNicknameResponse> updateNickname(Long accountId, String newNickname){
@@ -90,10 +86,7 @@ public class AccountProfileServiceImp implements AccountProfileService {
             }
         }
 
-        // 중복 닉네임 검증
-        if (accountProfileRepository.existsByNickname(trimmed)) {
-            throw new IllegalArgumentException("이미 사용 중인 닉네임입니다.");
-        }
+
 
         // 계정 프로필 조회
         AccountProfile ap = accountProfileRepository.findByAccountId(accountId)
