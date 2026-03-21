@@ -26,7 +26,6 @@ public class AccountProfileController {
             @LoginUser Long accountId,
             @RequestBody NicknameRequest request) {
 
-        Long accountId = resolveAccountId(userToken);
         UpdateNicknameResponse response = accountProfileService.updateNickname(accountId, request.getNickname())
                 .orElseThrow(() -> new IllegalArgumentException("닉네임 변경 실패"));
 
@@ -57,16 +56,12 @@ public class AccountProfileController {
 
     @GetMapping({"", "/"})
     public ResponseEntity<ProfileResponse> getMe(
-            @CookieValue(name = "userToken", required = false) String userToken) {
-        return getProfile(userToken);
+            @LoginUser Long accountId) {
+        return getProfile(accountId);
     }
 
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) {
-            throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
-        }
+    private Long resolveAccountId(@LoginUser Long accountId, String userToken) {
 
-        Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
         if (accountId == null) {
             throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
         }

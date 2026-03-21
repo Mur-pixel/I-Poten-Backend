@@ -234,10 +234,5 @@ public class QuizSessionController {
         }
     }
 
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) {
-            return null;
-        }
-        return redisCacheService.getValueByKey(userToken, Long.class); // TTL 만료/무효면 null
-    }
+
 }
