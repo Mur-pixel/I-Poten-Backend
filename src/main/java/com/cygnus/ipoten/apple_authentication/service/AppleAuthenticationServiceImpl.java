@@ -69,21 +69,36 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
 
     @Override
     public AppleLoginMobileResponse handleLoginMobile(AppleLoginMobileRequest request) {
-        log.info("Apple mobile login start - clientId: {}, redirectUri: {}, codeLength: {}",
-                clientId,
-                redirectUri,
+        boolean isIos = "ios".equalsIgnoreCase(request.getPlatform());
+
+        log.info("Apple mobile login start - platform: {}, clientId: {}, codeLength: {}",
+                request.getPlatform(),
+                isIos ? iosBundleId : clientId,
                 request.getAuthorizationCode() == null ? 0 : request.getAuthorizationCode().length());
 
-        Map<String, Object> tokenResponse = exchangeAuthorizationCode(request.getAuthorizationCode(), request.getPlatform());
-        log.info("Apple token exchange success - keys: {}", tokenResponse.keySet());
+        String accessToken;
+        String idToken;
 
-        String accessToken = asString(tokenResponse.get("access_token"));
-        if (isBlank(accessToken)) {
-            throw new IllegalArgumentException("애플 액세스 토큰이 비어 있습니다.");
+        if (isIos) {
+            idToken = request.getIdentityToken();
+            if (isBlank(idToken)) {
+                throw new IllegalArgumentException("애플 identityToken이 비어 있습니다.");
+            }
+            accessToken = request.getAuthorizationCode();
+            log.info("Apple iOS login - identityToken 직접 사용");
+        } else {
+            Map<String, Object> tokenResponse = exchangeAuthorizationCode(request.getAuthorizationCode(), request.getPlatform());
+            log.info("Apple token exchange success - keys: {}", tokenResponse.keySet());
+
+            accessToken = asString(tokenResponse.get("access_token"));
+            if (isBlank(accessToken)) {
+                throw new IllegalArgumentException("애플 액세스 토큰이 비어 있습니다.");
+            }
+
+            String responseIdToken = asString(tokenResponse.get("id_token"));
+            idToken = firstNonBlank(responseIdToken, request.getIdentityToken());
         }
 
-        String responseIdToken = asString(tokenResponse.get("id_token"));
-        String idToken = firstNonBlank(responseIdToken, request.getIdentityToken());
         Map<String, Object> claims = decodeIdTokenClaims(idToken);
 
         String email = firstNonBlank(asString(claims.get("email")), request.getEmail());
