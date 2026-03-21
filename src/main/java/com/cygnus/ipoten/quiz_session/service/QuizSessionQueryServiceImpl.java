@@ -352,84 +352,97 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
         long baseSeed = Optional.ofNullable(s.getSeedValue()).orElse(0L);
 
         for (Long qid : qids) {
-            QuizQuestion q = qById.get(qid);
-            if (q == null) continue;
+            try {
+                QuizQuestion q = qById.get(qid);
+                if (q == null) {
+                    log.warn("[review] snapshot question missing in DB. sessionId={}, qid={}", sessionId, qid);
+                    continue;
+                }
 
-            QuizSessionAnswer my = ansByQ.get(qid);
+                QuizSessionAnswer my = ansByQ.get(qid);
 
-            QuestionType qt = q.getQuestionType();
-            boolean isInitials = (qt == QuestionType.INITIALS);
+                QuestionType qt = q.getQuestionType();
+                boolean isInitials = (qt == QuestionType.INITIALS);
 
-            Long myChoiceId = (my != null) ? my.getSubmittedChoiceId() : null;
-            String mySubmittedText = (my != null) ? my.getSubmittedText() : null;
+                Long myChoiceId = (my != null) ? my.getSubmittedChoiceId() : null;
+                String mySubmittedText = (my != null) ? my.getSubmittedText() : null;
 
-            String expectedText = isInitials ? expectedTextByQid.get(qid) : null;
+                String expectedText = isInitials ? expectedTextByQid.get(qid) : null;
 
-            List<SessionReviewResponseForm.Choice> optionList = List.of();
-            Long answerChoiceId = null;
+                List<SessionReviewResponseForm.Choice> optionList = List.of();
+                Long answerChoiceId = null;
 
-            if (!isInitials) {
-                List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
-                qChoices = normalizeBaseOrder(qChoices);
+                if (!isInitials) {
+                    List<QuizChoice> qChoices = choicesByQ.getOrDefault(qid, List.of());
+                    qChoices = normalizeBaseOrder(qChoices);
 
                 // getSessionItems와 동일한 순서 규칙
                 qChoices = reorderDeterministic(qt, qChoices, baseSeed, qid);
 
-                List<QuizChoice> answersChoiceList = qChoices.stream()
-                        .filter(QuizChoice::isAnswer)
-                        .toList();
+                    List<QuizChoice> answersChoiceList = qChoices.stream()
+                            .filter(QuizChoice::isAnswer)
+                            .toList();
 
-                if (answersChoiceList.size() > 1) {
-                    log.warn("[review] multiple correct choices. qid={}, answerIds={}",
-                            qid, answersChoiceList.stream().map(QuizChoice::getId).toList());
+                    if (answersChoiceList.size() > 1) {
+                        log.warn("[review] multiple correct choices. sessionId={}, qid={}, answerIds={}",
+                                sessionId, qid, answersChoiceList.stream().map(QuizChoice::getId).toList());
+                    }
+
+                    QuizChoice answerChoice = answersChoiceList.isEmpty() ? null : answersChoiceList.get(0);
+                    answerChoiceId = (answerChoice == null) ? null : answerChoice.getId();
+
+                    optionList = qChoices.stream()
+                            .map(c -> SessionReviewResponseForm.Choice.builder()
+                                    .id(c.getId())
+                                    .text(c.getChoiceText())
+                                    .answer(c.isAnswer())
+                                    .build())
+                            .toList();
                 }
 
-                QuizChoice answerChoice = answersChoiceList.isEmpty() ? null : answersChoiceList.get(0);
-                answerChoiceId = (answerChoice == null) ? null : answerChoice.getId();
+                boolean computedCorrect;
 
-                optionList = qChoices.stream()
-                        .map(c -> SessionReviewResponseForm.Choice.builder()
-                                .id(c.getId())
-                                .text(c.getChoiceText())
-                                .answer(c.isAnswer())
-                                .build())
-                        .toList();
+                if (isInitials) {
+                    String submitted = Optional.ofNullable(mySubmittedText).orElse("").trim();
+                    String expected  = Optional.ofNullable(expectedText).orElse("").trim();
+                    computedCorrect = !submitted.isEmpty() && submitted.equalsIgnoreCase(expected);
+                } else {
+                    computedCorrect = (myChoiceId != null && answerChoiceId != null && myChoiceId.equals(answerChoiceId));
+                }
+
+                if (computedCorrect) correctCnt++;
+
+                Boolean storedCorrect = (my != null) ? my.isCorrect() : null;
+                if (storedCorrect != null && storedCorrect.booleanValue() != computedCorrect) {
+                    log.warn("[review mismatch] sessionId={}, qid={}, storedCorrect={}, computedCorrect={}, myChoiceId={}, answerChoiceId={}, myText={}, expectedText={}",
+                            sessionId, qid, storedCorrect, computedCorrect, myChoiceId, answerChoiceId, mySubmittedText, expectedText);
+                }
+
+                items.add(SessionReviewResponseForm.Item.builder()
+                        .quizQuestionId(qid)
+                        .questionType(qt)
+                        .questionText(q.getQuestionText())
+                        .myChoiceId(isInitials ? null : myChoiceId)
+                        .mySubmittedText(isInitials ? mySubmittedText : null)
+                        .expectedText(expectedText)
+                        .correct(computedCorrect)
+                        .answerChoiceId(answerChoiceId)
+                        .explanation(q.getExplanation())
+                        .termId(Optional.ofNullable(q.getTerm()).map(t -> t.getId()).orElse(null))
+                        .termTitle(Optional.ofNullable(q.getTerm()).map(t -> t.getTitle()).orElse(null))
+                        .categoryId(Optional.ofNullable(q.getTermCategory()).map(c -> c.getId()).orElse(null))
+                        .categoryName(Optional.ofNullable(q.getTermCategory()).map(c -> c.getName()).orElse(null))
+                        .choices(optionList)
+                        .build());
+            } catch (Exception e) {
+                log.error("[review] failed to build item. sessionId={}, qid={}, hasAnswer={}, snapshotSize={}",
+                        sessionId, qid, ansByQ.containsKey(qid), qids.size(), e);
             }
+        }
 
-            boolean computedCorrect;
-
-            if (isInitials) {
-                String submitted = Optional.ofNullable(mySubmittedText).orElse("").trim();
-                String expected  = Optional.ofNullable(expectedText).orElse("").trim();
-                computedCorrect = !submitted.isEmpty() && submitted.equalsIgnoreCase(expected);
-            } else {
-                computedCorrect = (myChoiceId != null && answerChoiceId != null && myChoiceId.equals(answerChoiceId));
-            }
-
-            if (computedCorrect) correctCnt++;
-
-            Boolean storedCorrect = (my != null) ? my.isCorrect() : null;
-            if (storedCorrect != null && storedCorrect.booleanValue() != computedCorrect) {
-                log.warn("[review mismatch] qid={}, storedCorrect={}, computedCorrect={}, myChoiceId={}, answerChoiceId={}, myText={}, expectedText={}",
-                        qid, storedCorrect, computedCorrect, myChoiceId, answerChoiceId, mySubmittedText, expectedText);
-            }
-
-            items.add(SessionReviewResponseForm.Item.builder()
-                    .quizQuestionId(qid)
-                    .questionType(qt)
-                    .questionText(q.getQuestionText())
-                    .myChoiceId(isInitials ? null : myChoiceId)
-                    .mySubmittedText(isInitials ? mySubmittedText : null)
-                    .expectedText(expectedText)
-                    .correct(computedCorrect)
-                    .answerChoiceId(answerChoiceId)
-                    .explanation(q.getExplanation())
-                    .termId(Optional.ofNullable(q.getTerm()).map(t -> t.getId()).orElse(null))
-                    .termTitle(Optional.ofNullable(q.getTerm()).map(t -> t.getTitle()).orElse(null))
-                    .categoryId(Optional.ofNullable(q.getTermCategory()).map(c -> c.getId()).orElse(null))
-                    .categoryName(Optional.ofNullable(q.getTermCategory()).map(c -> c.getName()).orElse(null))
-                    .choices(optionList)
-                    .build());
+        if (items.size() != qids.size()) {
+            log.warn("[review] skipped broken items. sessionId={}, requestedQids={}, builtItems={}",
+                    sessionId, qids.size(), items.size());
         }
 
         int total = qids.size();

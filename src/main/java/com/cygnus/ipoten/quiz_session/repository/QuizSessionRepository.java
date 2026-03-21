@@ -17,6 +17,14 @@ import java.util.Optional;
 
 public interface QuizSessionRepository extends JpaRepository<QuizSession, Long> {
 
+    @Query("""
+        select max(q.lastActivityAt)
+        from QuizSession q
+        where q.account.id = :accountId
+          and q.deletedAt is null
+    """)
+    Optional<Instant> findLatestActivityAt(@Param("accountId") Long accountId);
+
     @Query("SELECT COUNT(u) FROM QuizSession u " +
             "WHERE u.account.id = :accountId " +
             "AND u.deletedAt is null " +

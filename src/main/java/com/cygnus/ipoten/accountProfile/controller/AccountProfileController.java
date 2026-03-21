@@ -10,9 +10,12 @@ import com.cygnus.ipoten.common.annotation.LoginUser;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.server.ResponseStatusException;
+
+import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @RestController
-@RequestMapping("/account-profile")
+@RequestMapping({"/api/me", "/account-profile"})
 @RequiredArgsConstructor
 public class AccountProfileController {
 
@@ -23,6 +26,7 @@ public class AccountProfileController {
             @LoginUser Long accountId,
             @RequestBody NicknameRequest request) {
 
+        Long accountId = resolveAccountId(userToken);
         UpdateNicknameResponse response = accountProfileService.updateNickname(accountId, request.getNickname())
                 .orElseThrow(() -> new IllegalArgumentException("닉네임 변경 실패"));
 
@@ -31,6 +35,7 @@ public class AccountProfileController {
 
     @GetMapping("/nickname")
     public ResponseEntity<NicknameResponse> getNickname(@LoginUser Long accountId) {
+
         NicknameResponse nicknameResponse = accountProfileService.getNicknameByAccountId(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("회원의 닉네임을 찾을 수 없습니다"));
         return ResponseEntity.ok(nicknameResponse);
@@ -48,5 +53,24 @@ public class AccountProfileController {
         ProfileResponse profileResponse = accountProfileService.getProfileByAccountId(accountId)
                 .orElseThrow(() -> new IllegalArgumentException("회원의 회원정보를 찾을 수 없습니다"));
         return ResponseEntity.ok(profileResponse);
+    }
+
+    @GetMapping({"", "/"})
+    public ResponseEntity<ProfileResponse> getMe(
+            @CookieValue(name = "userToken", required = false) String userToken) {
+        return getProfile(userToken);
+    }
+
+    private Long resolveAccountId(String userToken) {
+        if (userToken == null || userToken.isBlank()) {
+            throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+
+        Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
+        if (accountId == null) {
+            throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
+        }
+
+        return accountId;
     }
 }

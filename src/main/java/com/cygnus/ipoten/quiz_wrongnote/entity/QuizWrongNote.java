@@ -71,14 +71,24 @@ public class QuizWrongNote {
     @Column(name = "submitted_at", nullable = false)
     private Instant submittedAt;
 
+    @Column(name = "updated_at", nullable = false)
+    private Instant updatedAt;
+
     @Enumerated(EnumType.STRING)
     @Column(name = "status", nullable = false, length = 20)
     private WrongNoteStatus status;
 
     @PrePersist
     void prePersist() {
+        Instant now = Instant.now();
         if (this.submittedAt == null) this.submittedAt = Instant.now();
         if (this.status == null) this.status = WrongNoteStatus.UNRESOLVED;
+        if (this.updatedAt == null) this.updatedAt = now;
+    }
+
+    @PreUpdate
+    void preUpdate() {
+        this.updatedAt = Instant.now();
     }
 
     public static QuizWrongNote forChoice(
@@ -104,6 +114,7 @@ public class QuizWrongNote {
         r.submittedChoiceText = (submittedChoiceText == null ? null : submittedChoiceText.trim());
         r.submittedText = null;
         r.submittedAt = (submittedAt != null ? submittedAt : Instant.now());
+        r.updatedAt = Instant.now();
         return r;
     }
 
@@ -129,6 +140,7 @@ public class QuizWrongNote {
         r.submittedChoiceText = null;
         r.submittedText = submittedText.trim();
         r.submittedAt = (submittedAt != null ? submittedAt : Instant.now());
+        r.updatedAt = Instant.now();
         r.status = WrongNoteStatus.UNRESOLVED;
         return r;
     }

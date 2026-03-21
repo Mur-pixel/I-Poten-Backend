@@ -143,8 +143,20 @@ public class QuizSessionController {
             @PathVariable Long sessionId,
             @LoginUser Long accountId) {
 
-        var review = quizSessionQueryService.getReview(sessionId, accountId);
-        return ResponseEntity.ok(review);
+        try {
+            var review = quizSessionQueryService.getReview(sessionId, accountId);
+            return ResponseEntity.ok(review);
+        } catch (SecurityException e) {
+            log.warn("getSessionReview forbidden or not found. sessionId={}, accountId={}", sessionId, accountId, e);
+            return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
+        } catch (IllegalStateException e) {
+            log.warn("getSessionReview invalid state. sessionId={}, accountId={}, message={}",
+                    sessionId, accountId, e.getMessage(), e);
+            return ResponseEntity.status(HttpStatus.CONFLICT).build();
+        } catch (Exception e) {
+            log.error("getSessionReview failed. sessionId={}, accountId={}", sessionId, accountId, e);
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
     }
 
     @Operation(summary = "오늘의 초성퀴즈 문항 조회")
@@ -220,5 +232,12 @@ public class QuizSessionController {
             log.error("renameSessionTitle failed sessionId={}", sessionId, e);
             return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
+    }
+
+    private Long resolveAccountId(String userToken) {
+        if (userToken == null || userToken.isBlank()) {
+            return null;
+        }
+        return redisCacheService.getValueByKey(userToken, Long.class); // TTL 만료/무효면 null
     }
 }
