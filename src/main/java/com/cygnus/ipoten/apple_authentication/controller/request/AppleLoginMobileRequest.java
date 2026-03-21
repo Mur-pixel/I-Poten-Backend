@@ -11,4 +11,5 @@ public class AppleLoginMobileRequest {
     private String email;
     private String givenName;
     private String familyName;
+    private String platform;
 }
