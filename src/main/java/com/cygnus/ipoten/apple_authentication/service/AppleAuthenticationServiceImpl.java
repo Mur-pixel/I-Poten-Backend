@@ -33,6 +33,7 @@ import java.util.Optional;
 public class AppleAuthenticationServiceImpl implements AppleAuthenticationService {
 
     private final String clientId;
+    private final String iosBundleId;
     private final String clientSecret;
     private final String redirectUri;
     private final String tokenRequestUri;
@@ -44,6 +45,7 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
 
     public AppleAuthenticationServiceImpl(
             @Value("${apple.client-id}") String clientId,
+            @Value("${apple.ios-bundle-id}") String iosBundleId,
             @Value("${apple.client-secret}") String clientSecret,
             @Value("${apple.redirect-uri}") String redirectUri,
             @Value("${apple.token-request-uri}") String tokenRequestUri,
@@ -54,6 +56,7 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
             ObjectMapper objectMapper
     ) {
         this.clientId = clientId;
+        this.iosBundleId = iosBundleId;
         this.clientSecret = clientSecret;
         this.redirectUri = redirectUri;
         this.tokenRequestUri = tokenRequestUri;
@@ -66,21 +69,36 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
 
     @Override
     public AppleLoginMobileResponse handleLoginMobile(AppleLoginMobileRequest request) {
-        log.info("Apple mobile login start - clientId: {}, redirectUri: {}, codeLength: {}",
-                clientId,
-                redirectUri,
+        boolean isIos = "ios".equalsIgnoreCase(request.getPlatform());
+
+        log.info("Apple mobile login start - platform: {}, clientId: {}, codeLength: {}",
+                request.getPlatform(),
+                isIos ? iosBundleId : clientId,
                 request.getAuthorizationCode() == null ? 0 : request.getAuthorizationCode().length());
 
-        Map<String, Object> tokenResponse = exchangeAuthorizationCode(request.getAuthorizationCode());
-        log.info("Apple token exchange success - keys: {}", tokenResponse.keySet());
+        String accessToken;
+        String idToken;
 
-        String accessToken = asString(tokenResponse.get("access_token"));
-        if (isBlank(accessToken)) {
-            throw new IllegalArgumentException("애플 액세스 토큰이 비어 있습니다.");
+        if (isIos) {
+            idToken = request.getIdentityToken();
+            if (isBlank(idToken)) {
+                throw new IllegalArgumentException("애플 identityToken이 비어 있습니다.");
+            }
+            accessToken = request.getAuthorizationCode();
+            log.info("Apple iOS login - identityToken 직접 사용");
+        } else {
+            Map<String, Object> tokenResponse = exchangeAuthorizationCode(request.getAuthorizationCode(), request.getPlatform());
+            log.info("Apple token exchange success - keys: {}", tokenResponse.keySet());
+
+            accessToken = asString(tokenResponse.get("access_token"));
+            if (isBlank(accessToken)) {
+                throw new IllegalArgumentException("애플 액세스 토큰이 비어 있습니다.");
+            }
+
+            String responseIdToken = asString(tokenResponse.get("id_token"));
+            idToken = firstNonBlank(responseIdToken, request.getIdentityToken());
         }
 
-        String responseIdToken = asString(tokenResponse.get("id_token"));
-        String idToken = firstNonBlank(responseIdToken, request.getIdentityToken());
         Map<String, Object> claims = decodeIdTokenClaims(idToken);
 
         String email = firstNonBlank(asString(claims.get("email")), request.getEmail());
@@ -107,7 +125,7 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
         return new AppleLoginMobileResponse(false, userToken, profile.getNickname(), email, refreshToken);
     }
 
-    private Map<String, Object> exchangeAuthorizationCode(String authorizationCode) {
+    private Map<String, Object> exchangeAuthorizationCode(String authorizationCode, String platform) {
         if (isBlank(authorizationCode)) {
             throw new IllegalArgumentException("애플 authorizationCode가 비어 있습니다.");
         }
@@ -115,16 +133,21 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
             throw new IllegalStateException("APPLE_CLIENT_SECRET 환경변수가 비어 있습니다.");
         }
 
+        boolean isIos = "ios".equalsIgnoreCase(platform);
+        String effectiveClientId = isIos ? iosBundleId : clientId;
+
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_FORM_URLENCODED);
 
             MultiValueMap<String, String> params = new LinkedMultiValueMap<>();
-            params.add("client_id", clientId);
+            params.add("client_id", effectiveClientId);
             params.add("client_secret", clientSecret);
             params.add("code", authorizationCode);
             params.add("grant_type", "authorization_code");
-            params.add("redirect_uri", redirectUri);
+            if (!isIos) {
+                params.add("redirect_uri", redirectUri);
+            }
 
             HttpEntity<MultiValueMap<String, String>> request = new HttpEntity<>(params, headers);
             ResponseEntity<Map> response = restTemplate.postForEntity(tokenRequestUri, request, Map.class);

@@ -1,11 +1,12 @@
 package com.cygnus.ipoten.quiz_set.controller;
 
+import com.cygnus.ipoten.common.annotation.LoginUser;
+import com.cygnus.ipoten.common.annotation.PublicEndpoint;
 import com.cygnus.ipoten.quiz_question.entity.enums.DifficultyLevel;
 import com.cygnus.ipoten.quiz_set.controller.response_form.ResolveQuizSetResponseForm;
 import com.cygnus.ipoten.quiz_set.entity.enums.QuizSetType;
 import com.cygnus.ipoten.quiz_set.service.QuizSetQueryService;
 import com.cygnus.ipoten.quiz_set.service.response.ResolveQuizSetResult;
-import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
@@ -29,23 +30,16 @@ import static org.springframework.http.HttpStatus.BAD_REQUEST;
 @Tag(name = "Quiz", description = "퀴즈 세트 관리 API")
 public class QuizSetController {
 
-    private final RedisCacheService redisCacheService;
     private final QuizSetQueryService quizSetQueryService;
 
-    @Operation(
-            summary = "Quiz Set ID resolve",
-            description = "termCategoryId/type/level/count 조건에 맞는 기존 퀴즈 세트를 찾아 반환합니다."
-    )
+    @Operation(summary = "Quiz Set ID resolve")
     @GetMapping("/me/quiz/sets/resolve")
     public ResponseEntity<ResolveQuizSetResponseForm> resolve(
             @RequestParam Long termCategoryId,
             @RequestParam String type,
-            @RequestParam(required=false) String level,
-            @RequestParam(required=false) Integer count,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+            @RequestParam(required = false) String level,
+            @RequestParam(required = false) Integer count,
+            @LoginUser Long accountId) {
 
         QuizSetType typeFilter = QuizSetType.fromParam(type);
         if (typeFilter == QuizSetType.MIX) typeFilter = null;
@@ -64,18 +58,15 @@ public class QuizSetController {
         }
     }
 
-    @Operation(
-            summary = "퀴즈 세트에 포함된 문항 조회",
-            description = "세트 ID와 파트 타입(part)에 따라 객관식/OX/초성 문항 목록을 조회합니다."
-    )
+    @PublicEndpoint
+    @Operation(summary = "퀴즈 세트에 포함된 문항 조회")
     @GetMapping("/quiz/sets/{setId}/questions")
     public ResponseEntity<?> getQuestionsBySet(
             @Parameter(description = "조회할 퀴즈 세트 ID", example = "1")
             @PathVariable Long setId,
-            @Parameter(description = "세트 파트 타입 (CHOICE/OX/INITIALS)", required = false)
-            @RequestParam(name = "part", required = false) QuizSetType part
-    ) {
-        // 세트의 실제 타입
+            @Parameter(description = "세트 파트 타입 (CHOICE/OX/INITIALS)")
+            @RequestParam(name = "part", required = false) QuizSetType part) {
+
         var actual = quizSetQueryService.findPartTypeBySetId(setId).orElse(null);
         if (actual == null) {
             throw new ResponseStatusException(HttpStatus.NOT_FOUND, "quiz set not found");
@@ -92,10 +83,8 @@ public class QuizSetController {
                 return ResponseEntity.ok(Map.of("total", items.size(), "questions", items));
             }
             case INITIALS -> {
-                // 엔티티 전부 조회 (orderIndex -> id 기준 정렬)
                 var qs = quizSetQueryService.findInitialsQuestionsBySetId(setId);
-
-                var out = new java.util.ArrayList<java.util.Map<String,Object>>();
+                var out = new java.util.ArrayList<java.util.Map<String, Object>>();
                 int order = 1;
                 for (var q : qs) {
                     out.add(java.util.Map.of(
@@ -110,30 +99,15 @@ public class QuizSetController {
         }
     }
 
-    /**
-     * 공통: 쿠키에서 userToken을 읽어 Redis에서 accountId를 조회한다.
-     * - 토큰이 없거나 공백이면 null
-     * - Redis에 존재하지 않거나 TTL 만료된 경우도 null
-     */
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) {
-            return null;
-        }
-        return redisCacheService.getValueByKey(userToken, Long.class); // TTL 만료/무효면 null
-    }
-
-    /** 정책: 소유권 위반/존재하지 않음은 404로 숨김 */
     @ExceptionHandler(SecurityException.class)
     public ResponseEntity<Void> handleSecurityException(SecurityException ex) {
         log.warn("보안/소유권 오류 → 404 변환: {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.NOT_FOUND).build();
     }
 
-    /** 만료 등 상태 충돌은 409 */
     @ExceptionHandler(IllegalStateException.class)
     public ResponseEntity<Void> handleIllegalState(IllegalStateException ex) {
         log.warn("상태 충돌(409): {}", ex.getMessage());
         return ResponseEntity.status(HttpStatus.CONFLICT).build();
     }
-
 }

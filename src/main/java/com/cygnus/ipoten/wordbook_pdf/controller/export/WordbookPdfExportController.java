@@ -1,12 +1,13 @@
 package com.cygnus.ipoten.wordbook_pdf.controller.export;
 
+import com.cygnus.ipoten.common.annotation.LoginUser;
+import com.cygnus.ipoten.common.annotation.PublicEndpoint;
 import com.cygnus.ipoten.wordbook_log.service.WordbookLogService;
 import com.cygnus.ipoten.wordbook_pdf.controller.export.request_form.TermsPdfGenerateRequestForm;
 import com.cygnus.ipoten.wordbook_pdf.controller.export.response_form.TermsPdfGenerateResponseForm;
 import com.cygnus.ipoten.wordbook_pdf.service.WordbookPdfEraseService;
 import com.cygnus.ipoten.wordbook_pdf.service.export.response.PdfExportService;
 import com.cygnus.ipoten.wordbook_pdf.service.export.PdfGenerateRequest;
-import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import com.cygnus.ipoten.wordbook.service.WordbookQueryService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -34,35 +35,19 @@ import static org.springframework.http.HttpStatus.UNPROCESSABLE_ENTITY;
 public class WordbookPdfExportController {
 
     private final PdfExportService pdfExportService;
-    private final RedisCacheService redisCacheService;
     private final WordbookPdfEraseService wordbookPdfEraseService;
     private final WordbookQueryService wordbookQueryService;
     private final WordbookLogService wordbookLogService;
 
-    /** 공통: 쿠키에서 토큰 추출 후 Redis에서 accountId 조회(없으면 null) — 쿠키 전용 */
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) return null;
-        return redisCacheService.getValueByKey(userToken, Long.class); // TTL 만료/무효면 null
-    }
-
     @PostMapping(value = "/pdf/generate", produces = MediaType.APPLICATION_PDF_VALUE)
     public ResponseEntity<StreamingResponseBody> generate(
             @Valid @RequestBody TermsPdfGenerateRequestForm form,
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) {
-            log.warn("인증 토큰이 없습니다. 요청을 거부합니다");
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId) {
 
-        final boolean hasTermIds =
-                form.getTermIds() != null && !form.getTermIds().isEmpty();
+        final boolean hasTermIds = form.getTermIds() != null && !form.getTermIds().isEmpty();
         final Long wordbookId =
-                form.getWordbookId() != null ? form.getWordbookId()
-                        : form.getUserWordbookId();
+                form.getWordbookId() != null ? form.getWordbookId() : form.getUserWordbookId();
 
-        // termIds도 없고, wordbookId도 없으면 잘못된 요청
         if (!hasTermIds && wordbookId == null) {
             log.warn("요청 유효성 오류: termIds와 wordbookId가 모두 비어있음. form={}", form);
             return ResponseEntity.badRequest()
@@ -73,25 +58,14 @@ public class WordbookPdfExportController {
         try {
             log.info("PDF(by-folder) 요청 - form={}", form);
 
-            // 최종적으로 PdfExportService에 넘길 termIds
             final java.util.List<Long> termIds;
 
             if (hasTermIds) {
-                // 선택 용어 기반
                 termIds = form.getTermIds();
             } else {
-                // 폴더 전체 기반 → 여기서 termIds 수집
                 final var collected = wordbookQueryService.collectExportTermIds(
-                        accountId,
-                        wordbookId,
-                        null,   // memorization filter 없음
-                        null,   // includeTags 없음
-                        null,   // excludeTags 없음
-                        null,   // sort 없음 (기본 정렬)
-                        0       // hardLimit 미지정 → 서비스 기본 상한
-                );
+                        accountId, wordbookId, null, null, null, null, 0);
 
-                // 상한 초과 시 413 (기존 ApplicationService와 동일 정책)
                 if (collected.limitExceeded()) {
                     return ResponseEntity.status(PAYLOAD_TOO_LARGE)
                             .header("Ebook-Error", "LIMIT_EXCEEDED")
@@ -101,7 +75,6 @@ public class WordbookPdfExportController {
                             .build();
                 }
 
-                // 폴더가 비었으면 422
                 if (collected.termIds().isEmpty()) {
                     return ResponseEntity.status(UNPROCESSABLE_ENTITY)
                             .header("Ebook-Error", "EMPTY_FOLDER")
@@ -112,7 +85,6 @@ public class WordbookPdfExportController {
                 termIds = collected.termIds();
             }
 
-            // 여기서는 무조건 termIds가 non-empty
             final PdfGenerateRequest request = PdfGenerateRequest.builder()
                     .accountId(accountId)
                     .termIds(termIds)
@@ -173,18 +145,15 @@ public class WordbookPdfExportController {
         }
     }
 
-    /**
-     * 내부(Admin) 호출용: ebook 도메인 데이터(해당 계정 것만) 삭제
-     */
+    // 내부(Admin) 호출용 — 인증 없이 접근 가능
+    @PublicEndpoint
     @DeleteMapping("/internal/admin/accounts/{accountId}/ebooks:erase")
     public ResponseEntity<?> eraseEbooksByAccount(@PathVariable Long accountId) {
         var result = wordbookPdfEraseService.eraseByAccountId(accountId);
 
         Map<String, Object> body = Map.of(
                 "accountId", accountId,
-                "deleted", Map.of(
-                        "ebook", result.getEbooks()
-                )
+                "deleted", Map.of("ebook", result.getEbooks())
         );
 
         log.info("[ebook:erase] {}", body);

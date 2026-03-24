@@ -4,11 +4,14 @@ import com.cygnus.ipoten.account.entity.Account;
 import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.common.annotation.LoginUser;
+import com.cygnus.ipoten.common.annotation.LoginToken;
+import com.cygnus.ipoten.common.annotation.PublicEndpoint;
+import com.cygnus.ipoten.common.util.CookieUtil;
 import com.cygnus.ipoten.mobile_auth.controller.dto.MobileRefreshRequest;
 import com.cygnus.ipoten.mobile_auth.controller.dto.MobileRefreshResponse;
 import com.cygnus.ipoten.mobile_auth.entity.AccountRefreshToken;
 import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
-import jakarta.servlet.http.Cookie;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,14 +31,13 @@ public class MobileAuthController {
     private final AuthenticationService authenticationService;
     private final AccountProfileService accountProfileService;
 
-    /**
-     * refreshToken으로 새 accessToken + 새 refreshToken 발급 (token rotation)
-     */
+    // refreshToken 기반 갱신 — userToken 쿠키 불필요
+    @PublicEndpoint
     @PostMapping("/refresh")
     public ResponseEntity<MobileRefreshResponse> refresh(
             @RequestBody MobileRefreshRequest request,
-            HttpServletResponse response
-    ) {
+            HttpServletResponse response) {
+
         Optional<AccountRefreshToken> tokenOpt = refreshTokenService.validate(request.getRefreshToken());
         if (tokenOpt.isEmpty()) {
             log.info("[MobileAuth] 유효하지 않은 리프레시 토큰");
@@ -48,10 +50,7 @@ public class MobileAuthController {
         String newAccessToken = authenticationService.createUserTokenWithAccessToken(accountId, "mobile");
         String newRefreshToken = refreshTokenService.rotate(tokenEntity);
 
-        response.addHeader("Set-Cookie", String.format(
-                "userToken=%s; Max-Age=%d; Path=/; HttpOnly; Secure; SameSite=Strict",
-                newAccessToken, 6 * 60 * 60
-        ));
+        CookieUtil.addUserToken(response, newAccessToken);
 
         AccountProfile profile = accountProfileService.findByAccountId(accountId)
                 .orElseThrow(() -> new IllegalStateException("프로필 없음"));
@@ -60,24 +59,12 @@ public class MobileAuthController {
         return ResponseEntity.ok(new MobileRefreshResponse(newAccessToken, newRefreshToken, profile.getNickname()));
     }
 
-    /**
-     * 회원가입 완료 후 refreshToken 발급
-     * 기존 signup 코드 수정 없이, 회원가입 직후 Flutter에서 이 엔드포인트를 호출
-     */
+    // 회원가입 완료 후 refreshToken 발급 — 인터셉터가 userToken 검증
     @PostMapping("/register")
     public ResponseEntity<MobileRefreshResponse> register(
-            @CookieValue(name = "userToken", required = false) String userToken
-    ) {
-        if (userToken == null || userToken.isBlank() || userToken.startsWith("Temporary_")) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
+            @LoginUser Long accountId,
+            @LoginToken String userToken) {
 
-        boolean valid = authenticationService.verification(userToken);
-        if (!valid) {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
-        }
-
-        Long accountId = authenticationService.getAccountIdByUserToken(userToken);
         AccountProfile profile = accountProfileService.findByAccountId(accountId)
                 .orElseThrow(() -> new IllegalStateException("프로필 없음"));
 
@@ -88,19 +75,15 @@ public class MobileAuthController {
         return ResponseEntity.ok(new MobileRefreshResponse(userToken, refreshToken, profile.getNickname()));
     }
 
-    /**
-     * 로그아웃: accessToken 세션 삭제 + refreshToken 폐기
-     */
+    // 로그아웃 — userToken 선택적 (쿠키 없어도 refreshToken만으로 로그아웃 가능)
+    @PublicEndpoint
     @PostMapping("/logout")
     public ResponseEntity<String> logout(
             @CookieValue(name = "userToken", required = false) String userToken,
             @RequestBody(required = false) MobileRefreshRequest request,
-            HttpServletResponse response
-    ) {
-        Cookie cookie = new Cookie("userToken", null);
-        cookie.setMaxAge(0);
-        cookie.setPath("/");
-        response.addCookie(cookie);
+            HttpServletResponse response) {
+
+        CookieUtil.clearUserToken(response);
 
         if (userToken != null && !userToken.isBlank()) {
             authenticationService.logout(userToken);

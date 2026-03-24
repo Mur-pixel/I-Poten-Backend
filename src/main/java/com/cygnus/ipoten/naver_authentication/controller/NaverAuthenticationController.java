@@ -1,6 +1,7 @@
 package com.cygnus.ipoten.naver_authentication.controller;
 
 
+import com.cygnus.ipoten.common.util.CookieUtil;
 import com.cygnus.ipoten.naver_authentication.service.NaverAuthenticationService;
 import com.cygnus.ipoten.naver_authentication.service.response.NaverLoginResponse;
 import jakarta.servlet.http.HttpServletResponse;
@@ -32,14 +33,7 @@ public class NaverAuthenticationController {
         try {
             NaverLoginResponse naverLoginResponse = naverAuthenticationService.handleLogin(code);
             if(!naverLoginResponse.getIsNewUser()){
-                String cookieHeader = String.format(
-                        "userToken=%s; Max-Age=%d; Path=/; HttpOnly; Secure; SameSite=Strict",
-                        naverLoginResponse.getUserToken(),
-//                    12 * 60 * 60
-                        6 * 60 * 60// 6시간
-
-                );        // CSRF 방어
-                response.addHeader("Set-Cookie", cookieHeader);
+                CookieUtil.addUserToken(response, naverLoginResponse.getUserToken());
             }
 
             response.setContentType("text/html;charset=UTF-8");

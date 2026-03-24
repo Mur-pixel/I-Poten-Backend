@@ -1,11 +1,12 @@
 package com.cygnus.ipoten.recommendation.controller;
 
 import com.cygnus.ipoten.recommendation.controller.response_form.JobRecommendedTermsResponseForm;
+import com.cygnus.ipoten.common.annotation.LoginUser;
+import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
 import com.cygnus.ipoten.recommendation.controller.request_form.attachJobRecommendationsToWordbook;
 import com.cygnus.ipoten.recommendation.entity.enums.JobKey;
 import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
 import com.cygnus.ipoten.wordbook.controller.response_form.AttachTermsBulkResponseForm;
-import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
@@ -28,7 +29,6 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 @Tag(name = "Recommendation", description = "추천 단어를 사용자 단어장에 추가하는 API")
 public class JobRecommendedTermController {
 
-    private final RedisCacheService redisCacheService;
     private final JobRecommendedTermService jobRecommendedTermService;
 
     @GetMapping("/recommended-terms/by-job")
@@ -43,26 +43,22 @@ public class JobRecommendedTermController {
             summary = "직무별 추천 단어를 단어장에 일괄 저장",
             description = "JobKey(예: FRONTEND, BACKEND)에 해당하는 추천 단어들을 지정한 폴더에 한 번에 담습니다."
     )
+    @Operation(summary = "직무별 추천 단어를 단어장에 일괄 저장")
     @PostMapping("/me/folders/{wordbookId}/recommended-terms/by-job")
     public ResponseEntity<AttachTermsBulkResponseForm> attachJobRoleRecommendationsToFolder(
-            @CookieValue(name = "userToken", required = false) String userToken,
+            @LoginUser Long accountId,
             @PathVariable Long wordbookId,
-            @RequestBody @Valid attachJobRecommendationsToWordbook requestForm
-    ) {
-        Long accountId = resolveAccountId(userToken);
-        if (accountId == null) throw new ResponseStatusException(UNAUTHORIZED, "로그인이 필요합니다.");
+            @RequestBody @Valid attachJobRecommendationsToWordbook requestForm) {
 
         try {
             log.info("[attachJobRecommendations] wordbookId={}, jobKey={}",
                     wordbookId, requestForm.getJobKey());
 
             var response = jobRecommendedTermService.attachJobRecommendationsToWordbook(
-                    accountId, wordbookId, requestForm.getJobKey()
-            );
+                    accountId, wordbookId, requestForm.getJobKey());
 
             return ResponseEntity.status(HttpStatus.CREATED)
                     .body(AttachTermsBulkResponseForm.from(response));
-
         } catch (Exception e) {
             log.error("[attachJobRecommendations] FAILED wordbookId={} jobKey={}",
                     wordbookId, requestForm.getJobKey(), e);
