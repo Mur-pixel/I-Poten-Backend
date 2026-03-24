@@ -6,6 +6,7 @@ import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
 import com.cygnus.ipoten.recommendation.controller.request_form.attachJobRecommendationsToWordbook;
 import com.cygnus.ipoten.recommendation.entity.enums.JobKey;
 import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
+import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import com.cygnus.ipoten.wordbook.controller.response_form.AttachTermsBulkResponseForm;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -30,6 +31,7 @@ import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 public class JobRecommendedTermController {
 
     private final JobRecommendedTermService jobRecommendedTermService;
+    private final RedisCacheService redisCacheService;
 
     @GetMapping("/recommended-terms/by-job")
     public ResponseEntity<JobRecommendedTermsResponseForm> getJobRecommendedTerms(
@@ -43,7 +45,9 @@ public class JobRecommendedTermController {
             summary = "직무별 추천 단어를 단어장에 일괄 저장",
             description = "JobKey(예: FRONTEND, BACKEND)에 해당하는 추천 단어들을 지정한 폴더에 한 번에 담습니다."
     )
-    @Operation(summary = "직무별 추천 단어를 단어장에 일괄 저장")
+
+
+//    @Operation(summary = "직무별 추천 단어를 단어장에 일괄 저장")
     @PostMapping("/me/folders/{wordbookId}/recommended-terms/by-job")
     public ResponseEntity<AttachTermsBulkResponseForm> attachJobRoleRecommendationsToFolder(
             @LoginUser Long accountId,
