@@ -1,7 +1,9 @@
 package com.cygnus.ipoten.recommendation.controller;
 
-import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
+import com.cygnus.ipoten.recommendation.controller.response_form.JobRecommendedTermsResponseForm;
 import com.cygnus.ipoten.recommendation.controller.request_form.attachJobRecommendationsToWordbook;
+import com.cygnus.ipoten.recommendation.entity.enums.JobKey;
+import com.cygnus.ipoten.recommendation.service.JobRecommendedTermService;
 import com.cygnus.ipoten.wordbook.controller.response_form.AttachTermsBulkResponseForm;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -14,6 +16,9 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Arrays;
+import java.util.Locale;
+
 import static org.springframework.http.HttpStatus.UNAUTHORIZED;
 
 @Slf4j
@@ -25,6 +30,14 @@ public class JobRecommendedTermController {
 
     private final RedisCacheService redisCacheService;
     private final JobRecommendedTermService jobRecommendedTermService;
+
+    @GetMapping("/recommended-terms/by-job")
+    public ResponseEntity<JobRecommendedTermsResponseForm> getJobRecommendedTerms(
+            @RequestParam String jobKey
+    ) {
+        var recommendations = jobRecommendedTermService.getJobRecommendations(parseJobKey(jobKey));
+        return ResponseEntity.ok(JobRecommendedTermsResponseForm.from(recommendations));
+    }
 
     @Operation(
             summary = "직무별 추천 단어를 단어장에 일괄 저장",
@@ -66,5 +79,20 @@ public class JobRecommendedTermController {
     private Long resolveAccountId(String userToken) {
         if (userToken == null || userToken.isBlank()) return null;
         return redisCacheService.getValueByKey(userToken, Long.class);
+    }
+
+    private JobKey parseJobKey(String rawJobKey) {
+        if (rawJobKey == null || rawJobKey.isBlank()) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "jobKey is required");
+        }
+
+        try {
+            return JobKey.valueOf(rawJobKey.trim().toUpperCase(Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            throw new ResponseStatusException(
+                    HttpStatus.BAD_REQUEST,
+                    "Invalid jobKey. Allowed values: " + Arrays.toString(JobKey.values())
+            );
+        }
     }
 }

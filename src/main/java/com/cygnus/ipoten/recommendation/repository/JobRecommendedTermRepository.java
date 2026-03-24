@@ -16,6 +16,7 @@ public interface JobRecommendedTermRepository extends JpaRepository<JobRecommend
         select jrt
         from JobRecommendedTerm jrt
         join fetch jrt.term t
+        join fetch jrt.termCategory c
         where jrt.jobKey = :jobKey
         order by jrt.rankNo asc
     """)
@@ -25,6 +26,7 @@ public interface JobRecommendedTermRepository extends JpaRepository<JobRecommend
         select jrt
         from JobRecommendedTerm jrt
         join fetch jrt.term t
+        join fetch jrt.termCategory c
         where jrt.jobKey = :jobKey
           and t.termCategory.id = :categoryId
         order by jrt.rankNo asc

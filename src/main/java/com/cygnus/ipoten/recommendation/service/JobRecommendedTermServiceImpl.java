@@ -1,5 +1,6 @@
 package com.cygnus.ipoten.recommendation.service;
 
+import com.cygnus.ipoten.recommendation.entity.JobRecommendedTerm;
 import com.cygnus.ipoten.recommendation.entity.enums.JobKey;
 import com.cygnus.ipoten.wordbook.service.WordbookService;
 import com.cygnus.ipoten.recommendation.repository.JobRecommendedTermRepository;
@@ -25,6 +26,16 @@ public class JobRecommendedTermServiceImpl implements JobRecommendedTermService 
     private final JobRecommendedTermRepository jobRecommendedTermRepository;
     private final WordbookRepository wordbookRepository;
     private final WordbookTermRepository wordbookTermRepository;
+
+    @Override
+    @Transactional(readOnly = true)
+    public List<JobRecommendedTerm> getJobRecommendations(JobKey jobKey) {
+        if (jobKey == null) {
+            throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "jobKey is required");
+        }
+
+        return jobRecommendedTermRepository.findAllWithTermByJobKeyOrderByRankNo(jobKey);
+    }
 
     @Override
     @Transactional
