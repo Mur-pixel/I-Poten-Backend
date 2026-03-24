@@ -6,6 +6,8 @@ import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import com.cygnus.ipoten.config.FrontendConfig;
+import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
+import com.cygnus.ipoten.naver_authentication.service.mobile_response.NaverLoginMobileResponse;
 import com.cygnus.ipoten.naver_authentication.service.response.NaverLoginResponse;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -32,6 +34,7 @@ public class NaverAuthenticationServiceImpl implements NaverAuthenticationServic
     private final FrontendConfig frontendConfig;
     private final AuthenticationService authenticationService;
     private final AccountProfileService accountProfileService;
+    private final RefreshTokenService refreshTokenService;
 
 
     public NaverAuthenticationServiceImpl(
@@ -42,7 +45,8 @@ public class NaverAuthenticationServiceImpl implements NaverAuthenticationServic
             RestTemplate restTemplate,
             FrontendConfig frontendConfig,
             AuthenticationService authenticationService,
-            AccountProfileService accountProfileService) {
+            AccountProfileService accountProfileService,
+            RefreshTokenService refreshTokenService) {
 
         this.loginUrl = loginUrl;
         this.clientId = clientId;
@@ -52,6 +56,7 @@ public class NaverAuthenticationServiceImpl implements NaverAuthenticationServic
         this.frontendConfig = frontendConfig;
         this.authenticationService = authenticationService;
         this.accountProfileService = accountProfileService;
+        this.refreshTokenService = refreshTokenService;
     }
 
     @Override
@@ -80,6 +85,29 @@ public class NaverAuthenticationServiceImpl implements NaverAuthenticationServic
 
 
         return NaverLoginResponse.of(isNewUser, token, nickname, email, origin);
+    }
+
+    @Override
+    public NaverLoginMobileResponse handleLoginMobile(String accessToken) {
+        Map<String, Object> userInfo = getUserInfo(accessToken);
+        String email = (String) userInfo.get("email");
+        String nickname = (String) userInfo.get("nickname");
+
+        log.info("이메일 : {}", email);
+        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.NAVER);
+
+        boolean isNewUser = accountProfile.isEmpty();
+        log.info("회원가입 되어 있는지 여부 : {}", isNewUser);
+
+        if (isNewUser) {
+            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
+            return new NaverLoginMobileResponse(true, tempToken, nickname, email);
+        }
+
+        var account = accountProfile.get().getAccount();
+        String userToken = authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken);
+        String refreshToken = refreshTokenService.createOrReplace(account);
+        return new NaverLoginMobileResponse(false, userToken, nickname, email, refreshToken);
     }
 
     @Override
