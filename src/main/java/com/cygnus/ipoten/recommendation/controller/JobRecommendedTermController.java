@@ -43,7 +43,6 @@ public class JobRecommendedTermController {
             summary = "직무별 추천 단어를 단어장에 일괄 저장",
             description = "JobKey(예: FRONTEND, BACKEND)에 해당하는 추천 단어들을 지정한 폴더에 한 번에 담습니다."
     )
-    @Operation(summary = "직무별 추천 단어를 단어장에 일괄 저장")
     @PostMapping("/me/folders/{wordbookId}/recommended-terms/by-job")
     public ResponseEntity<AttachTermsBulkResponseForm> attachJobRoleRecommendationsToFolder(
             @LoginUser Long accountId,
@@ -65,18 +64,7 @@ public class JobRecommendedTermController {
             throw e;
         }
     }
-
-    /**
-     * 공통: userToken 쿠키에서 계정 ID를 조회한다.
-     * - 토큰이 없거나 공백이면 null
-     * - Redis에 없거나 TTL 만료된 경우도 null
-     * → null이면 컨트롤러에서 UNAUTHORIZED 처리
-     */
-    private Long resolveAccountId(String userToken) {
-        if (userToken == null || userToken.isBlank()) return null;
-        return redisCacheService.getValueByKey(userToken, Long.class);
-    }
-
+    
     private JobKey parseJobKey(String rawJobKey) {
         if (rawJobKey == null || rawJobKey.isBlank()) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "jobKey is required");
