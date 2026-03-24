@@ -38,12 +38,14 @@ import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
+import jakarta.persistence.EntityNotFoundException;
 
 import java.time.Duration;
 import java.time.Instant;
 import java.time.ZoneId;
 import java.time.format.DateTimeFormatter;
 import java.util.*;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 @Slf4j
@@ -428,10 +430,14 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                         .correct(computedCorrect)
                         .answerChoiceId(answerChoiceId)
                         .explanation(q.getExplanation())
-                        .termId(Optional.ofNullable(q.getTerm()).map(t -> t.getId()).orElse(null))
-                        .termTitle(Optional.ofNullable(q.getTerm()).map(t -> t.getTitle()).orElse(null))
-                        .categoryId(Optional.ofNullable(q.getTermCategory()).map(c -> c.getId()).orElse(null))
-                        .categoryName(Optional.ofNullable(q.getTermCategory()).map(c -> c.getName()).orElse(null))
+                        .termId(safeEntityField(() -> Optional.ofNullable(q.getTerm()).map(t -> t.getId()).orElse(null),
+                                "termId", sessionId, qid))
+                        .termTitle(safeEntityField(() -> Optional.ofNullable(q.getTerm()).map(t -> t.getTitle()).orElse(null),
+                                "termTitle", sessionId, qid))
+                        .categoryId(safeEntityField(() -> Optional.ofNullable(q.getTermCategory()).map(c -> c.getId()).orElse(null),
+                                "categoryId", sessionId, qid))
+                        .categoryName(safeEntityField(() -> Optional.ofNullable(q.getTermCategory()).map(c -> c.getName()).orElse(null),
+                                "categoryName", sessionId, qid))
                         .choices(optionList)
                         .build());
             } catch (Exception e) {
@@ -907,5 +913,15 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
     private static int computeTargetAnswerIndex(long sessionSeed, long qid, int optionCount) {
         long h = mixSeed(sessionSeed, qid);
         return Math.floorMod((int) h, optionCount);
+    }
+
+    private <T> T safeEntityField(Supplier<T> supplier, String fieldName, Long sessionId, Long qid) {
+        try {
+            return supplier.get();
+        } catch (EntityNotFoundException e) {
+            log.warn("[review] missing related entity. sessionId={}, qid={}, field={}, message={}",
+                    sessionId, qid, fieldName, e.getMessage());
+            return null;
+        }
     }
 }
