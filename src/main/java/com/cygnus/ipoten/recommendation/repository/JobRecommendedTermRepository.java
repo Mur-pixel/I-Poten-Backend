@@ -2,6 +2,7 @@ package com.cygnus.ipoten.recommendation.repository;
 
 import com.cygnus.ipoten.recommendation.entity.JobRecommendedTerm;
 import com.cygnus.ipoten.recommendation.entity.enums.JobKey;
+import com.cygnus.ipoten.recommendation.repository.projection.JobRecommendedTermViewRow;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
@@ -35,4 +36,21 @@ public interface JobRecommendedTermRepository extends JpaRepository<JobRecommend
             @Param("jobKey") JobKey jobKey,
             @Param("categoryId") Long categoryId
     );
+
+    @Query("""
+        select new com.cygnus.ipoten.recommendation.repository.projection.JobRecommendedTermViewRow(
+            t.id,
+            t.title,
+            t.description,
+            jrt.rankNo,
+            c.id,
+            c.name
+        )
+        from JobRecommendedTerm jrt
+        join jrt.term t
+        left join t.termCategory c
+        where jrt.jobKey = :jobKey
+        order by jrt.rankNo asc
+    """)
+    List<JobRecommendedTermViewRow> findRecommendationViewsByJobKey(@Param("jobKey") JobKey jobKey);
 }

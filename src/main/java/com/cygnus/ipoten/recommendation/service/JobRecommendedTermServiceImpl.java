@@ -1,9 +1,9 @@
 package com.cygnus.ipoten.recommendation.service;
 
-import com.cygnus.ipoten.recommendation.entity.JobRecommendedTerm;
 import com.cygnus.ipoten.recommendation.entity.enums.JobKey;
 import com.cygnus.ipoten.wordbook.service.WordbookService;
 import com.cygnus.ipoten.recommendation.repository.JobRecommendedTermRepository;
+import com.cygnus.ipoten.recommendation.service.response.JobRecommendedTermView;
 import com.cygnus.ipoten.wordbook.repository.WordbookRepository;
 import com.cygnus.ipoten.wordbook.service.request.AttachTermsBulkRequest;
 import com.cygnus.ipoten.wordbook.service.response.AttachTermsBulkResponse;
@@ -29,12 +29,21 @@ public class JobRecommendedTermServiceImpl implements JobRecommendedTermService 
 
     @Override
     @Transactional(readOnly = true)
-    public List<JobRecommendedTerm> getJobRecommendations(JobKey jobKey) {
+    public List<JobRecommendedTermView> getJobRecommendations(JobKey jobKey) {
         if (jobKey == null) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "jobKey is required");
         }
 
-        return jobRecommendedTermRepository.findAllWithTermByJobKeyOrderByRankNo(jobKey);
+        return jobRecommendedTermRepository.findRecommendationViewsByJobKey(jobKey).stream()
+                .map(row -> new JobRecommendedTermView(
+                        row.termId(),
+                        row.title(),
+                        row.description(),
+                        row.rankNo(),
+                        row.categoryId(),
+                        row.categoryName()
+                ))
+                .toList();
     }
 
     @Override
