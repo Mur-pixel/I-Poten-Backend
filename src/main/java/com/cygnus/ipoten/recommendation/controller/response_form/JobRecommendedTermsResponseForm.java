@@ -1,12 +1,12 @@
 package com.cygnus.ipoten.recommendation.controller.response_form;
 
-import com.cygnus.ipoten.recommendation.entity.JobRecommendedTerm;
+import com.cygnus.ipoten.recommendation.service.response.JobRecommendedTermView;
 
 import java.util.List;
 
 public record JobRecommendedTermsResponseForm(List<Item> items) {
 
-    public static JobRecommendedTermsResponseForm from(List<JobRecommendedTerm> recommendations) {
+    public static JobRecommendedTermsResponseForm from(List<JobRecommendedTermView> recommendations) {
         return new JobRecommendedTermsResponseForm(
                 recommendations.stream()
                         .map(Item::from)
@@ -23,18 +23,15 @@ public record JobRecommendedTermsResponseForm(List<Item> items) {
             Long categoryId,
             String categoryName
     ) {
-        public static Item from(JobRecommendedTerm recommendation) {
-            var term = recommendation.getTerm();
-            var category = recommendation.getTermCategory();
-
+        public static Item from(JobRecommendedTermView recommendation) {
             return new Item(
-                    term != null ? term.getId() : null,
-                    term != null ? term.getId() : null,
-                    term != null ? term.getTitle() : null,
-                    term != null ? term.getDescription() : null,
-                    recommendation.getRankNo(),
-                    category != null ? category.getId() : null,
-                    category != null ? category.getName() : null
+                    recommendation.termId(),
+                    recommendation.termId(),
+                    recommendation.title(),
+                    recommendation.description(),
+                    recommendation.rankNo(),
+                    recommendation.categoryId(),
+                    recommendation.categoryName()
             );
         }
     }
