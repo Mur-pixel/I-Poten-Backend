@@ -14,7 +14,7 @@ public record WrongNoteSearchCondition(
         LocalDate from,
         LocalDate to
 ) {
-    public enum SortKey { RECENT, OLDEST }
+    public enum SortKey { RECENT, OLDEST, MOST_WRONG }
 
     public static WrongNoteSearchCondition of(
             String q,
