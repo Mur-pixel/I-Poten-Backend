@@ -35,6 +35,8 @@ public class WrongNoteItemResponseForm {
 
     private List<ChoiceItem> choices;
     private Instant wrongAt;
+    private Long wrongCount;
+    private String badgeLabel;
 
     private boolean resolved;
     private String status;
@@ -44,6 +46,8 @@ public class WrongNoteItemResponseForm {
             List<QuizChoice> choices,
             String myAnswer,
             String correctAnswer,
+            Long wrongCount,
+            boolean resolved,
             boolean includeAnswers
     ) {
         var q = wn.getQuizQuestion();
@@ -71,8 +75,7 @@ public class WrongNoteItemResponseForm {
                         .build())
                 .toList());
 
-        var s = wn.getStatus();
-        boolean resolved = (s != null && s.name().equals("RESOLVED"));
+        var s = resolved ? "RESOLVED" : "UNRESOLVED";
 
         return WrongNoteItemResponseForm.builder()
                 .wrongNoteId(wn.getId())
@@ -86,12 +89,21 @@ public class WrongNoteItemResponseForm {
                 .correctAnswer(includeAnswers ? correctAnswer : null)
                 .choices(choiceItems)
                 .wrongAt(wn.getSubmittedAt())
+                .wrongCount(wrongCount)
+                .badgeLabel(buildBadgeLabel(wrongCount))
                 .termId(termId)
                 .termTitle(termTitle)
                 .categoryLabel(categoryLabel)
-                .status(s == null ? "UNRESOLVED" : s.name())
+                .status(s)
                 .resolved(resolved)
                 .build();
+    }
+
+    private static String buildBadgeLabel(Long wrongCount) {
+        if (wrongCount == null || wrongCount <= 1L) {
+            return null;
+        }
+        return wrongCount + "회 오답";
     }
 
     @Getter

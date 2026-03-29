@@ -7,24 +7,31 @@ import com.cygnus.ipoten.quiz_question.entity.QuizTextAnswer;
 import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
+import com.cygnus.ipoten.quiz_session_answer.entity.QuizSessionAnswer;
 import com.cygnus.ipoten.quiz_wrongnote.controller.response_form.WrongNoteItemResponseForm;
 import com.cygnus.ipoten.quiz_wrongnote.controller.response_form.WrongNoteListResponseForm;
 import com.cygnus.ipoten.quiz_wrongnote.entity.QuizWrongNote;
 import com.cygnus.ipoten.quiz_wrongnote.entity.enums.WrongNoteStatus;
 import com.cygnus.ipoten.quiz_wrongnote.repository.QuizWrongNoteRepository;
-import com.cygnus.ipoten.quiz_session_answer.entity.QuizSessionAnswer;
+import com.cygnus.ipoten.quiz_wrongnote.repository.projection.WrongNoteQuestionSummaryView;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.domain.Sort;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.ZoneId;
-import java.util.*;
+import java.util.ArrayList;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.NoSuchElementException;
+import java.util.Objects;
+import java.util.Optional;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -105,11 +112,7 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
         page = Math.max(0, page);
         size = Math.max(1, Math.min(100, size));
 
-        var sort = (condition.sortKey() == WrongNoteSearchCondition.SortKey.OLDEST)
-                ? Sort.by(Sort.Direction.ASC, "submittedAt", "id")
-                : Sort.by(Sort.Direction.DESC, "submittedAt", "id");
-
-        Pageable pageable = PageRequest.of(page, size, sort);
+        Pageable pageable = PageRequest.of(page, size);
 
         Instant fromInstant = parseDateStart(condition.from(), KST);
         Instant toExclusive = parseDateEndExclusive(condition.to(), KST);
@@ -119,44 +122,68 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
         var unresolvedOnly = condition.unresolvedOnly();
         var q = condition.q();
 
-        Page<QuizWrongNote> result =
-                quizWrongNoteRepository.searchWrongNotes(accountId, qType, diff, unresolvedOnly, WrongNoteStatus.UNRESOLVED, q, condition.sessionId(), fromInstant, toExclusive, pageable);
+        Page<WrongNoteQuestionSummaryView> result = switch (condition.sortKey()) {
+            case OLDEST -> quizWrongNoteRepository.searchWrongNoteQuestionSummariesOldest(
+                    accountId, qType, diff, unresolvedOnly, WrongNoteStatus.UNRESOLVED, q, condition.sessionId(), fromInstant, toExclusive, pageable);
+            case MOST_WRONG -> quizWrongNoteRepository.searchWrongNoteQuestionSummariesMostWrong(
+                    accountId, qType, diff, unresolvedOnly, WrongNoteStatus.UNRESOLVED, q, condition.sessionId(), fromInstant, toExclusive, pageable);
+            case RECENT -> quizWrongNoteRepository.searchWrongNoteQuestionSummariesRecent(
+                    accountId, qType, diff, unresolvedOnly, WrongNoteStatus.UNRESOLVED, q, condition.sessionId(), fromInstant, toExclusive, pageable);
+        };
 
-        List<QuizWrongNote> content = result.getContent();
-        if (content.isEmpty()) {
+        List<WrongNoteQuestionSummaryView> summaries = result.getContent();
+        if (summaries.isEmpty()) {
             return WrongNoteListResponseForm.of(result.getNumber(), result.getSize(), result.getTotalElements(), List.of());
         }
 
-        // 1) questionIds 수집
+        List<Long> representativeIds = summaries.stream()
+                .map(WrongNoteQuestionSummaryView::getRepresentativeWrongNoteId)
+                .filter(Objects::nonNull)
+                .toList();
+
+        Map<Long, WrongNoteQuestionSummaryView> summaryByRepresentativeId = summaries.stream()
+                .filter(summary -> summary.getRepresentativeWrongNoteId() != null)
+                .collect(Collectors.toMap(
+                        WrongNoteQuestionSummaryView::getRepresentativeWrongNoteId,
+                        summary -> summary,
+                        (left, right) -> left,
+                        LinkedHashMap::new
+                ));
+
+        Map<Long, QuizWrongNote> wrongNoteById = quizWrongNoteRepository.findAllWithDetailsByIdIn(representativeIds).stream()
+                .collect(Collectors.toMap(QuizWrongNote::getId, wrongNote -> wrongNote));
+
+        List<QuizWrongNote> content = representativeIds.stream()
+                .map(wrongNoteById::get)
+                .filter(Objects::nonNull)
+                .toList();
+
         List<Long> questionIds = content.stream()
-                .map(w -> w.getQuizQuestion().getId())
+                .map(wrongNote -> wrongNote.getQuizQuestion().getId())
                 .filter(Objects::nonNull)
                 .distinct()
                 .toList();
 
-        // 2) choices 전체 조회 후 questionId로 그룹핑
         final Map<Long, List<QuizChoice>> choicesByQuestionId =
                 questionIds.isEmpty()
                         ? Map.of()
                         : quizChoiceRepository.findByQuestionIds(questionIds).stream()
                         .collect(Collectors.groupingBy(
-                                c -> c.getQuizQuestion().getId(),
+                                choice -> choice.getQuizQuestion().getId(),
                                 LinkedHashMap::new,
                                 Collectors.toList()
                         ));
 
-        // 3) textAnswer 조회(questionId -> answerText)
         final Map<Long, String> correctTextAnswerByQuestionId =
                 (!includeAnswers || questionIds.isEmpty())
                         ? Map.of()
                         : quizTextAnswerRepository.findByQuizQuestion_IdIn(questionIds).stream()
                         .collect(Collectors.toMap(
-                                a -> a.getQuizQuestion().getId(),
+                                answer -> answer.getQuizQuestion().getId(),
                                 QuizTextAnswer::getAnswerText,
-                                (a, b) -> a
+                                (left, right) -> left
                         ));
 
-        // 4) submittedChoiceText 없는 부분 보강: submittedChoiceId -> choiceText
         final Set<Long> submittedChoiceIds = content.stream()
                 .map(QuizWrongNote::getSubmittedChoiceId)
                 .filter(Objects::nonNull)
@@ -169,30 +196,39 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
                         .collect(Collectors.toMap(
                                 QuizChoice::getId,
                                 QuizChoice::getChoiceText,
-                                (a, b) -> a
+                                (left, right) -> left
                         ));
 
-        // 5) 응답 매핑
         List<WrongNoteItemResponseForm> items = content.stream()
-                .map(wn -> {
-                    Long qid = wn.getQuizQuestion().getId();
-                    List<QuizChoice> choices = choicesByQuestionId.getOrDefault(qid, List.of());
+                .map(wrongNote -> {
+                    Long questionId = wrongNote.getQuizQuestion().getId();
+                    List<QuizChoice> choices = choicesByQuestionId.getOrDefault(questionId, List.of());
+                    WrongNoteQuestionSummaryView summary = summaryByRepresentativeId.get(wrongNote.getId());
 
-                    String myAnswer = resolveMyAnswer(wn, choiceTextByChoiceId);
-
+                    String myAnswer = resolveMyAnswer(wrongNote, choiceTextByChoiceId);
                     String correctAnswer = null;
+
                     if (includeAnswers) {
-                        // 선택형이면 choices에서 정답 찾기
                         Optional<QuizChoice> correctChoice = choices.stream().filter(QuizChoice::isAnswer).findFirst();
                         if (correctChoice.isPresent()) {
                             correctAnswer = correctChoice.get().getChoiceText();
                         } else {
-                            // 텍스트형 정답
-                            correctAnswer = correctTextAnswerByQuestionId.get(qid);
+                            correctAnswer = correctTextAnswerByQuestionId.get(questionId);
                         }
                     }
 
-                    return WrongNoteItemResponseForm.from(wn, choices, myAnswer, correctAnswer, includeAnswers);
+                    boolean resolved = summary == null || summary.getUnresolvedCount() == null || summary.getUnresolvedCount() == 0L;
+                    Long wrongCount = summary == null || summary.getWrongCount() == null ? 1L : summary.getWrongCount();
+
+                    return WrongNoteItemResponseForm.from(
+                            wrongNote,
+                            choices,
+                            myAnswer,
+                            correctAnswer,
+                            wrongCount,
+                            resolved,
+                            includeAnswers
+                    );
                 })
                 .toList();
 
@@ -207,16 +243,23 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
     @Override
     @Transactional
     public void updateResolved(Long accountId, Long wrongNoteId, boolean resolved) {
-        QuizWrongNote wn = quizWrongNoteRepository.findByIdAndAccount_Id(wrongNoteId, accountId)
+        QuizWrongNote wrongNote = quizWrongNoteRepository.findByIdAndAccount_Id(wrongNoteId, accountId)
                 .orElseThrow(() -> new NoSuchElementException("Wrong note id " + wrongNoteId));
 
-        wn.changeStatus(resolved ? WrongNoteStatus.RESOLVED : WrongNoteStatus.UNRESOLVED);
+        quizWrongNoteRepository.updateStatusByAccountIdAndQuestionId(
+                accountId,
+                wrongNote.getQuizQuestion().getId(),
+                resolved ? WrongNoteStatus.RESOLVED : WrongNoteStatus.UNRESOLVED
+        );
     }
 
     @Override
     @Transactional
     public void deleteWrongNote(Long accountId, Long wrongNoteId) {
-        long deleted = quizWrongNoteRepository.deleteByIdAndAccount_Id(wrongNoteId, accountId);
+        QuizWrongNote wrongNote = quizWrongNoteRepository.findByIdAndAccount_Id(wrongNoteId, accountId)
+                .orElseThrow(() -> new NoSuchElementException("Wrong note id " + wrongNoteId));
+
+        long deleted = quizWrongNoteRepository.deleteByAccount_IdAndQuizQuestion_Id(accountId, wrongNote.getQuizQuestion().getId());
         if (deleted == 0) {
             throw new NoSuchElementException("Wrong note id " + wrongNoteId);
         }
@@ -232,30 +275,38 @@ public class QuizWrongNoteServiceImpl implements QuizWrongNoteService {
 
         if (ids.isEmpty()) return;
 
-        long deleted = quizWrongNoteRepository.deleteByAccount_IdAndIdIn(accountId, ids);
+        List<Long> questionIds = quizWrongNoteRepository.findByIdInAndAccount_Id(ids, accountId).stream()
+                .map(quizWrongNote -> quizWrongNote.getQuizQuestion().getId())
+                .filter(Objects::nonNull)
+                .distinct()
+                .toList();
+
+        if (questionIds.isEmpty()) return;
+
+        quizWrongNoteRepository.deleteByAccount_IdAndQuizQuestion_IdIn(accountId, questionIds);
     }
 
-    private String resolveMyAnswer(QuizWrongNote wn, Map<Long, String> choiceTextByChoiceId) {
-        if (wn.getSubmittedText() != null && !wn.getSubmittedText().isBlank()) {
-            return wn.getSubmittedText();
+    private String resolveMyAnswer(QuizWrongNote wrongNote, Map<Long, String> choiceTextByChoiceId) {
+        if (wrongNote.getSubmittedText() != null && !wrongNote.getSubmittedText().isBlank()) {
+            return wrongNote.getSubmittedText();
         }
-        if (wn.getSubmittedChoiceText() != null && !wn.getSubmittedChoiceText().isBlank()) {
-            return wn.getSubmittedChoiceText();
+        if (wrongNote.getSubmittedChoiceText() != null && !wrongNote.getSubmittedChoiceText().isBlank()) {
+            return wrongNote.getSubmittedChoiceText();
         }
-        if (wn.getSubmittedChoiceId() != null) {
-            return choiceTextByChoiceId.getOrDefault(wn.getSubmittedChoiceId(), null);
+        if (wrongNote.getSubmittedChoiceId() != null) {
+            return choiceTextByChoiceId.getOrDefault(wrongNote.getSubmittedChoiceId(), null);
         }
         return null;
     }
 
-    private Instant parseDateStart(LocalDate d, ZoneId zone) {
-        if (d == null) return null;
-        return d.atStartOfDay(zone).toInstant();
+    private Instant parseDateStart(LocalDate date, ZoneId zone) {
+        if (date == null) return null;
+        return date.atStartOfDay(zone).toInstant();
     }
 
-    private Instant parseDateEndExclusive(LocalDate d, ZoneId zone) {
-        if (d == null) return null;
-        return d.plusDays(1).atStartOfDay(zone).toInstant();
+    private Instant parseDateEndExclusive(LocalDate date, ZoneId zone) {
+        if (date == null) return null;
+        return date.plusDays(1).atStartOfDay(zone).toInstant();
     }
 
     private QuestionType parseQuestionTypeOrNull(String type) {

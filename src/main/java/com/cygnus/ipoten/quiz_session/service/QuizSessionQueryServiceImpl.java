@@ -8,6 +8,7 @@ import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
+import com.cygnus.ipoten.quiz_question.util.TextAnswerNormalizer;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionItemsPageResponseForm;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionListResponseForm;
 import com.cygnus.ipoten.quiz_session.controller.response_form.SessionReviewResponseForm;
@@ -405,9 +406,7 @@ public class QuizSessionQueryServiceImpl implements QuizSessionQueryService {
                 boolean computedCorrect;
 
                 if (isInitials) {
-                    String submitted = Optional.ofNullable(mySubmittedText).orElse("").trim();
-                    String expected  = Optional.ofNullable(expectedText).orElse("").trim();
-                    computedCorrect = !submitted.isEmpty() && submitted.equalsIgnoreCase(expected);
+                    computedCorrect = TextAnswerNormalizer.equalsIgnoringWhitespace(mySubmittedText, expectedText);
                 } else {
                     computedCorrect = (myChoiceId != null && answerChoiceId != null && myChoiceId.equals(answerChoiceId));
                 }
