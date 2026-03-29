@@ -3,6 +3,7 @@ package com.cygnus.ipoten.apple_authentication.controller;
 import com.cygnus.ipoten.apple_authentication.controller.request.AppleLoginMobileRequest;
 import com.cygnus.ipoten.apple_authentication.service.AppleAuthenticationService;
 import com.cygnus.ipoten.apple_authentication.service.mobile_response.AppleLoginMobileResponse;
+import com.cygnus.ipoten.authentication.social.SocialLoginException;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -42,11 +43,6 @@ public class AppleAuthenticationController {
 
     @GetMapping("/apple-authentication/test")
     public ResponseEntity<Map<String, Object>> appleTest() {
-        log.info("Apple test endpoint hit - clientId: {}, redirectUri: {}, package: {}",
-                clientId,
-                redirectUri,
-                androidPackageName);
-
         return ResponseEntity.ok(Map.of(
                 "ok", true,
                 "clientId", clientId,
@@ -60,11 +56,6 @@ public class AppleAuthenticationController {
             @RequestParam MultiValueMap<String, String> params,
             HttpServletResponse response
     ) throws IOException {
-        log.info("Apple callback received - keys: {}, codePresent: {}, state: {}",
-                params.keySet(),
-                params.containsKey("code"),
-                params.getFirst("state"));
-
         String queryString = params.entrySet().stream()
                 .flatMap(entry -> entry.getValue().stream().map(value -> encode(entry.getKey()) + "=" + encode(value)))
                 .collect(Collectors.joining("&"));
@@ -73,23 +64,16 @@ public class AppleAuthenticationController {
                 + (queryString.isEmpty() ? "" : "?" + queryString)
                 + "#Intent;package=" + androidPackageName + ";scheme=signinwithapple;end";
 
-        log.info("Apple callback -> Android redirect, package: {}, queryLength: {}", androidPackageName, queryString.length());
         response.sendRedirect(redirectUrl);
     }
 
     @PostMapping("/authentication/apple/login/mobile")
-    public ResponseEntity<AppleLoginMobileResponse> appleLoginMobile(
-            @RequestBody AppleLoginMobileRequest request
-    ) {
-        log.info("Apple mobile login request - codePresent: {}, identityTokenPresent: {}, email: {}, givenNamePresent: {}, familyNamePresent: {}",
-                request.getAuthorizationCode() != null && !request.getAuthorizationCode().isBlank(),
-                request.getIdentityToken() != null && !request.getIdentityToken().isBlank(),
-                request.getEmail(),
-                request.getGivenName() != null && !request.getGivenName().isBlank(),
-                request.getFamilyName() != null && !request.getFamilyName().isBlank());
+    public ResponseEntity<?> appleLoginMobile(@RequestBody AppleLoginMobileRequest request) {
         try {
             AppleLoginMobileResponse appleLoginMobileResponse = appleAuthenticationService.handleLoginMobile(request);
             return new ResponseEntity<>(appleLoginMobileResponse, HttpStatus.OK);
+        } catch (SocialLoginException e) {
+            return ResponseEntity.status(e.getStatus()).body(e.toResponse());
         } catch (Exception e) {
             log.error("애플 모바일 로그인 오류", e);
             return new ResponseEntity<>(HttpStatus.INTERNAL_SERVER_ERROR);

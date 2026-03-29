@@ -8,14 +8,28 @@ public abstract class MetaLoginResponse {
 
 
 
-    public static MetaLoginResponse of(boolean isNewUser, String token, String nickname, String email, String origin) {
+    public static MetaLoginResponse of(
+            boolean isNewUser,
+            boolean isRejoinUser,
+            String token,
+            String nickname,
+            String email,
+            String origin
+    ) {
         return isNewUser
-                ? new NewUserMetaLoginResponse(isNewUser, token, nickname, email, origin)
+                ? new NewUserMetaLoginResponse(isNewUser, isRejoinUser, token, nickname, email, origin)
                 : new ExistingUserMetaLoginResponse(isNewUser, token, nickname, email, origin);
     }
 
-    public static KakaoLoginMobileResponse ofMobile(boolean isNewUser, String token, String nickname, String email, String origin) {
-        return new KakaoLoginMobileResponse(isNewUser, token, nickname, email);
+    public static KakaoLoginMobileResponse ofMobile(
+            boolean isNewUser,
+            boolean isRejoinUser,
+            String token,
+            String nickname,
+            String email,
+            String origin
+    ) {
+        return new KakaoLoginMobileResponse(isNewUser, token, nickname, email, isRejoinUser);
     }
 
 

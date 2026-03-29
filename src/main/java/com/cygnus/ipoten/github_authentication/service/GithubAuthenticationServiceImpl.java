@@ -50,6 +50,7 @@ public class GithubAuthenticationServiceImpl implements GithubAuthenticationServ
 
         if (optionalProfile.isPresent()) {
             account = optionalProfile.get().getAccount();
+            account.ensureActive();
             log.info("account (existing): {}", account);
         }
         String origin = frontendConfig.getOrigins().get(0);
