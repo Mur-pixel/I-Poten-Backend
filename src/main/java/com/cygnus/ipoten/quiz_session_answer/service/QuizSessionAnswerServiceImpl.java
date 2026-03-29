@@ -9,6 +9,7 @@ import com.cygnus.ipoten.quiz_question.entity.enums.QuestionType;
 import com.cygnus.ipoten.quiz_question.repository.QuizChoiceRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizQuestionRepository;
 import com.cygnus.ipoten.quiz_question.repository.QuizTextAnswerRepository;
+import com.cygnus.ipoten.quiz_question.util.TextAnswerNormalizer;
 import com.cygnus.ipoten.quiz_session.entity.QuizSession;
 import com.cygnus.ipoten.quiz_session.entity.enums.SeedMode;
 import com.cygnus.ipoten.quiz_session.entity.enums.SessionMode;
@@ -31,7 +32,6 @@ import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.text.Normalizer;
 import java.time.*;
 import java.util.*;
 import java.util.concurrent.ThreadLocalRandom;
@@ -359,10 +359,7 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
                 String expectedRaw = Optional.ofNullable(expectedTextByQid.get(q.getId()))
                         .orElseThrow(() -> new IllegalArgumentException("초성 퀴즈 정답이 등록되지 않았습니다: " + q.getId()));
 
-                String submittedNorm = normalizeTextAnswer(submittedRaw);
-                String expectedNorm = normalizeTextAnswer(expectedRaw);
-
-                boolean isCorrect = !submittedNorm.isBlank() && submittedNorm.equals(expectedNorm);
+                boolean isCorrect = TextAnswerNormalizer.equalsIgnoringWhitespace(submittedRaw, expectedRaw);
                 if (isCorrect) correctCount++;
 
                 String submittedToSave = submittedRaw.trim();
@@ -665,11 +662,4 @@ public class QuizSessionAnswerServiceImpl implements QuizSessionAnswerService {
         }
     }
 
-    private static String normalizeTextAnswer(String s) {
-        if (s == null) return "";
-        String t = Normalizer.normalize(s, Normalizer.Form.NFKC);
-        t = t.replaceAll("\\s+", "");
-        t = t.toLowerCase(Locale.ROOT);
-        return t;
-    }
 }
