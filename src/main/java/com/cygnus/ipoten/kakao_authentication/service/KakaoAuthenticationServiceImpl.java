@@ -1,17 +1,20 @@
 package com.cygnus.ipoten.kakao_authentication.service;
 
-
 import com.cygnus.ipoten.account.entity.LoginType;
-import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.authentication.social.SocialLoginPolicyService;
 import com.cygnus.ipoten.config.FrontendConfig;
 import com.cygnus.ipoten.kakao_authentication.service.mobile_response.KakaoLoginMobileResponse;
 import com.cygnus.ipoten.kakao_authentication.service.response.KakaoLoginResponse;
 import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
@@ -34,7 +37,7 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
     private final FrontendConfig frontendConfig;
     private final AuthenticationService authenticationService;
     private final RefreshTokenService refreshTokenService;
-
+    private final SocialLoginPolicyService socialLoginPolicyService;
 
     public KakaoAuthenticationServiceImpl(
             @Value("${kakao.login-url}") String loginUrl,
@@ -46,33 +49,30 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
             AccountProfileService accountProfileService,
             FrontendConfig frontendConfig,
             AuthenticationService authenticationService,
-            RefreshTokenService refreshTokenService) {
+            RefreshTokenService refreshTokenService,
+            SocialLoginPolicyService socialLoginPolicyService) {
         this.loginUrl = loginUrl;
         this.clientId = clientId;
         this.redirectUri = redirectUri;
         this.tokenRequestUri = tokenRequestUri;
         this.userInfoRequestUri = userInfoRequestUri;
-
         this.restTemplate = restTemplate;
         this.accountProfileService = accountProfileService;
         this.frontendConfig = frontendConfig;
         this.authenticationService = authenticationService;
         this.refreshTokenService = refreshTokenService;
+        this.socialLoginPolicyService = socialLoginPolicyService;
     }
-
 
     @Override
     public String requestKakaoOauthLink() {
-        log.info("Kakao 소셜 로그인 시도 -> 로그인 url 호출");
-
-
-
         if (loginUrl == null || clientId == null || redirectUri == null) {
-            throw new IllegalStateException("필수 설정 값이 누락되었습니다: loginUrl, clientId, redirectUri는 모두 필수입니다.");
+            throw new IllegalStateException("필수 설정값이 누락되었습니다. loginUrl, clientId, redirectUri는 모두 필수입니다.");
         }
 
         log.info("로그인 링크 : {}" , String.format("%soauth/authorize?client_id=%s&redirect_uri=%s&response_type=code",
                 loginUrl, clientId, redirectUri));
+
         return String.format("%soauth/authorize?client_id=%s&redirect_uri=%s&response_type=code",
                 loginUrl, clientId, redirectUri);
     }
@@ -150,24 +150,17 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
         Map<String, Object> userInfo = getUserInfo(accessToken);
         String email = extractEmail(userInfo);
         String nickname = extractNickname(userInfo);
-
-        log.info("이메일 :  {}", email);
-        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.KAKAO);
-
-
-
-        boolean isNewUser = accountProfile.isEmpty();
-
-        log.info("신규 회원 여부 : {}", isNewUser);
-
         String origin = frontendConfig.getOrigins().get(0);
 
-        String token = isNewUser
-                ? authenticationService.createTemporaryUserTokenWithAccessToken(accessToken)
-                : authenticationService.createUserTokenWithAccessToken(accountProfile.get().getAccount().getId(), accessToken);
-
-        return KakaoLoginResponse.of(isNewUser, token, nickname, email, origin);
-
+        var loginResult = socialLoginPolicyService.login(email, LoginType.KAKAO, accessToken);
+        return KakaoLoginResponse.of(
+                loginResult.isNewUser(),
+                loginResult.isRejoinUser(),
+                loginResult.token(),
+                nickname,
+                email,
+                origin
+        );
     }
 
     @Override
@@ -175,16 +168,15 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
         return Optional.ofNullable((Map<?, ?>) userInfo.get("properties"))
                 .map(properties -> (String) ((Map<?, ?>) properties).get("nickname"))
                 .filter(nickname -> !nickname.isBlank())
-                .orElseThrow(() -> new IllegalArgumentException("카카오에서 받아온 닉네임이 없습니다."));
+                .orElseThrow(() -> new IllegalArgumentException("카카오에서 받은 닉네임 정보가 없습니다."));
     }
 
     @Override
     public String extractEmail(Map<String, Object> userInfo) {
         return Optional.ofNullable((Map<?, ?>) userInfo.get("kakao_account"))
                 .map(kakaoAccount -> (String) ((Map<?, ?>) kakaoAccount).get("email"))
-                .filter(nickname -> !nickname.isBlank())
-                .orElseThrow(() -> new IllegalArgumentException("카카오에서 받아온 이메일 정보가 없습니다."));
-
+                .filter(email -> !email.isBlank())
+                .orElseThrow(() -> new IllegalArgumentException("카카오에서 받은 이메일 정보가 없습니다."));
     }
 
     @Override
@@ -193,22 +185,13 @@ public class KakaoAuthenticationServiceImpl implements KakaoAuthenticationServic
         String email = extractEmail(userInfo);
         String nickname = extractNickname(userInfo);
 
-        log.info("이메일 :  {}", email);
-        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.KAKAO);
-
-        boolean isNewUser = accountProfile.isEmpty();
-        log.info("회원가입 되어 있는지 여부 : {}", isNewUser);
-
-        if (isNewUser) {
-            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
-            return new KakaoLoginMobileResponse(true, tempToken, nickname, email);
+        var loginResult = socialLoginPolicyService.login(email, LoginType.KAKAO, accessToken);
+        if (loginResult.isNewUser()) {
+            return new KakaoLoginMobileResponse(true, loginResult.token(), nickname, email, loginResult.isRejoinUser());
         }
 
-        var account = accountProfile.get().getAccount();
-        String userToken = authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken);
+        var account = loginResult.account();
         String refreshToken = refreshTokenService.createOrReplace(account);
-        return new KakaoLoginMobileResponse(false, userToken, nickname, email, refreshToken);
+        return new KakaoLoginMobileResponse(false, loginResult.token(), nickname, email, refreshToken);
     }
-
-
 }

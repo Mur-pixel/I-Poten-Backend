@@ -1,11 +1,10 @@
 package com.cygnus.ipoten.google_authentication.service;
 
 import com.cygnus.ipoten.account.entity.LoginType;
-import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.authentication.social.SocialLoginPolicyService;
 import com.cygnus.ipoten.config.FrontendConfig;
-import com.cygnus.ipoten.exception.GlobalExceptionHandler;
 import com.cygnus.ipoten.google_authentication.exception.GoogleAccessTokenException;
 import com.cygnus.ipoten.google_authentication.exception.GoogleGetUserInfoException;
 import com.cygnus.ipoten.google_authentication.service.mobile_response.GoogleLoginMobileResponse;
@@ -13,16 +12,18 @@ import com.cygnus.ipoten.google_authentication.service.response.GoogleLoginRespo
 import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.http.*;
+import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
+import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.util.LinkedMultiValueMap;
 import org.springframework.util.MultiValueMap;
 import org.springframework.web.client.RestClientException;
 import org.springframework.web.client.RestTemplate;
-import org.springframework.web.util.UriComponentsBuilder;
 
 import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -37,7 +38,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
     private final AccountProfileService accountProfileService;
     private final FrontendConfig frontendConfig;
     private final RefreshTokenService refreshTokenService;
-
+    private final SocialLoginPolicyService socialLoginPolicyService;
 
     public GoogleAuthenticationServiceImpl(
             @Value("${google.client-id}") String clientId,
@@ -48,21 +49,20 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
             AuthenticationService authenticationService,
             AccountProfileService accountProfileService,
             FrontendConfig frontendConfig,
-            RefreshTokenService refreshTokenService
+            RefreshTokenService refreshTokenService,
+            SocialLoginPolicyService socialLoginPolicyService
     ) {
-            this.clientId = clientId;
-            this.clientSecret = clientSecret;
-            this.redirectUri = redirectUri;
-            this.tokenRequestUri = tokenRequestUri;
-            this.restTemplate = restTemplate;
-            this.authenticationService = authenticationService;
-            this.accountProfileService = accountProfileService;
-            this.frontendConfig = frontendConfig;
-            this.refreshTokenService = refreshTokenService;
+        this.clientId = clientId;
+        this.clientSecret = clientSecret;
+        this.redirectUri = redirectUri;
+        this.tokenRequestUri = tokenRequestUri;
+        this.restTemplate = restTemplate;
+        this.authenticationService = authenticationService;
+        this.accountProfileService = accountProfileService;
+        this.frontendConfig = frontendConfig;
+        this.refreshTokenService = refreshTokenService;
+        this.socialLoginPolicyService = socialLoginPolicyService;
     }
-
-
-
 
     @Override
     public String Link() {
@@ -80,7 +80,6 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
         );
     }
 
-
     @Override
     public GoogleLoginResponse handleLogin(String code) {
         String origin = frontendConfig.getOrigins().get(0);
@@ -89,17 +88,17 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
         String email = (String) userInfo.get("email");
         String name = (String) userInfo.get("name");
 
-        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmail(email);
+        // 로그인 정책 처리
+        var loginResult = socialLoginPolicyService.login(email, LoginType.GOOGLE, accessToken);
 
-        boolean isNewUser = accountProfile.isEmpty();
-
-        String token =
-                isNewUser
-                ? authenticationService.createTemporaryUserTokenWithAccessToken(accessToken)
-                : authenticationService.createUserTokenWithAccessToken(accountProfile.get().getAccount().getId(), accessToken);
-
-        return GoogleLoginResponse.of(isNewUser, token, name, email, origin);
-
+        return GoogleLoginResponse.of(
+                loginResult.isNewUser(),
+                loginResult.isRejoinUser(),
+                loginResult.token(),
+                name,
+                email,
+                origin
+        );
     }
 
     @Override
@@ -125,7 +124,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
             return (body != null) ? (String) body.get("access_token") : null;
 
         } catch (RestClientException e) {
-            throw new GoogleAccessTokenException("구글 로그인중 AccessTokenException : "+e.getMessage());
+            throw new GoogleAccessTokenException("구글 로그인 중 AccessToken 조회에 실패했습니다: " + e.getMessage());
         }
     }
 
@@ -149,7 +148,7 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
             return response.getBody();
 
         } catch (Exception e) {
-            throw new GoogleGetUserInfoException("구글 로그인중 UserInfoException : "+e.getMessage());
+            throw new GoogleGetUserInfoException("구글 로그인 중 사용자 정보 조회에 실패했습니다: " + e.getMessage());
         }
     }
 
@@ -159,22 +158,17 @@ public class GoogleAuthenticationServiceImpl implements GoogleAuthenticationServ
         String email = (String) userInfo.get("email");
         String nickname = (String) userInfo.get("name");
 
-        log.info("이메일 :  {}", email);
-        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.GOOGLE);
+        var loginResult = socialLoginPolicyService.login(email, LoginType.GOOGLE, accessToken);
 
-        boolean isNewUser = accountProfile.isEmpty();
-        log.info("회원가입 되어 있는지 여부 : {}", isNewUser);
-
-        if (isNewUser) {
-            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
-            return new GoogleLoginMobileResponse(true, tempToken, nickname, email);
+        // 신규 회원 → 임시 토큰 반환
+        if (loginResult.isNewUser()) {
+            return new GoogleLoginMobileResponse(true, loginResult.token(), nickname, email, loginResult.isRejoinUser());
         }
 
-        var account = accountProfile.get().getAccount();
-        String userToken = authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken);
+        // 기존 회원 → refresh token 발급
+        var account = loginResult.account();
         String refreshToken = refreshTokenService.createOrReplace(account);
-        return new GoogleLoginMobileResponse(false, userToken, nickname, email, refreshToken);
+
+        return new GoogleLoginMobileResponse(false, loginResult.token(), nickname, email, refreshToken);
     }
-
-
 }

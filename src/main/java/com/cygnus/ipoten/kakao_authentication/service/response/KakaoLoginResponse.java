@@ -8,14 +8,28 @@ public abstract class KakaoLoginResponse {
 
 
 
-    public static KakaoLoginResponse of(boolean isNewUser, String token, String nickname, String email, String origin) {
+    public static KakaoLoginResponse of(
+            boolean isNewUser,
+            boolean isRejoinUser,
+            String token,
+            String nickname,
+            String email,
+            String origin
+    ) {
         return isNewUser
-                ? new NewUserKakaoLoginResponse(isNewUser, token, nickname, email, origin)
+                ? new NewUserKakaoLoginResponse(isNewUser, isRejoinUser, token, nickname, email, origin)
                 : new ExistingUserKakaoLoginResponse(isNewUser, token, nickname, email, origin);
     }
 
-    public static KakaoLoginMobileResponse ofMobile(boolean isNewUser, String token, String nickname, String email, String origin) {
-        return new KakaoLoginMobileResponse(isNewUser, token, nickname, email);
+    public static KakaoLoginMobileResponse ofMobile(
+            boolean isNewUser,
+            boolean isRejoinUser,
+            String token,
+            String nickname,
+            String email,
+            String origin
+    ) {
+        return new KakaoLoginMobileResponse(isNewUser, token, nickname, email, isRejoinUser);
     }
 
 

@@ -2,43 +2,63 @@ package com.cygnus.ipoten.exception;
 
 import com.cygnus.ipoten.account.exception.NotLoggedInException;
 import com.cygnus.ipoten.account.exception.UserNotFoundException;
+import com.cygnus.ipoten.authentication.social.SocialLoginErrorResponse;
+import com.cygnus.ipoten.authentication.social.SocialLoginException;
 import com.cygnus.ipoten.google_authentication.exception.GoogleAccessTokenException;
 import com.cygnus.ipoten.google_authentication.exception.GoogleGetUserInfoException;
 import com.cygnus.ipoten.term.exception.TermNotFoundException;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.ExceptionHandler;
 import org.springframework.web.bind.annotation.RestControllerAdvice;
+import org.springframework.web.server.ResponseStatusException;
+import org.springframework.web.servlet.resource.NoResourceFoundException;
 
+@Slf4j
 @RestControllerAdvice
 public class GlobalExceptionHandler {
 
-    // 404 Not Found 처리
     @ExceptionHandler(TermNotFoundException.class)
     public ResponseEntity<String> handleTermNotFoundException(TermNotFoundException ex) {
-        return ResponseEntity.status(404).body(ex.getMessage());
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
 
-    // 400 Bad Request 처리
     @ExceptionHandler(IllegalArgumentException.class)
     public ResponseEntity<String> handleIllegalArgumentException(IllegalArgumentException ex) {
+        log.warn("bad request", ex);
         return ResponseEntity.badRequest().body(ex.getMessage());
     }
 
-    // (선택) 예상치 못한 서버 오류
+    @ExceptionHandler(ResponseStatusException.class)
+    public ResponseEntity<String> handleResponseStatusException(ResponseStatusException ex) {
+        return ResponseEntity.status(ex.getStatusCode()).body(ex.getReason());
+    }
+
+    @ExceptionHandler(NoResourceFoundException.class)
+    public ResponseEntity<String> handleNoResourceFoundException(NoResourceFoundException ex) {
+        return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
+    }
+
+    @ExceptionHandler(SocialLoginException.class)
+    public ResponseEntity<SocialLoginErrorResponse> handleSocialLoginException(SocialLoginException ex) {
+        return ResponseEntity.status(ex.getStatus()).body(ex.toResponse());
+    }
+
     @ExceptionHandler(Exception.class)
     public ResponseEntity<String> handleUnexpectedException(Exception ex) {
+        log.error("unexpected server error", ex);
         return ResponseEntity.internalServerError().body("서버 내부 오류가 발생했습니다.");
     }
 
     @ExceptionHandler(NotLoggedInException.class)
     public ResponseEntity<String> handleNotLoggedInException(NotLoggedInException e) {
-        return new ResponseEntity<>(e.getMessage(), HttpStatus.UNAUTHORIZED); // 401 Unauthorized
+        return new ResponseEntity<>(e.getMessage(), HttpStatus.UNAUTHORIZED);
     }
 
     @ExceptionHandler(UserNotFoundException.class)
     public ResponseEntity<String> handleUserNotFoundException(UserNotFoundException e) {
-        return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND); // 404 Not Found
+        return new ResponseEntity<>(e.getMessage(), HttpStatus.NOT_FOUND);
     }
 
     @ExceptionHandler(GoogleAccessTokenException.class)

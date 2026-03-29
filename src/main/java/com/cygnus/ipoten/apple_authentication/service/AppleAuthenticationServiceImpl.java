@@ -1,11 +1,11 @@
 package com.cygnus.ipoten.apple_authentication.service;
 
 import com.cygnus.ipoten.account.entity.LoginType;
-import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.apple_authentication.controller.request.AppleLoginMobileRequest;
 import com.cygnus.ipoten.apple_authentication.service.mobile_response.AppleLoginMobileResponse;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.authentication.social.SocialLoginPolicyService;
 import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -26,7 +26,6 @@ import java.nio.charset.StandardCharsets;
 import java.util.Base64;
 import java.util.Collections;
 import java.util.Map;
-import java.util.Optional;
 
 @Slf4j
 @Service
@@ -42,6 +41,7 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
     private final AccountProfileService accountProfileService;
     private final RefreshTokenService refreshTokenService;
     private final ObjectMapper objectMapper;
+    private final SocialLoginPolicyService socialLoginPolicyService;
 
     public AppleAuthenticationServiceImpl(
             @Value("${apple.client-id}") String clientId,
@@ -53,7 +53,8 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
             AuthenticationService authenticationService,
             AccountProfileService accountProfileService,
             RefreshTokenService refreshTokenService,
-            ObjectMapper objectMapper
+            ObjectMapper objectMapper,
+            SocialLoginPolicyService socialLoginPolicyService
     ) {
         this.clientId = clientId;
         this.iosBundleId = iosBundleId;
@@ -65,6 +66,7 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
         this.accountProfileService = accountProfileService;
         this.refreshTokenService = refreshTokenService;
         this.objectMapper = objectMapper;
+        this.socialLoginPolicyService = socialLoginPolicyService;
     }
 
     @Override
@@ -85,11 +87,8 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
                 throw new IllegalArgumentException("애플 identityToken이 비어 있습니다.");
             }
             accessToken = request.getAuthorizationCode();
-            log.info("Apple iOS login - identityToken 직접 사용");
         } else {
             Map<String, Object> tokenResponse = exchangeAuthorizationCode(request.getAuthorizationCode(), request.getPlatform());
-            log.info("Apple token exchange success - keys: {}", tokenResponse.keySet());
-
             accessToken = asString(tokenResponse.get("access_token"));
             if (isBlank(accessToken)) {
                 throw new IllegalArgumentException("애플 액세스 토큰이 비어 있습니다.");
@@ -100,29 +99,21 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
         }
 
         Map<String, Object> claims = decodeIdTokenClaims(idToken);
-
         String email = firstNonBlank(asString(claims.get("email")), request.getEmail());
         if (isBlank(email)) {
             throw new IllegalArgumentException("애플 이메일을 확인할 수 없습니다.");
         }
 
-        Optional<AccountProfile> accountProfile = accountProfileService.loadProfileByEmailAndLoginType(email, LoginType.APPLE);
-        boolean isNewUser = accountProfile.isEmpty();
+        var loginResult = socialLoginPolicyService.login(email, LoginType.APPLE, accessToken);
         String nickname = buildNickname(request.getGivenName(), request.getFamilyName(), email);
 
-        if (isNewUser) {
-            log.info("Apple mobile login result - new user, email: {}", email);
-            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
-            return new AppleLoginMobileResponse(true, tempToken, nickname, email);
+        if (loginResult.isNewUser()) {
+            return new AppleLoginMobileResponse(true, loginResult.token(), nickname, email, loginResult.isRejoinUser());
         }
 
-        AccountProfile profile = accountProfile.get();
-        log.info("Apple mobile login result - existing user, accountId: {}, email: {}",
-                profile.getAccount().getId(),
-                email);
-        String userToken = authenticationService.createUserTokenWithAccessToken(profile.getAccount().getId(), accessToken);
-        String refreshToken = refreshTokenService.createOrReplace(profile.getAccount());
-        return new AppleLoginMobileResponse(false, userToken, profile.getNickname(), email, refreshToken);
+        var account = loginResult.account();
+        String refreshToken = refreshTokenService.createOrReplace(account);
+        return new AppleLoginMobileResponse(false, loginResult.token(), nickname, email, refreshToken);
     }
 
     private Map<String, Object> exchangeAuthorizationCode(String authorizationCode, String platform) {

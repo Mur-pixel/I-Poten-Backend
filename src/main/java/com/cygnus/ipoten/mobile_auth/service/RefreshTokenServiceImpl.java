@@ -61,4 +61,14 @@ public class RefreshTokenServiceImpl implements RefreshTokenService {
             log.info("[RefreshToken] 폐기 - accountId: {}", t.getAccount().getId());
         });
     }
+
+    @Override
+    @Transactional
+    public void revokeByAccountId(Long accountId) {
+        repository.findByAccountId(accountId).ifPresent(t -> {
+            t.revoke();
+            repository.save(t);
+            log.info("[RefreshToken] 계정 기준 폐기 - accountId: {}", accountId);
+        });
+    }
 }
