@@ -10,4 +10,5 @@ public interface RefreshTokenService {
     Optional<AccountRefreshToken> validate(String token);
     String rotate(AccountRefreshToken tokenEntity);
     void revoke(String token);
+    void revokeByAccountId(Long accountId);
 }

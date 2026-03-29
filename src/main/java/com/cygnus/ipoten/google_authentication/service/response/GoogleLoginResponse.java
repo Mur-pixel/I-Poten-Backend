@@ -9,14 +9,28 @@ import lombok.NoArgsConstructor;
 @NoArgsConstructor
 public abstract class GoogleLoginResponse {
 
-    public static GoogleLoginResponse of( boolean isNewUser, String token, String nickname, String email, String origin) {
+    public static GoogleLoginResponse of(
+            boolean isNewUser,
+            boolean isRejoinUser,
+            String token,
+            String nickname,
+            String email,
+            String origin
+    ) {
         return isNewUser
-                ? new NewUserGoogleLoginResponse(isNewUser, token, nickname, email, origin)
+                ? new NewUserGoogleLoginResponse(isNewUser, isRejoinUser, token, nickname, email, origin)
                 : new ExisitingUserGoogleLoginResponse(isNewUser, token, nickname, email, origin);
 
     }
-    public static GoogleLoginMobileResponse ofMobile(boolean isNewUser, String token, String nickname, String email, String origin) {
-        return new GoogleLoginMobileResponse(isNewUser, token, nickname, email);
+    public static GoogleLoginMobileResponse ofMobile(
+            boolean isNewUser,
+            boolean isRejoinUser,
+            String token,
+            String nickname,
+            String email,
+            String origin
+    ) {
+        return new GoogleLoginMobileResponse(isNewUser, token, nickname, email, isRejoinUser);
     }
 
 

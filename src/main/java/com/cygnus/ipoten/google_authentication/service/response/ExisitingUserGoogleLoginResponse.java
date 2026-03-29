@@ -5,6 +5,7 @@ public class ExisitingUserGoogleLoginResponse extends GoogleLoginResponse {
     private final String htmlResponse;
     private final String userToken;
     private final boolean isNewUser;
+    private final boolean rejoinUser = false;
 
     public ExisitingUserGoogleLoginResponse(boolean isNewUser, String token, String nickname, String email, String origin) {
         this.isNewUser = isNewUser;
@@ -13,6 +14,7 @@ public class ExisitingUserGoogleLoginResponse extends GoogleLoginResponse {
         <html><body><script>
         window.opener.postMessage({
             isNewUser: %s,
+            rejoinUser: false,
             accessToken: '%s',
             user: { nickname: '%s', email: '%s' }
         }, '%s'); window.close();

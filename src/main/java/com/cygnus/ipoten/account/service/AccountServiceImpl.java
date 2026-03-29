@@ -10,6 +10,7 @@ import com.cygnus.ipoten.account.service.register_request.RegisterAccountRequest
 import com.cygnus.ipoten.accountProfile.repository.AccountProfileRepository;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
+import com.cygnus.ipoten.mobile_auth.service.RefreshTokenService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -28,6 +29,7 @@ public class AccountServiceImpl implements AccountService {
     private final AccountRoleTypeRepository accountRoleTypeRepository;
     private final RedisCacheService redisCacheService;
     private final AuthenticationService authenticationService;
+    private final RefreshTokenService refreshTokenService;
     private final AccountProfileRepository accountProfileRepository;
 
     private final AccountProfileService accountProfileService;
@@ -74,6 +76,7 @@ public class AccountServiceImpl implements AccountService {
 
 
     @Override
+    @Transactional
     public void withdraw(String userToken) {
         Long accountId = redisCacheService.getValueByKey(userToken, Long.class);
 
@@ -82,25 +85,24 @@ public class AccountServiceImpl implements AccountService {
             throw new NotLoggedInException("회원이 로그인 상태가 아닙니다.");
         }
 
-        authenticationService.deleteToken(userToken);
-
-
         // 계정을 찾고 삭제
         Account account = accountRepository.findById(accountId)
                 .orElseThrow(() -> new UserNotFoundException("해당하는 계정을 찾을 수 없습니다."));
 
-        // 먼저 accountProfile 삭제
-        accountProfileRepository.findByAccountId(accountId)
-                .ifPresent(accountProfileRepository::delete);
+        // 탈퇴한 회원인지 체크
+        if (account.isWithdrawn()) {
+            throw new IllegalStateException("이미 탈퇴한 회원입니다.");
+        }
 
-        // 그 다음 account 삭제
-        accountRepository.delete(account);
+        // 계정은 남기고 상태/탈퇴 시각만 기록
+        account.markWithdrawn();
 
+        // 현재 로그인 토큰 제거
+        authenticationService.deleteToken(userToken);
+
+        // 해당 계정의 refresh token 전체 폐기
+        refreshTokenService.revokeByAccountId(accountId);
+
+        log.info("회원 탈퇴 상태 변경 완료. accountId={}, 연관 데이터는 배치 삭제 예정", accountId);
     }
-
-
-
-
-
-
 }

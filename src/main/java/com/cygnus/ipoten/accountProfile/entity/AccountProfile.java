@@ -32,5 +32,10 @@ public class AccountProfile {
         this.email = email;
     }
 
+    public void updateProfile(String nickname, String email) {
+        this.nickname = nickname;
+        this.email = email;
+    }
+
 
 }

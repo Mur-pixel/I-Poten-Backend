@@ -45,7 +45,9 @@ public class MobileAuthController {
         }
 
         AccountRefreshToken tokenEntity = tokenOpt.get();
-        Long accountId = tokenEntity.getAccount().getId();
+        Account account = tokenEntity.getAccount();
+        account.ensureActive();
+        Long accountId = account.getId();
 
         String newAccessToken = authenticationService.createUserTokenWithAccessToken(accountId, "mobile");
         String newRefreshToken = refreshTokenService.rotate(tokenEntity);
@@ -69,6 +71,7 @@ public class MobileAuthController {
                 .orElseThrow(() -> new IllegalStateException("프로필 없음"));
 
         Account account = profile.getAccount();
+        account.ensureActive();
         String refreshToken = refreshTokenService.createOrReplace(account);
 
         log.info("[MobileAuth] 회원가입 후 refreshToken 발급 - accountId: {}", accountId);
