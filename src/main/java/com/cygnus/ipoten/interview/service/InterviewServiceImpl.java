@@ -312,6 +312,7 @@ public class InterviewServiceImpl implements InterviewService {
     }
 
     @Override
+    @Transactional(readOnly = true)
     public PersonalityInterviewResultResponseForm getPersonalityInterviewResult(Long interviewId, Long accountId) {
         Interview interview = interviewRepository.findById(interviewId)
                 .orElseThrow(() -> new IllegalArgumentException("인터뷰를 찾을 수 없음"));
