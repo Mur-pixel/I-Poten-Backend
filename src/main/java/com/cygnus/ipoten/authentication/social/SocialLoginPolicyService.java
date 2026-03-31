@@ -5,12 +5,14 @@ import com.cygnus.ipoten.accountProfile.entity.AccountProfile;
 import com.cygnus.ipoten.accountProfile.service.AccountProfileService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Service;
 
 import java.time.Instant;
 import java.util.Optional;
 
 @Service
+@Slf4j
 @RequiredArgsConstructor
 public class SocialLoginPolicyService {
 
@@ -26,46 +28,136 @@ public class SocialLoginPolicyService {
         Optional<AccountProfile> accountProfile =
                 accountProfileService.loadProfileByEmailAndLoginType(email, loginType);
 
+        log.info(
+                "Social login lookup - provider: {}, email: {}, matchedByEmailAndLoginType: {}",
+                loginType,
+                maskEmail(email),
+                accountProfile.isPresent()
+        );
+
         // 2. 가입 이력이 없으면 신규 회원 후보로 판단
         // 아직 정식 가입 전이므로 임시 사용자 토큰(temp token) 발급
         if (accountProfile.isEmpty()) {
+            Optional<AccountProfile> emailOnlyProfile = accountProfileService.loadProfileByEmail(email);
+            if (emailOnlyProfile.isPresent()) {
+                var existingAccount = emailOnlyProfile.get().getAccount();
+                log.warn(
+                        "Social login fallback match by email only - provider: {}, email: {}, accountId: {}, accountStatus: {}, accountLoginType: {}, withdrawnAt: {}",
+                        loginType,
+                        maskEmail(email),
+                        existingAccount.getId(),
+                        existingAccount.getStatus(),
+                        existingAccount.getAccountLoginType().getLoginType(),
+                        existingAccount.getWithdrawnAt()
+                );
+            } else {
+                log.info("Social login treated as new user - provider: {}, email: {}", loginType, maskEmail(email));
+            }
+
+            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
+            log.info(
+                    "Social login issued temporary token - provider: {}, email: {}, tokenPrefix: {}",
+                    loginType,
+                    maskEmail(email),
+                    tokenPrefix(tempToken)
+            );
+
             return new SocialLoginResult(
-                    true,   // 회원가입 필요
-                    false,  // 재가입 아님
-                    authenticationService.createTemporaryUserTokenWithAccessToken(accessToken),
-                    null    // 연결된 기존 계정 없음
+                    true,
+                    false,
+                    tempToken,
+                    null
             );
         }
 
         // 3. 기존 계정이 존재하면 연결된 account 조회
         var account = accountProfile.get().getAccount();
+        log.info(
+                "Social login matched account - provider: {}, email: {}, accountId: {}, accountStatus: {}, accountLoginType: {}, withdrawnAt: {}",
+                loginType,
+                maskEmail(email),
+                account.getId(),
+                account.getStatus(),
+                account.getAccountLoginType().getLoginType(),
+                account.getWithdrawnAt()
+        );
 
         // 4. 탈퇴한 계정인 경우 재가입 가능 여부 확인
         if (account.isWithdrawn()) {
             Instant now = Instant.now();
+            Instant rejoinAvailableAt = account.getRejoinAvailableAt();
+            log.info(
+                    "Social login withdrawn account check - provider: {}, email: {}, accountId: {}, withdrawnAt: {}, rejoinAvailableAt: {}, now: {}",
+                    loginType,
+                    maskEmail(email),
+                    account.getId(),
+                    account.getWithdrawnAt(),
+                    rejoinAvailableAt,
+                    now
+            );
 
-            // 재가입 대기 기간이 지나지 않았다면 예외 발생
             if (!account.canRejoinAt(now)) {
-                throw SocialLoginException.accountWithdrawn(loginType, account.getRejoinAvailableAt());
+                log.warn(
+                        "Social login blocked for withdrawn account - provider: {}, email: {}, accountId: {}, rejoinAvailableAt: {}",
+                        loginType,
+                        maskEmail(email),
+                        account.getId(),
+                        rejoinAvailableAt
+                );
+                throw SocialLoginException.accountWithdrawn(loginType, rejoinAvailableAt);
             }
 
-            // 재가입 가능한 상태라면
-            // 회원가입 화면으로 다시 보내기 위해 임시 토큰 발급
+            String tempToken = authenticationService.createTemporaryUserTokenWithAccessToken(accessToken);
+            log.info(
+                    "Social login rejoin eligible - provider: {}, email: {}, accountId: {}, tokenPrefix: {}",
+                    loginType,
+                    maskEmail(email),
+                    account.getId(),
+                    tokenPrefix(tempToken)
+            );
+
             return new SocialLoginResult(
-                    true,   // 회원가입 절차 필요
-                    true,   // 재가입 대상
-                    authenticationService.createTemporaryUserTokenWithAccessToken(accessToken),
-                    account // 기존 탈퇴 계정 정보 전달
+                    true,
+                    true,
+                    tempToken,
+                    account
             );
         }
 
         // 5. 활성 계정이면 바로 로그인 처리
         // 정식 사용자 토큰(user token) 발급
-        return new SocialLoginResult(
-                false,  // 회원가입 필요 없음
-                false,  // 재가입 아님
-                authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken),
-                account // 로그인된 기존 계정
+        String userToken = authenticationService.createUserTokenWithAccessToken(account.getId(), accessToken);
+        log.info(
+                "Social login issued user token - provider: {}, email: {}, accountId: {}, tokenPrefix: {}",
+                loginType,
+                maskEmail(email),
+                account.getId(),
+                tokenPrefix(userToken)
         );
+
+        return new SocialLoginResult(
+                false,
+                false,
+                userToken,
+                account
+        );
+    }
+
+    private String maskEmail(String email) {
+        if (email == null || email.isBlank() || !email.contains("@")) {
+            return email;
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return "***" + email.substring(atIndex);
+        }
+        return email.charAt(0) + "***" + email.substring(atIndex);
+    }
+
+    private String tokenPrefix(String token) {
+        if (token == null || token.isBlank()) {
+            return token;
+        }
+        return token.substring(0, Math.min(token.length(), 12));
     }
 }

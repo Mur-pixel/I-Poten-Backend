@@ -99,7 +99,18 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
         }
 
         Map<String, Object> claims = decodeIdTokenClaims(idToken);
-        String email = firstNonBlank(asString(claims.get("email")), request.getEmail());
+        String tokenEmail = asString(claims.get("email"));
+        String requestEmail = request.getEmail();
+        String email = firstNonBlank(tokenEmail, requestEmail);
+        log.info(
+                "Apple login email resolved - platform: {}, tokenEmail: {}, requestEmail: {}, resolvedEmail: {}, hasIdentityToken: {}, authCodeLength: {}",
+                request.getPlatform(),
+                maskEmail(tokenEmail),
+                maskEmail(requestEmail),
+                maskEmail(email),
+                !isBlank(idToken),
+                request.getAuthorizationCode() == null ? 0 : request.getAuthorizationCode().length()
+        );
         if (isBlank(email)) {
             throw new IllegalArgumentException("애플 이메일을 확인할 수 없습니다.");
         }
@@ -212,6 +223,17 @@ public class AppleAuthenticationServiceImpl implements AppleAuthenticationServic
 
     private String asString(Object value) {
         return value == null ? null : String.valueOf(value);
+    }
+
+    private String maskEmail(String email) {
+        if (isBlank(email) || !email.contains("@")) {
+            return email;
+        }
+        int atIndex = email.indexOf('@');
+        if (atIndex <= 1) {
+            return "***" + email.substring(atIndex);
+        }
+        return email.charAt(0) + "***" + email.substring(atIndex);
     }
 
     private boolean isBlank(String value) {
