@@ -42,13 +42,13 @@ public class SocialLoginPolicyService {
             if (emailOnlyProfile.isPresent()) {
                 var existingAccount = emailOnlyProfile.get().getAccount();
                 log.warn(
-                        "Social login fallback match by email only - provider: {}, email: {}, accountId: {}, accountStatus: {}, accountLoginType: {}, withdrawnAt: {}",
+                        "Social login fallback match by email only - provider: {}, email: {}, accountId: {}, accountStatus: {}, withdrawnAt: {}, isWithdrawn: {}",
                         loginType,
                         maskEmail(email),
                         existingAccount.getId(),
                         existingAccount.getStatus(),
-                        existingAccount.getAccountLoginType().getLoginType(),
-                        existingAccount.getWithdrawnAt()
+                        existingAccount.getWithdrawnAt(),
+                        existingAccount.isWithdrawn()
                 );
             } else {
                 log.info("Social login treated as new user - provider: {}, email: {}", loginType, maskEmail(email));
@@ -73,12 +73,12 @@ public class SocialLoginPolicyService {
         // 3. 기존 계정이 존재하면 연결된 account 조회
         var account = accountProfile.get().getAccount();
         log.info(
-                "Social login matched account - provider: {}, email: {}, accountId: {}, accountStatus: {}, accountLoginType: {}, withdrawnAt: {}",
+                "Social login matched account - provider: {}, email: {}, accountId: {}, accountStatus: {}, isWithdrawn: {}, withdrawnAt: {}",
                 loginType,
                 maskEmail(email),
                 account.getId(),
                 account.getStatus(),
-                account.getAccountLoginType().getLoginType(),
+                account.isWithdrawn(),
                 account.getWithdrawnAt()
         );
 
