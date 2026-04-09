@@ -1,7 +1,7 @@
 package com.cygnus.ipoten.quiz_admin.controller;
 
 import com.cygnus.ipoten.common.annotation.LoginUser;
-import com.cygnus.ipoten.common.annotation.PublicEndpoint;
+import com.cygnus.ipoten.common.util.InternalApiKeyValidator;
 import com.cygnus.ipoten.quiz_admin.service.QuizAdminService;
 import com.cygnus.ipoten.quiz_admin.controller.request_form.CreateQuizQuestionRequestForm;
 import com.cygnus.ipoten.quiz_admin.controller.response_form.CreateQuizChoiceListResponseForm;
@@ -35,6 +35,7 @@ public class QuizAdminController {
     private final QuizAdminService quizAdminService;
     private final QuizQuestionService quizQuestionService;
     private final QuizChoiceService quizChoiceService;
+    private final InternalApiKeyValidator internalApiKeyValidator;
 
     @Operation(summary = "용어 기반 퀴즈 문제 등록")
     @PostMapping("/terms/{termId}/quiz-questions")
@@ -79,13 +80,17 @@ public class QuizAdminController {
         }
     }
 
-    // 내부(Admin/배치) 호출용 — 인증 없이 접근 가능
-    @PublicEndpoint
+    // 내부(Admin/배치) 호출용 — X-Internal-Key 헤더 검증 필수
     @Operation(summary = "[내부] 특정 계정의 퀴즈 사용자 데이터 일괄 삭제")
     @DeleteMapping("/internal/admin/accounts/{accountId}/quiz:erase")
     public ResponseEntity<?> eraseQuizByAccount(
             @Parameter(description = "정리 대상 계정 ID", example = "1")
-            @PathVariable Long accountId) {
+            @PathVariable Long accountId,
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey) {
+
+        if (!internalApiKeyValidator.isValid(internalKey)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Forbidden"));
+        }
 
         var result = quizAdminService.eraseByAccountId(accountId);
 

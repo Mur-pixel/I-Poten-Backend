@@ -6,8 +6,6 @@ services:
       - dbdata:/var/lib/mysql
       - ./docker/mysql/custom.cnf:/etc/mysql/conf.d/custom.cnf
       - ./docker/mysql/logs:/var/log/mysql
-    ports:
-      - "${SPRING_DATABASE_PORT}:${SPRING_DATABASE_PORT}"
     environment:
       MYSQL_ROOT_PASSWORD: ${SPRING_DATABASE_PASSWORD}
       MYSQL_USER: ${SPRING_DATABASE_USERNAME}
@@ -25,8 +23,6 @@ services:
     labels:
       - "name=redis"
       - "mode=standalone"
-    ports:
-      - "${SPRING_DATA_REDIS_PORT}:${SPRING_DATA_REDIS_PORT}"
     environment:
       REDIS_PASSWORD: ${REDIS_PASSWORD}
     command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}"]

@@ -23,8 +23,8 @@ spring:
 
   jpa:
     hibernate:
-      ddl-auto: update
-    show-sql: true
+      ddl-auto: ${SPRING_JPA_HIBERNATE_DDL_AUTO:validate}
+    show-sql: ${SPRING_JPA_SHOW_SQL:false}
     database-platform: org.hibernate.dialect.MySQL8Dialect
 
 kakao:
@@ -139,3 +139,13 @@ openai:
 
 fastapi:
   uri: ${FASTAPI_URI}
+
+springdoc:
+  api-docs:
+    enabled: ${SPRINGDOC_ENABLED:false}
+  swagger-ui:
+    enabled: ${SPRINGDOC_ENABLED:false}
+
+internal:
+  api:
+    key: ${INTERNAL_API_KEY:}

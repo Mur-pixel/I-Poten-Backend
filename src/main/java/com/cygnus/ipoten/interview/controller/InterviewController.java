@@ -4,7 +4,7 @@ import com.cygnus.ipoten.account.service.AccountService;
 import com.cygnus.ipoten.authentication.service.AuthenticationService;
 import com.cygnus.ipoten.common.annotation.LoginToken;
 import com.cygnus.ipoten.common.annotation.LoginUser;
-import com.cygnus.ipoten.common.annotation.PublicEndpoint;
+import com.cygnus.ipoten.common.util.InternalApiKeyValidator;
 import com.cygnus.ipoten.fcm.service.FcmNotificationService;
 import com.cygnus.ipoten.infrastructure.external.email.EmailService;
 import com.cygnus.ipoten.interview.controller.request_form.*;
@@ -37,6 +37,7 @@ public class InterviewController {
     private final AccountService accountService;
     private final AuthenticationService authenticationService;
     private final FcmNotificationService fcmNotificationService;
+    private final InternalApiKeyValidator internalApiKeyValidator;
 
 
     @PostMapping("/create")
@@ -80,11 +81,15 @@ public class InterviewController {
         return ResponseEntity.ok().build();
     }
 
-    // FastAPI 콜백 — 인증 없이 호출됨
-    @PublicEndpoint
+    // FastAPI 콜백 — X-Internal-Key 헤더 검증 (인터셉터에서 처리)
     @PostMapping("/callback")
     public ResponseEntity<Void> callback(
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey,
             @RequestBody InterviewResultRequestForm interviewResultRequestForm) {
+
+        if (!internalApiKeyValidator.isValid(internalKey)) {
+            return ResponseEntity.status(403).build();
+        }
 
         InterviewResultResponse interviewResultResponse = interviewService.interviewResult(interviewResultRequestForm);
 

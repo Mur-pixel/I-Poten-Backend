@@ -1,14 +1,17 @@
 package com.cygnus.ipoten.wordbook_admin;
 
+import com.cygnus.ipoten.common.util.InternalApiKeyValidator;
 import com.cygnus.ipoten.wordbook_admin.service.WordbookAdminEraseService;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
@@ -22,6 +25,7 @@ import java.util.Map;
 public class WordbookAdminController {
 
     private final WordbookAdminEraseService wordbookAdminEraseService;
+    private final InternalApiKeyValidator internalApiKeyValidator;
 
     /**
      * [내부(Admin/배치) 호출용]
@@ -45,8 +49,12 @@ public class WordbookAdminController {
     @DeleteMapping("/internal/admin/accounts/{accountId}/wordbook:erase")
     public ResponseEntity<?> eraseWordbookByAccount(
             @Parameter(description = "정리 대상 계정 ID", example = "1")
-            @PathVariable Long accountId
+            @PathVariable Long accountId,
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey
     ) {
+        if (!internalApiKeyValidator.isValid(internalKey)) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body(Map.of("message", "Forbidden"));
+        }
         if (accountId == null || accountId <= 0) {
             return ResponseEntity.badRequest().body(Map.of("message", "accountId must be positive"));
         }

@@ -2,6 +2,7 @@ package com.cygnus.ipoten.common.interceptor;
 
 import com.cygnus.ipoten.common.annotation.PublicEndpoint;
 import com.cygnus.ipoten.common.util.CookieUtil;
+import com.cygnus.ipoten.common.util.InternalApiKeyValidator;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
 import jakarta.servlet.http.HttpServletRequest;
 import jakarta.servlet.http.HttpServletResponse;
@@ -20,6 +21,7 @@ import java.io.IOException;
  * <p>흐름:</p>
  * <ol>
  *   <li>@PublicEndpoint → 검증 없이 통과</li>
+ *   <li>X-Internal-Key 헤더가 유효하면 → 내부 서비스 호출로 통과</li>
  *   <li>userToken 쿠키 없음 / Temporary_ 토큰 → 401 즉시 반환</li>
  *   <li>Redis 에서 accountId 조회 실패(만료/무효) → 401 즉시 반환</li>
  *   <li>검증 성공 → request 에 accountId, userToken 저장 후 통과</li>
@@ -40,6 +42,7 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
     public static final String USER_TOKEN_ATTR  = "_userToken";
 
     private final RedisCacheService redisCacheService;
+    private final InternalApiKeyValidator internalApiKeyValidator;
 
     @Override
     public boolean preHandle(HttpServletRequest request,
@@ -52,6 +55,12 @@ public class AuthenticationInterceptor implements HandlerInterceptor {
 
         // @PublicEndpoint 가 메서드 또는 클래스에 붙어있으면 통과
         if (isPublicEndpoint(method)) {
+            return true;
+        }
+
+        // X-Internal-Key 헤더가 유효하면 내부 서비스 호출로 통과
+        String internalKey = request.getHeader("X-Internal-Key");
+        if (internalKey != null && internalApiKeyValidator.isValid(internalKey)) {
             return true;
         }
 
