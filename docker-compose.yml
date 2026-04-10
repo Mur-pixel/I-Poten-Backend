@@ -14,7 +14,7 @@ services:
     env_file:
       - .env
     networks:
-      - ipoten-net
+      - iptn-net
 
   redis:
     image: redis:7.0.4
@@ -31,7 +31,7 @@ services:
     depends_on:
       - db
     networks:
-      - ipoten-net
+      - iptn-net
 
   server:
     image: ghcr.io/i-cygnus/spring-backend:latest
@@ -51,10 +51,10 @@ services:
     env_file:
       - .env
     networks:
-      - ipoten-net
+      - iptn-net
 
 networks:
-  ipoten-net:
+  iptn-net:
     external: true
 
 volumes:

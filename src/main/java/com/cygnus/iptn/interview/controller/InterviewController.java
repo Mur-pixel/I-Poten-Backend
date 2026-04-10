@@ -1,0 +1,153 @@
+package com.cygnus.iptn.interview.controller;
+
+import com.cygnus.iptn.account.service.AccountService;
+import com.cygnus.iptn.authentication.service.AuthenticationService;
+import com.cygnus.iptn.common.annotation.LoginToken;
+import com.cygnus.iptn.common.annotation.LoginUser;
+import com.cygnus.iptn.common.util.InternalApiKeyValidator;
+import com.cygnus.iptn.fcm.service.FcmNotificationService;
+import com.cygnus.iptn.infrastructure.external.email.EmailService;
+import com.cygnus.iptn.interview.controller.request_form.*;
+import com.cygnus.iptn.interview.controller.response_form.*;
+import com.cygnus.iptn.interview.controller.response_form.PersonalityInterviewResultResponseForm;
+import com.cygnus.iptn.interview.service.InterviewService;
+import com.cygnus.iptn.interview.service.response.InterviewCreateResponse;
+import com.cygnus.iptn.interview.service.response.InterviewProgressResponse;
+import com.cygnus.iptn.interview.service.response.InterviewResultListResponse;
+import com.cygnus.iptn.interview.service.response.InterviewResultResponse;
+import com.cygnus.iptn.interview_result.service.InterviewResultService;
+import com.cygnus.iptn.redis_cache.RedisCacheService;
+import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.*;
+
+import java.util.List;
+
+@Slf4j
+@RestController
+@RequestMapping("/api/interview")
+@RequiredArgsConstructor
+public class InterviewController {
+
+    private final RedisCacheService redisCacheService;
+    private final InterviewService interviewService;
+    private final EmailService emailService;
+    private final InterviewResultService interviewResultService;
+    private final AccountService accountService;
+    private final AuthenticationService authenticationService;
+    private final FcmNotificationService fcmNotificationService;
+    private final InternalApiKeyValidator internalApiKeyValidator;
+
+
+    @PostMapping("/create")
+    public ResponseEntity<InterviewCreateResponseForm> interviewCreate(
+            @LoginUser Long accountId,
+            @LoginToken String userToken,
+            @RequestBody InterviewCreateRequestForm interviewCreateRequestForm) {
+
+        log.info("면접 요청 !  첫번째 질문 옴: {}", interviewCreateRequestForm);
+        InterviewCreateResponse interviewCreateResponse = interviewService.createInterview(interviewCreateRequestForm, accountId, userToken);
+        return ResponseEntity.ok(InterviewCreateResponseForm.of(interviewCreateResponse));
+    }
+
+    @PostMapping("/create/normal")
+    public ResponseEntity<NormalInterviewCreateResponseForm> interviewCreateNormal(
+            @LoginToken String userToken,
+            @RequestBody NormalInterviewCreateRequestForm normalInterviewCreateRequestForm) {
+
+        log.info("노말 면접 시도 옴");
+        NormalInterviewCreateResponseForm normalInterviewCreateResponseForm = interviewService.execute(
+                normalInterviewCreateRequestForm.getInterviewType(), normalInterviewCreateRequestForm, userToken);
+        return ResponseEntity.ok(normalInterviewCreateResponseForm);
+    }
+
+    @PostMapping("/progress")
+    public ResponseEntity<InterviewProgressResponseForm> progressInterview(
+            @LoginToken String userToken,
+            @RequestBody InterviewProgressRequestForm interviewProgressRequestForm) {
+
+        InterviewProgressResponse interviewProgressResponse = interviewService.execute(
+                interviewProgressRequestForm.getInterviewType(), interviewProgressRequestForm, userToken);
+        return ResponseEntity.ok(interviewProgressResponse.toInterviewProgressResponseForm());
+    }
+
+    @PostMapping("/end")
+    public ResponseEntity<Void> endInterview(
+            @LoginToken String userToken,
+            @RequestBody InterviewEndRequestForm interviewEndRequestForm) {
+
+        interviewService.endInterview(interviewEndRequestForm, userToken);
+        return ResponseEntity.ok().build();
+    }
+
+    // FastAPI 콜백 — X-Internal-Key 헤더 검증 (인터셉터에서 처리)
+    @PostMapping("/callback")
+    public ResponseEntity<Void> callback(
+            @RequestHeader(value = "X-Internal-Key", required = false) String internalKey,
+            @RequestBody InterviewResultRequestForm interviewResultRequestForm) {
+
+        if (!internalApiKeyValidator.isValid(internalKey)) {
+            return ResponseEntity.status(403).build();
+        }
+
+        InterviewResultResponse interviewResultResponse = interviewService.interviewResult(interviewResultRequestForm);
+
+        try {
+            emailService.sendInterviewResultNotification(interviewResultResponse.getSender(), interviewResultResponse.getResult().getInterview_id());
+        } catch (Exception e) {
+            log.error("이메일 발송 실패 - {}", e.getMessage());
+        }
+
+        Long accountId = redisCacheService.getValueByKey(interviewResultResponse.getUserToken(), Long.class);
+        if (accountId != null) {
+            fcmNotificationService.sendToAccount(accountId, "면접 결과가 도착했어요", "AI 면접 분석이 완료되었습니다. 결과를 확인해보세요!", interviewResultResponse.getResult().getInterview_id());
+        }
+
+        return ResponseEntity.ok().build();
+    }
+
+    @GetMapping("/result/{interviewId}")
+    public ResponseEntity<InterviewResultResponseForm> getInterviewResult(
+            @LoginUser Long accountId,
+            @PathVariable Long interviewId) {
+
+        log.info("면접 결과 조회 요청 - interviewId: {}", interviewId);
+        interviewResultService.checkInterviewOwnership(accountId, interviewId);
+        InterviewResultResponseForm interviewResult = interviewResultService.getInterviewResult(interviewId);
+        return ResponseEntity.ok(interviewResult);
+    }
+
+    @GetMapping("/result/list")
+    public ResponseEntity<InterviewResultListForm> getInterviewResultList(@LoginUser Long accountId) {
+        log.info("accountId: {}", accountId);
+        List<InterviewResultListResponse> interviewResultListByAccountId = interviewService.getInterviewResultListByAccountId(accountId);
+        return ResponseEntity.ok(new InterviewResultListForm(interviewResultListByAccountId));
+    }
+
+    @PostMapping("/normal/submit")
+    public ResponseEntity<Void> submitPersonalityInterview(
+            @LoginUser Long accountId,
+            @RequestBody NormalInterviewSubmitRequestForm form) {
+
+        try {
+            interviewService.submitPersonalityInterviewAnswers(form, accountId);
+            return ResponseEntity.ok().build();
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+
+    @GetMapping("/normal/result/{interviewId}")
+    public ResponseEntity<PersonalityInterviewResultResponseForm> getPersonalityInterviewResult(
+            @LoginUser Long accountId,
+            @PathVariable Long interviewId) {
+
+        try {
+            PersonalityInterviewResultResponseForm result = interviewService.getPersonalityInterviewResult(interviewId, accountId);
+            return ResponseEntity.ok(result);
+        } catch (SecurityException e) {
+            return ResponseEntity.status(403).build();
+        }
+    }
+}

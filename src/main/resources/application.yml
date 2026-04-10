@@ -3,7 +3,7 @@ server:
 
 spring:
   application:
-    name: ipoten
+    name: iptn
 
   task:
     scheduling:
@@ -64,7 +64,7 @@ apple:
   client-secret: ${APPLE_CLIENT_SECRET}
   redirect-uri: ${APPLE_REDIRECT_URI}
   token-request-uri: ${APPLE_TOKEN_REQUEST_URI:https://appleid.apple.com/auth/token}
-  android-package-name: ${APPLE_ANDROID_PACKAGE_NAME:com.cygnus.i_poten_app}
+  android-package-name: ${APPLE_ANDROID_PACKAGE_NAME:com.cygnus.i_ptn_app}
 
 meta:
   login-url: ${META_LOGIN_URL}
