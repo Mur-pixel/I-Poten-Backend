@@ -28,7 +28,7 @@ public class SurveyQueryServiceImpl implements SurveyQueryService {
     @Override
     public GetActiveSurveyResponse getActiveSurvey(Long accountId) {
         SurveyForm activeSurveyForm = surveyFormRepository.findFirstByActiveTrueOrderByVersionDesc()
-                .orElseThrow(() -> new NoSuchElementException("현재 진행 중인 i-Poten 후기 설문이 없습니다."));
+                .orElseThrow(() -> new NoSuchElementException("현재 진행 중인 i-Ptn 후기 설문이 없습니다."));
 
         List<SurveyQuestion> questions = surveyQuestionRepository
                 .findBySurveyFormIdOrderByDisplayOrderAsc(activeSurveyForm.getId());

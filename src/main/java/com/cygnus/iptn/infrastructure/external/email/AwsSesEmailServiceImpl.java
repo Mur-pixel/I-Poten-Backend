@@ -23,7 +23,7 @@ public class AwsSesEmailServiceImpl implements EmailService {
     @Override
     public void sendInterviewResultNotification(String to, Long interviewId) {
         try {
-            String subject = "[I-Poten] AI 면접 평가 리포트가 도착했습니다";
+            String subject = "[I-Ptn] AI 면접 평가 리포트가 도착했습니다";
             String htmlBody = buildNotificationEmail(interviewId);
             sendEmail(to, subject, htmlBody);
             log.info("✅ 리포트 알림 메일 발송 성공: {}", to);
@@ -35,7 +35,7 @@ public class AwsSesEmailServiceImpl implements EmailService {
     @Override
     public void sendErrorNotification(String to, Long interviewId) {
         try {
-            String subject = "[I-Poten] AI 면접 평가 처리 지연 안내";
+            String subject = "[I-Ptn] AI 면접 평가 처리 지연 안내";
             String htmlBody = buildErrorEmail(interviewId);
             sendEmail(to, subject, htmlBody);
             log.info("✅ 오류 알림 발송 성공: {}", to);
@@ -47,7 +47,7 @@ public class AwsSesEmailServiceImpl implements EmailService {
     @Override
     public void sendSignupWelcomeEmail(String to, String nickname) {
         try {
-            String subject = "[I-Poten] 회원가입을 진심으로 환영합니다";
+            String subject = "[I-Ptn] 회원가입을 진심으로 환영합니다";
             String htmlBody = buildSignupEmail(nickname);
             sendEmail(to, subject, htmlBody);
             log.info("✅ 웰컴 메일 발송 성공: {}", to);
@@ -59,7 +59,7 @@ public class AwsSesEmailServiceImpl implements EmailService {
     @Override
     public void sendWithdrawalConfirmationEmail(String to, String nickname) {
         try {
-            String subject = "[I-Poten] 회원 탈퇴 처리가 완료되었습니다";
+            String subject = "[I-Ptn] 회원 탈퇴 처리가 완료되었습니다";
             String htmlBody = buildWithdrawalEmail(nickname);
             sendEmail(to, subject, htmlBody);
             log.info("✅ 탈퇴 확인 메일 발송 성공: {}", to);
@@ -81,14 +81,14 @@ public class AwsSesEmailServiceImpl implements EmailService {
     }
 
     private String getHeader() {
-        return "<div style='text-align: center; padding: 40px 0;'><img src='https://i-poten.com/assets/Logo.png' alt='I-Poten' style='height: 32px; width: auto;'></div>";
+        return "<div style='text-align: center; padding: 40px 0;'><img src='https://i-poten.com/assets/Logo.png' alt='I-Ptn' style='height: 32px; width: auto;'></div>";
     }
 
     private String getFooter() {
         return "<div style='margin-top: 40px; padding-top: 24px; border-top: 1px solid #e5e7eb; text-align: center;'>" +
                "<p style='font-size: 13px; color: #9ca3af; margin: 0;'>본 메일은 발신 전용이며, 회신되지 않습니다.<br>" +
                "문의사항: <a href='mailto:support@i-poten.com' style='color: #3b82f6; text-decoration: none;'>support@i-poten.com/a></p>" +
-               "<p style='font-size: 12px; color: #d1d5db; margin-top: 12px;'>© 2025 I-Poten. All rights reserved.</p></div>";
+               "<p style='font-size: 12px; color: #d1d5db; margin-top: 12px;'>© 2025 I-Ptn. All rights reserved.</p></div>";
     }
 
     private String buildNotificationEmail(Long interviewId) {
@@ -177,7 +177,7 @@ public class AwsSesEmailServiceImpl implements EmailService {
                     %s
                     <div style="text-align: center;">
                         <h1 style="font-size: 22px; font-weight: 800; color: #111827; margin-bottom: 16px;">회원 탈퇴가 완료되었습니다</h1>
-                        <p style="font-size: 15px; color: #4b5563; line-height: 1.7; margin-bottom: 32px;">그동안 I-Poten과 함께해 주셔서 진심으로 감사드립니다.<br>%s님께서 남겨주신 소중한 시간들을 기억하겠습니다.</p>
+                        <p style="font-size: 15px; color: #4b5563; line-height: 1.7; margin-bottom: 32px;">그동안 I-Ptn과 함께해 주셔서 진심으로 감사드립니다.<br>%s님께서 남겨주신 소중한 시간들을 기억하겠습니다.</p>
                         <a href="https://i-poten.com/vue-account/account/signup" style="color: #3b82f6; font-size: 14px; font-weight: 700;">나중에 다시 가입하기</a>
                     </div>
                     %s

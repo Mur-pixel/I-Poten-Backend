@@ -29,8 +29,8 @@ public class SurveyController {
     private final SurveySubmitService surveySubmitService;
 
     @Operation(
-            summary = "현재 진행 중인 i-Poten 후기 설문 조회",
-            description = "인증된 사용자가 현재 활성화된  i-Poten 후기 설문을 조회합니다."
+            summary = "현재 진행 중인 i-Ptn 후기 설문 조회",
+            description = "인증된 사용자가 현재 활성화된  i-Ptn 후기 설문을 조회합니다."
     )
     @GetMapping("/me/surveys/active")
     public ResponseEntity<?> getActiveSurvey(
@@ -61,8 +61,8 @@ public class SurveyController {
     }
 
     @Operation(
-            summary = "현재 진행 중인 i-Poten 후기 설문 응답 제출",
-            description = "인증된 사용자가 현재 활성화된 i-Poten 후기 설문에 응답을 제출합니다."
+            summary = "현재 진행 중인 i-Ptn 후기 설문 응답 제출",
+            description = "인증된 사용자가 현재 활성화된 i-Ptn 후기 설문에 응답을 제출합니다."
     )
     @PostMapping("/me/surveys/active/responses")
     public ResponseEntity<?> submitActiveSurvey(

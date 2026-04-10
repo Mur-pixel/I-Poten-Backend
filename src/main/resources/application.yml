@@ -60,7 +60,7 @@ google:
 
 apple:
   client-id: ${APPLE_CLIENT_ID}
-  ios-bundle-id: ${APPLE_IOS_BUNDLE_ID:com.cygnus.iPotenApp}
+  ios-bundle-id: ${APPLE_IOS_BUNDLE_ID:com.cygnus.iPtnApp}
   client-secret: ${APPLE_CLIENT_SECRET}
   redirect-uri: ${APPLE_REDIRECT_URI}
   token-request-uri: ${APPLE_TOKEN_REQUEST_URI:https://appleid.apple.com/auth/token}

@@ -68,7 +68,7 @@ public class PdfExportService {
         // 5) 렌더
         String title = (request.getTitle() == null || request.getTitle().isBlank())
                 ? "내 단어장 PDF" : request.getTitle();
-        String filename = "I-Poten_terms_" + LocalDate.now() + ".pdf";
+        String filename = "I-Ptn_terms_" + LocalDate.now() + ".pdf";
 
         PdfStream stream = out -> pdfRenderer.render(title, ordered, out);
 

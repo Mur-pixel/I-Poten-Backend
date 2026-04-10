@@ -123,7 +123,7 @@ public class WordbookPdfExportController {
 
             String filename = (responseForm.getFilename() != null && !responseForm.getFilename().isBlank())
                     ? responseForm.getFilename()
-                    : "I-Poten_terms_" + LocalDate.now() + ".pdf";
+                    : "I-Ptn_terms_" + LocalDate.now() + ".pdf";
 
             ContentDisposition cd = ContentDisposition.attachment()
                     .filename(filename, StandardCharsets.UTF_8)
