@@ -29,7 +29,7 @@ public interface InterviewRepository extends JpaRepository<Interview, Long> {
     """)
     List<Interview> findRecentWithProfileByAccountId(@Param("accountId") Long accountId);
 
-    @Query("SELECT i FROM Interview i WHERE i.account.id = :accountId AND i.deletedAt IS NULL")
+    @Query("SELECT i FROM Interview i WHERE i.account.id = :accountId AND i.deletedAt IS NULL AND i.isFinished = true ORDER BY i.createdAt DESC")
     List<Interview> getInterviewResultListByAccountId(@Param("accountId") Long accountId);
 
     // 최신 완료된 인터뷰 1건 조회 (가장 최근 완료 인터뷰)

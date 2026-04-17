@@ -113,7 +113,9 @@ public class InterviewController {
             @PathVariable Long interviewId) {
 
         log.info("면접 결과 조회 요청 - interviewId: {}", interviewId);
-        interviewResultService.checkInterviewOwnership(accountId, interviewId);
+        if (!interviewResultService.checkInterviewOwnership(accountId, interviewId)) {
+            return ResponseEntity.status(403).build();
+        }
         InterviewResultResponseForm interviewResult = interviewResultService.getInterviewResult(interviewId);
         return ResponseEntity.ok(interviewResult);
     }
