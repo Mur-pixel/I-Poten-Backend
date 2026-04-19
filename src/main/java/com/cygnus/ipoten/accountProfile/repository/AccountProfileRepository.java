@@ -21,5 +21,6 @@ public interface AccountProfileRepository extends JpaRepository<AccountProfile, 
     @Query("SELECT ap FROM AccountProfile ap JOIN FETCH ap.account WHERE ap.email = :email")
     Optional<AccountProfile> findWithAccountByEmail(@Param("email") String email);
 
-
+    @Query("SELECT ap FROM AccountProfile ap JOIN FETCH ap.account a LEFT JOIN FETCH a.accountRoleType WHERE a.id IN :accountIds")
+    List<AccountProfile> findAllByAccountIdIn(@Param("accountIds") List<Long> accountIds);
 }
