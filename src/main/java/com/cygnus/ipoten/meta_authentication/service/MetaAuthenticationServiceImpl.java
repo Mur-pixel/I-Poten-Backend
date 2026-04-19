@@ -12,6 +12,8 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.net.URLEncoder;
+import java.nio.charset.StandardCharsets;
 import java.util.Map;
 
 @Slf4j
@@ -58,9 +60,10 @@ public class MetaAuthenticationServiceImpl implements MetaAuthenticationService 
 
     @Override
     public String requestKakaoOauthLink() {
+        String encodedRedirect = URLEncoder.encode(redirectUri, StandardCharsets.UTF_8);
         return String.format(
-                "%s?client_id=%s&redirect_uri=%s&scope=email,public_profile,&response_type=code&scope=email,",
-                loginUrl, clientId, redirectUri
+                "%s?client_id=%s&redirect_uri=%s&response_type=code&scope=email,public_profile",
+                loginUrl, clientId, encodedRedirect
         );
     }
 
