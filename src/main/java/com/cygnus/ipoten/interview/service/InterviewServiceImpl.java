@@ -31,12 +31,12 @@ import com.cygnus.ipoten.interviewee_profile.service.IntervieweeProfileService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.context.ApplicationContext;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.stream.Collectors;
 
@@ -49,7 +49,8 @@ public class InterviewServiceImpl implements InterviewService {
     private final IntervieweeProfileService intervieweeProfileService;
     private final InterviewQAService interviewQAService;
     private final InterviewRepository interviewRepository;
-    private final ApplicationContext context;
+    private final Map<String, InterviewProcessStrategy> interviewProcessStrategies;
+    private final Map<String, NormalInterviewProgressStrategy> normalInterviewProgressStrategies;
     private final AccountProjectService accountProjectService;
     private final FastApiEndInterview fastApiEndInterview;
     private final InterviewResultService interviewResultService;
@@ -162,7 +163,11 @@ public class InterviewServiceImpl implements InterviewService {
         log.info("✅ 인터뷰 프로그레스 시도");
         log.info("✅ 인터뷰 내용 : {},  {},  {}, {}", form.getInterviewId(),form.getInterviewQAId(), form.getInterviewSequence(), form.getAnswer());
 
-        InterviewProcessStrategy strategy = context.getBean(String.valueOf(type), InterviewProcessStrategy.class);
+        String typeKey = String.valueOf(type);
+        InterviewProcessStrategy strategy = interviewProcessStrategies.get(typeKey);
+        if (strategy == null) {
+            throw new IllegalArgumentException("지원하지 않는 인터뷰 타입: " + typeKey);
+        }
         InterviewProgressResponse process = strategy.process(form, userToken);
         String questionTTS = googleTtsService.synthesizeAndUpload(process.getInterviewQuestionText());
 
@@ -173,7 +178,11 @@ public class InterviewServiceImpl implements InterviewService {
     @Override
     public NormalInterviewCreateResponseForm execute(InterviewType type, NormalInterviewCreateRequestForm form, String userToken) {
 
-        NormalInterviewProgressStrategy strategy = context.getBean(String.valueOf(type), NormalInterviewProgressStrategy.class);
+        String typeKey = String.valueOf(type);
+        NormalInterviewProgressStrategy strategy = normalInterviewProgressStrategies.get(typeKey);
+        if (strategy == null) {
+            throw new IllegalArgumentException("지원하지 않는 인터뷰 타입: " + typeKey);
+        }
         NormalInterviewProgressResponse process = strategy.process(form, userToken);
 
         return process.toNormalInterviewCreateResponseForm();
