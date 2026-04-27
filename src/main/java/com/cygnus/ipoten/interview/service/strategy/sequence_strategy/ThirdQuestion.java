@@ -7,7 +7,7 @@ import com.cygnus.ipoten.infrastructure.external.fastapi.request.FastApiAccountP
 import com.cygnus.ipoten.infrastructure.external.fastapi.request.FastApiThirdProgressRequest;
 import com.cygnus.ipoten.infrastructure.external.fastapi.response.FastApiQuestionResponse;
 import com.cygnus.ipoten.interview.entity.*;
-import com.cygnus.ipoten.interview.service.InterviewService;
+import com.cygnus.ipoten.interview.repository.InterviewRepository;
 import com.cygnus.ipoten.interview.service.request.InterviewSequenceRequest;
 import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
 import com.cygnus.ipoten.interviewQA.entity.InterviewQA;
@@ -27,7 +27,7 @@ import java.util.stream.Collectors;
 @Transactional
 public class ThirdQuestion implements InterviewSequenceStrategy{
 
-    private final InterviewService interviewService;
+    private final InterviewRepository interviewRepository;
     private final RedisCacheService redisCacheService;
     private final FastApiThirdFollowupQuestionClient fastApiThirdFollowupQuestionClient;
     private final InterviewQAService interviewQAService;
@@ -43,7 +43,7 @@ public class ThirdQuestion implements InterviewSequenceStrategy{
         }
 
 
-        Interview interview = interviewService.findById(interviewSequenceRequest.getInterviewId())
+        Interview interview = interviewRepository.findById(interviewSequenceRequest.getInterviewId())
                 .orElseThrow(() -> new IllegalArgumentException("두 번째 질문에서 인터뷰 정보를 찾을 수 없습니다."));
 
         IntervieweeProfile intervieweeProfile = interview.getIntervieweeProfile();

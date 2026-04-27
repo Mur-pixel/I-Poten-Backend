@@ -4,7 +4,7 @@ import com.cygnus.ipoten.infrastructure.external.fastapi.client.FastApiFourthFol
 import com.cygnus.ipoten.infrastructure.external.fastapi.request.FastApiFourthProgressRequest;
 import com.cygnus.ipoten.infrastructure.external.fastapi.response.FastApiQuestionResponse;
 import com.cygnus.ipoten.interview.entity.Interview;
-import com.cygnus.ipoten.interview.service.InterviewService;
+import com.cygnus.ipoten.interview.repository.InterviewRepository;
 import com.cygnus.ipoten.interview.service.request.InterviewSequenceRequest;
 import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
 import com.cygnus.ipoten.interviewQA.entity.InterviewQA;
@@ -24,14 +24,14 @@ import java.util.List;
 @Transactional
 public class FourthQuestion implements InterviewSequenceStrategy {
 
-    private final InterviewService interviewService;
+    private final InterviewRepository interviewRepository;
     private final FastApiFourthFollowupQuestionClient fastApiFourthFollowupQuestionClient;
     private final InterviewQAService interviewQAService;
 
     @Override
     public InterviewProgressResponse getQuestionByCompany(InterviewSequenceRequest interviewSequenceRequest, String userToken) {
 
-        Interview interview = interviewService.findById(interviewSequenceRequest.getInterviewId())
+        Interview interview = interviewRepository.findById(interviewSequenceRequest.getInterviewId())
                 .orElseThrow(() -> new IllegalArgumentException("네 번째 질문에서 인터뷰를 찾지 못했습니다"));
 
         IntervieweeProfile intervieweeProfile = interview.getIntervieweeProfile();

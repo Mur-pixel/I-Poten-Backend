@@ -9,13 +9,12 @@ import com.cygnus.ipoten.personality_interview.entity.PersonalityInterview;
 import com.cygnus.ipoten.personality_interview.repository.PersonalityInterviewAudioRepository;
 import com.cygnus.ipoten.personality_interview.service.PersonalityInterviewService;
 import com.cygnus.ipoten.redis_cache.RedisCacheService;
-import lombok.RequiredArgsConstructor;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Component;
 
 import java.util.List;
 
 
-@RequiredArgsConstructor
 @Component("PERSONAL")
 public class NormalPersonalityInterviewStrategy implements NormalInterviewProgressStrategy {
 
@@ -23,6 +22,17 @@ public class NormalPersonalityInterviewStrategy implements NormalInterviewProgre
     private final PersonalityInterviewService personalityInterviewService;
     private final PersonalityInterviewAudioRepository personalityInterviewAudioRepository;
     private final RedisCacheService redisCacheService;
+
+    public NormalPersonalityInterviewStrategy(
+            @Lazy InterviewService interviewService,
+            PersonalityInterviewService personalityInterviewService,
+            PersonalityInterviewAudioRepository personalityInterviewAudioRepository,
+            RedisCacheService redisCacheService) {
+        this.interviewService = interviewService;
+        this.personalityInterviewService = personalityInterviewService;
+        this.personalityInterviewAudioRepository = personalityInterviewAudioRepository;
+        this.redisCacheService = redisCacheService;
+    }
 
     @Override
     public NormalInterviewProgressResponse process(NormalInterviewCreateRequestForm interviewProgressRequestForm, String userToken) {

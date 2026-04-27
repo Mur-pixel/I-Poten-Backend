@@ -8,7 +8,7 @@ import com.cygnus.ipoten.interview.entity.CompanyNameMapping;
 import com.cygnus.ipoten.interview.entity.ExperienceLevel;
 import com.cygnus.ipoten.interview.entity.Interview;
 import com.cygnus.ipoten.interview.entity.JobCategory;
-import com.cygnus.ipoten.interview.service.InterviewService;
+import com.cygnus.ipoten.interview.repository.InterviewRepository;
 import com.cygnus.ipoten.interview.service.request.InterviewSequenceRequest;
 import com.cygnus.ipoten.interview.service.response.InterviewProgressResponse;
 import com.cygnus.ipoten.interviewQA.entity.InterviewQA;
@@ -31,7 +31,7 @@ public class FirstQuestion implements InterviewSequenceStrategy {
     private static final Logger logger = LoggerFactory.getLogger(FirstQuestion.class);
 
     private final IntervieweeProfileService intervieweeProfileService;
-    private final InterviewService interviewService;
+    private final InterviewRepository interviewRepository;
     private final InterviewQAService interviewQAService;
     private final FastApiFirstFollowupQuestionClientImpl fastApiFirstFollowupQuestionClient;
 
@@ -40,7 +40,7 @@ public class FirstQuestion implements InterviewSequenceStrategy {
 
         log.info("자기소개를 제외한 첫 번째 질문 시도");
 
-        Interview interview = interviewService.findById(interviewSequenceRequest.getInterviewId())
+        Interview interview = interviewRepository.findById(interviewSequenceRequest.getInterviewId())
                 .orElseThrow(() -> new IllegalArgumentException("해당 ID의 인터뷰를 찾을 수 없습니다"));
 
         IntervieweeProfile intervieweeProfile = interview.getIntervieweeProfile();
