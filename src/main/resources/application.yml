@@ -19,7 +19,8 @@ spring:
     redis:
       host: ${SPRING_DATA_REDIS_HOST:localhost}
       port: ${SPRING_DATA_REDIS_PORT:6379}
-      password: ${SPRING_DATA_REDIS_PASSWORD:eddi@123}
+      # 보안: 기본값 제거. 환경변수로 반드시 주입.
+      password: ${SPRING_DATA_REDIS_PASSWORD}
 
   jpa:
     hibernate:
@@ -29,8 +30,8 @@ spring:
 
 kakao:
   login-url: ${KAKAO_LOGIN_URL:https://kauth.kakao.com/oauth/authorize}
-  client-id: ${KAKAO_CLIENT_ID:your-local-client-id}
-  redirect-uri: ${KAKAO_REDIRECT_URI:http://localhost:5173/auth/kakao/callback}
+  client-id: ${KAKAO_CLIENT_ID}
+  redirect-uri: ${KAKAO_REDIRECT_URI}
   token-request-uri: ${KAKAO_TOKEN_REQUEST_URI:https://kauth.kakao.com/oauth/token}
   user-info-request-uri: ${KAKAO_USER_INFO_REQUEST_URI:https://kapi.kakao.com/v2/user/me}
 
@@ -64,7 +65,7 @@ apple:
   client-secret: ${APPLE_CLIENT_SECRET}
   redirect-uri: ${APPLE_REDIRECT_URI}
   token-request-uri: ${APPLE_TOKEN_REQUEST_URI:https://appleid.apple.com/auth/token}
-  android-package-name: ${APPLE_ANDROID_PACKAGE_NAME:com.cygnus.i_poten_app}
+  android-package-name: ${APPLE_ANDROID_PACKAGE_NAME}
 
 meta:
   login-url: ${META_LOGIN_URL}
@@ -97,6 +98,10 @@ gcp:
 logging:
   level:
     org.springframework: INFO
+  pattern:
+    # %X{traceId} 는 RequestTraceFilter 에서 MDC 에 주입한 요청 추적 ID.
+    # 동일 요청에서 발생한 모든 로그를 traceId 로 grep 하여 추적 가능.
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} %-5level [%thread] [traceId=%X{traceId:-}] %logger{36} - %msg%n"
 
 ebook:
   pdf:
